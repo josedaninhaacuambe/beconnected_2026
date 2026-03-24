@@ -1,0 +1,62 @@
+config:
+  # Distribui carga por 8 workers PHP
+  target: "http://localhost:8088"
+  http:
+    timeout: 15
+    pool: 100
+  phases:
+    - name: "Aquecimento"
+      duration: 20
+      arrivalRate: 10
+      rampTo: 50
+
+    - name: "Carga normal"
+      duration: 40
+      arrivalRate: 50
+      rampTo: 150
+
+    - name: "Pico"
+      duration: 30
+      arrivalRate: 150
+
+  ensure:
+    p99: 3000
+    p95: 1500
+    maxErrorRate: 10
+
+scenarios:
+  - name: "Homepage + Lojas"
+    weight: 50
+    flow:
+      - get:
+          url: "/api/stores"
+          expect:
+            - statusCode: 200
+      - get:
+          url: "/api/products/trending"
+          expect:
+            - statusCode: 200
+      - get:
+          url: "/api/products/flash"
+      - think: 1
+
+  - name: "Pesquisa de produtos"
+    weight: 30
+    flow:
+      - get:
+          url: "/api/products/search?q=produto&page=1"
+      - get:
+          url: "/api/store-categories"
+      - think: 1
+
+  - name: "Detalhe de loja"
+    weight: 20
+    flow:
+      - get:
+          url: "/api/stores"
+          capture:
+            - json: "$.data[0].slug"
+              as: "storeSlug"
+              default: "loja-teste"
+      - get:
+          url: "/api/stores/{{ storeSlug }}/products"

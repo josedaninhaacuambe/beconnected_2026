@@ -1,0 +1,40 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Git
+.git/
+.gitignore
+
+# Docker (evitar recursão)
+docker/
+docker-compose*.yml
+.dockerignore
+
+# Ambiente local
+.env
+.env.local
+.env.*.local
+
+# Build do Vite (vai ser reconstruído dentro do Docker)
+public/build/
+public/hot
+
+# Storage (vai ser criado no volume)
+storage/app/public/
+storage/logs/
+storage/framework/cache/
+storage/framework/sessions/
+storage/framework/views/
+
+# Testes e docs
+tests/
+README.md
+SETUP.md
+*.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

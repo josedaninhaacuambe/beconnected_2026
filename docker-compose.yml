@@ -1,0 +1,152 @@
+services:
+
+  # ─── Aplicação Laravel (PHP 8.3-FPM) ──────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: beconnect_app
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - .:/var/www
+      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    networks:
+      - beconnect
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - PHP_OPCACHE_ENABLE=0
+
+  # ─── Servidor Web (Nginx) ──────────────────────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: beconnect_nginx
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - .:/var/www
+      - ./docker/nginx/beconnect.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - beconnect
+    depends_on:
+      - app
+
+  # ─── Base de dados MySQL 8.0 ───────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: beconnect_mysql
+    restart: unless-stopped
+    ports:
+      - "3308:3306"          # porta 3308 no host (não conflicta com Laragon/3306 nem 3307)
+    environment:
+      MYSQL_ROOT_PASSWORD: beconnect_secret
+      MYSQL_DATABASE: beconnect
+      MYSQL_USER: beconnect
+      MYSQL_PASSWORD: beconnect_secret
+    volumes:
+      - beconnect_mysql_data:/var/lib/mysql
+      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/my.cnf
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pbeconnect_secret"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - beconnect
+
+  # ─── phpMyAdmin (porta 8081 — igual ao teu setup actual) ──────────────────
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: beconnect_phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "8082:80"
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: beconnect_secret
+      UPLOAD_LIMIT: 50M
+    networks:
+      - beconnect
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # ─── Redis (filas e cache) ─────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: beconnect_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - beconnect_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - beconnect
+
+  # ─── Worker de filas (comissões, notificações, stock sync) ─────────────────
+  queue:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: beconnect_queue
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - .:/var/www
+    command: php artisan queue:work --sleep=3 --tries=3 --max-time=3600
+    networks:
+      - beconnect
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ─── Scheduler (tarefas agendadas: sync APIs externas, etc.) ──────────────
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: beconnect_scheduler
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - .:/var/www
+    command: >
+      sh -c "while true; do php artisan schedule:run --verbose --no-interaction; sleep 60; done"
+    networks:
+      - beconnect
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # ─── Node.js (build único do frontend) ────────────────────────────────────
+  node:
+    image: node:20-alpine
+    container_name: beconnect_node
+    working_dir: /var/www
+    volumes:
+      - .:/var/www
+    command: sh -c "npm install --legacy-peer-deps && npm run build"
+    profiles:
+      - build          # apenas executado com: docker compose --profile build up node
+
+networks:
+  beconnect:
+    driver: bridge
+
+volumes:
+  beconnect_mysql_data:
+  beconnect_redis_data:

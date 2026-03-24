@@ -1,0 +1,182 @@
+config:
+  target: "http://localhost:8000"
+  http:
+    timeout: 10
+    pool: 50
+  phases:
+    # Fase 1: Aquecimento — 30 utilizadores/seg por 30s
+    - name: "Aquecimento"
+      duration: 30
+      arrivalRate: 30
+      rampTo: 30
+
+    # Fase 2: Carga normal — sobe de 30 para 200 utilizadores/seg em 60s
+    - name: "Carga crescente"
+      duration: 60
+      arrivalRate: 30
+      rampTo: 200
+
+    # Fase 3: Pico — 500 utilizadores/seg por 60s (simula tráfego viral)
+    - name: "Pico de tráfego"
+      duration: 60
+      arrivalRate: 500
+
+    # Fase 4: Stress máximo — 1000 utilizadores/seg por 30s
+    - name: "Stress máximo"
+      duration: 30
+      arrivalRate: 1000
+
+    # Fase 5: Recuperação
+    - name: "Recuperação"
+      duration: 30
+      arrivalRate: 50
+
+  plugins:
+    expect: {}
+
+  # Thresholds de qualidade
+  ensure:
+    p99: 2000      # 99% das respostas abaixo de 2s
+    p95: 1000      # 95% abaixo de 1s
+    maxErrorRate: 5 # menos de 5% de erros
+
+scenarios:
+  # ── Cenário 1: Visitante navega a página inicial (40% do tráfego) ─────────
+  - name: "Visitante — Homepage"
+    weight: 40
+    flow:
+      - get:
+          url: "/api/stores"
+          expect:
+            - statusCode: 200
+      - get:
+          url: "/api/products/flash"
+          expect:
+            - statusCode: 200
+      - get:
+          url: "/api/products/trending"
+          expect:
+            - statusCode: 200
+      - get:
+          url: "/api/store-categories"
+          expect:
+            - statusCode: 200
+      - think: 2
+
+  # ── Cenário 2: Visitante pesquisa produtos (20% do tráfego) ──────────────
+  - name: "Visitante — Pesquisa"
+    weight: 20
+    flow:
+      - get:
+          url: "/api/products/search?q=camisa&page=1"
+          expect:
+            - statusCode: 200
+      - think: 1
+      - get:
+          url: "/api/products/search?q=sapatos&page=1"
+          expect:
+            - statusCode: 200
+      - think: 1
+      - get:
+          url: "/api/stores?search=moda"
+          expect:
+            - statusCode: 200
+
+  # ── Cenário 3: Cliente autenticado — Carrinho e checkout (15% do tráfego) ─
+  - name: "Cliente — Login e Carrinho"
+    weight: 15
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "cliente_teste@beconnect.co.mz"
+            password: "password123"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+      - think: 1
+      - get:
+          url: "/api/cart"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          expect:
+            - statusCode: 200
+      - post:
+          url: "/api/cart/items"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            product_id: 1
+            quantity: 1
+          expect:
+            - statusCode:
+                - 200
+                - 422  # Stock insuficiente é esperado
+      - think: 2
+
+  # ── Cenário 4: Loja — listagem de produtos (15% do tráfego) ──────────────
+  - name: "Visitante — Produtos de Loja"
+    weight: 15
+    flow:
+      - get:
+          url: "/api/stores"
+          expect:
+            - statusCode: 200
+      - think: 1
+      - get:
+          url: "/api/stores/loja-teste/products?page=1"
+          expect:
+            - statusCode:
+                - 200
+                - 404  # Loja pode não existir no test
+      - get:
+          url: "/api/products/discounts"
+          expect:
+            - statusCode: 200
+
+  # ── Cenário 5: POS — Sincronização offline (10% do tráfego) ──────────────
+  - name: "POS — Sync offline"
+    weight: 10
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "loja_teste@beconnect.co.mz"
+            password: "password123"
+          capture:
+            - json: "$.token"
+              as: "posToken"
+          expect:
+            - statusCode: 200
+      - get:
+          url: "/api/pos/products"
+          headers:
+            Authorization: "Bearer {{ posToken }}"
+          expect:
+            - statusCode:
+                - 200
+                - 403
+      - post:
+          url: "/api/pos/sync"
+          headers:
+            Authorization: "Bearer {{ posToken }}"
+          json:
+            sales:
+              - local_id: "local_stress_{{ $randomNumber(1, 999999) }}"
+                total: 150.00
+                subtotal: 150.00
+                discount: 0
+                payment_method: "cash"
+                sale_at: "2026-03-23T10:00:00Z"
+                items:
+                  - product_name: "Produto Teste"
+                    unit_price: 150.00
+                    quantity: 1
+                    subtotal: 150.00
+          expect:
+            - statusCode:
+                - 200
+                - 403
+                - 429  # Rate limit esperado sob stress

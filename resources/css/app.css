@@ -1,0 +1,233 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+@source '../**/*.vue';
+
+/* ============================================
+   BECONNECT — Paleta WeBuyCars
+   Laranja #F07820  |  Azul-marinho #1C2B3C  |  Branco #FFFFFF
+============================================ */
+
+@theme {
+    --font-sans: 'Poppins', 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
+
+    --color-bc-gold:      #F07820;   /* Laranja WeBuyCars — acções, preços, logo */
+    --color-bc-navy:      #1C2B3C;   /* Azul-marinho escuro — hero, header, sidebars */
+    --color-bc-orange:    #E07B39;   /* Laranja queima de stock */
+    --color-bc-green:     #22C55E;   /* Verde sucesso */
+    --color-bc-red:       #DC2626;   /* Vermelho erro */
+    --color-bc-dark:      #FFFFFF;   /* Branco — fundo principal */
+    --color-bc-surface:   #F8F8F8;   /* Cinza muito claro — cards */
+    --color-bc-surface-2: #EEEEEE;   /* Cinza claro — inputs, fundos secundários */
+    --color-bc-light:     #1A1A1A;   /* Texto principal escuro */
+    --color-bc-muted:     #666666;   /* Texto secundário */
+}
+
+@layer base {
+    body {
+        background-color: #FFFFFF;
+        color: #1A1A1A;
+        font-family: 'Poppins', sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #F8F8F8; }
+    ::-webkit-scrollbar-thumb { background: #F07820; border-radius: 3px; }
+}
+
+@layer components {
+
+    /* Barra decorativa — laranja e marinho */
+    .african-pattern-bar {
+        background: repeating-linear-gradient(
+            90deg,
+            #F07820 0px,
+            #F07820 14px,
+            #1C2B3C 14px,
+            #1C2B3C 28px,
+            #F5A04A 28px,
+            #F5A04A 42px,
+            #233548 42px,
+            #233548 56px
+        );
+    }
+
+    .african-bg-pattern {
+        background-image:
+            repeating-linear-gradient(45deg, #F07820 0px, transparent 2px, transparent 20px),
+            repeating-linear-gradient(-45deg, #1C2B3C 0px, transparent 2px, transparent 20px);
+    }
+
+    /* ── Botão principal (laranja) ── */
+    .btn-gold {
+        background-color: #F07820;
+        color: #FFFFFF;
+        font-weight: 700;
+        border-radius: 0.5rem;
+        padding: 0.5rem 1.5rem;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        font-size: 0.875rem;
+    }
+    .btn-gold:hover {
+        background-color: #D96810;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 14px rgba(240, 120, 32, 0.4);
+    }
+    .btn-gold:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+    /* ── Botão acção (mesmo laranja — confirmar, guardar) ── */
+    .btn-green {
+        background-color: #F07820;
+        color: #FFFFFF;
+        font-weight: 700;
+        border-radius: 0.5rem;
+        padding: 0.5rem 1.5rem;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        font-size: 0.875rem;
+    }
+    .btn-green:hover {
+        background-color: #D96810;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 14px rgba(240, 120, 32, 0.4);
+    }
+    .btn-green:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+    /* ── Botão fantasma (contorno laranja) ── */
+    .btn-ghost {
+        border: 2px solid #F07820;
+        color: #F07820;
+        font-weight: 700;
+        border-radius: 0.5rem;
+        padding: 0.5rem 1.5rem;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+    }
+    .btn-ghost:hover {
+        background-color: rgba(240, 120, 32, 0.08);
+    }
+
+    .btn-danger {
+        background-color: #DC2626;
+        color: white;
+        font-weight: 600;
+        border-radius: 0.5rem;
+        padding: 0.5rem 1.5rem;
+        transition: all 0.2s;
+    }
+    .btn-danger:hover { background-color: #B91C1C; }
+
+    /* ── Cards ── */
+    .card-african {
+        background-color: #FFFFFF;
+        border: 1px solid #E5E5E5;
+        border-radius: 0.75rem;
+        transition: all 0.2s;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    }
+    .card-african:hover {
+        border-color: #F07820;
+        box-shadow: 0 6px 20px rgba(240, 120, 32, 0.12);
+    }
+
+    /* ── Inputs ── */
+    .input-african {
+        width: 100%;
+        background-color: #FFFFFF;
+        border: 1.5px solid #DDDDDD;
+        border-radius: 0.5rem;
+        padding: 0.625rem 1rem;
+        color: #1A1A1A;
+        font-size: 0.875rem;
+        transition: border-color 0.2s;
+    }
+    .input-african:focus {
+        outline: none;
+        border-color: #F07820;
+        box-shadow: 0 0 0 3px rgba(240, 120, 32, 0.12);
+    }
+    .input-african::placeholder { color: #AAAAAA; }
+
+    .select-african {
+        width: 100%;
+        background-color: #FFFFFF;
+        border: 1.5px solid #DDDDDD;
+        border-radius: 0.5rem;
+        padding: 0.625rem 1rem;
+        color: #1A1A1A;
+        font-size: 0.875rem;
+        appearance: none;
+        cursor: pointer;
+    }
+    .select-african:focus {
+        outline: none;
+        border-color: #F07820;
+        box-shadow: 0 0 0 3px rgba(240, 120, 32, 0.12);
+    }
+    .select-african:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Badge destaque ── */
+    .badge-featured {
+        background: #F07820;
+        color: #FFFFFF;
+        font-weight: 700;
+        font-size: 0.65rem;
+        padding: 0.15rem 0.5rem;
+        border-radius: 0.25rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    /* ── Preço ── */
+    .price-tag {
+        color: #F07820;
+        font-weight: 700;
+        font-size: 1.125rem;
+    }
+
+    /* ── Skeleton loading ── */
+    .skeleton {
+        background: linear-gradient(90deg, #EEEEEE 25%, #F8F8F8 50%, #EEEEEE 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+        border-radius: 0.5rem;
+    }
+    @keyframes shimmer {
+        0%   { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+
+    /* ── Mobile bottom padding ── */
+    .pb-mobile { padding-bottom: 4.5rem; }
+    @media (min-width: 768px) { .pb-mobile { padding-bottom: 0; } }
+}

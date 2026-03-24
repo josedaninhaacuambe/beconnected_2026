@@ -1,0 +1,29 @@
+config:
+  target: "http://localhost:8088"
+  http:
+    timeout: 10
+  phases:
+    # Teste rápido: sobe de 10 para 100 utilizadores em 30s
+    - name: "Teste rápido"
+      duration: 30
+      arrivalRate: 10
+      rampTo: 100
+
+scenarios:
+  - name: "Endpoints públicos"
+    weight: 60
+    flow:
+      - get:
+          url: "/api/stores"
+      - get:
+          url: "/api/products/trending"
+      - get:
+          url: "/api/products/flash"
+
+  - name: "Pesquisa"
+    weight: 40
+    flow:
+      - get:
+          url: "/api/products/search?q=produto"
+      - get:
+          url: "/api/stores?search=loja"

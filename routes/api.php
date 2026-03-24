@@ -1,0 +1,287 @@
+<?php
+
+use App\Http\Controllers\API\AdminController;
+use App\Http\Controllers\API\AuthController;
+use App\Http\Controllers\API\CartController;
+use App\Http\Controllers\API\DeliveryController;
+use App\Http\Controllers\API\FlashSaleController;
+use App\Http\Controllers\API\GoogleAuthController;
+use App\Http\Controllers\API\LocationController;
+use App\Http\Controllers\API\NotificationController;
+use App\Http\Controllers\API\OrderController;
+use App\Http\Controllers\API\PaymentController;
+use App\Http\Controllers\API\ProductController;
+use App\Http\Controllers\API\StockImportController;
+use App\Http\Controllers\API\StoreController;
+use App\Http\Controllers\API\FeedbackController;
+use App\Http\Controllers\API\PosController;
+use App\Http\Controllers\API\ReviewController;
+use App\Http\Controllers\API\StoreSectionController;
+use App\Http\Controllers\API\VisibilityController;
+use Illuminate\Support\Facades\Route;
+
+/*
+|--------------------------------------------------------------------------
+| Beconnect API Routes
+|--------------------------------------------------------------------------
+*/
+
+// =============================================
+// AUTENTICAÇÃO
+// =============================================
+Route::prefix('auth')->middleware('throttle:auth-strict')->group(function () {
+    Route::post('register', [AuthController::class, 'register']);
+    Route::post('login', [AuthController::class, 'login']);
+
+    // Google OAuth
+    Route::get('google/redirect-url', [GoogleAuthController::class, 'redirectUrl']);
+    Route::get('google/callback', [GoogleAuthController::class, 'callbackRedirect']);
+    Route::post('google/token', [GoogleAuthController::class, 'callback']);
+});
+
+// =============================================
+// ROTAS PÚBLICAS
+// =============================================
+
+// Localização (Moçambique) — cache longa, rate limit normal
+Route::prefix('locations')->middleware('throttle:api-public')->group(function () {
+    Route::get('provinces', [LocationController::class, 'provinces']);
+    Route::get('cities', [LocationController::class, 'cities']);
+    Route::get('neighborhoods', [LocationController::class, 'neighborhoods']);
+});
+
+// Categorias e marcas
+Route::middleware('throttle:api-public')->group(function () {
+    Route::get('store-categories', [StoreController::class, 'categories']);
+    Route::get('product-categories', [ProductController::class, 'categories']);
+    Route::get('brands', [ProductController::class, 'brands']);
+});
+
+// Pesquisa global de produtos (SEM PREÇO)
+Route::get('products/search', [ProductController::class, 'search'])->middleware('throttle:api-public');
+
+// ─── Viral hooks (públicos, sem autenticação) ─────────────────────────────
+Route::middleware('throttle:api-public')->group(function () {
+    Route::get('products/flash',     [ProductController::class, 'flashDeals']);
+    Route::get('products/trending',  [ProductController::class, 'trending']);
+    Route::get('products/discounts', [ProductController::class, 'discounts']);
+});
+
+// Lojas (listagem pública)
+Route::middleware('throttle:api-public')->group(function () {
+    Route::get('stores', [StoreController::class, 'index']);
+    Route::get('stores/{slug}', [StoreController::class, 'show']);
+});
+
+// ─── Scan & Go ────────────────────────────────────────────────────────────
+Route::get('stores/{slug}/scan', [StoreController::class, 'scanBarcode']);
+Route::middleware('auth:sanctum')->post('stores/{slug}/in-store-checkout', [StoreController::class, 'inStoreCheckout']);
+
+// Produtos de uma loja (COM PREÇO - só visível dentro da loja)
+Route::get('stores/{storeSlug}/products', [ProductController::class, 'storeProducts']);
+Route::get('stores/{storeSlug}/products/{productSlug}', [ProductController::class, 'show']);
+Route::get('stores/{storeSlug}/sections', [StoreSectionController::class, 'publicIndex']);
+
+// Avaliações de lojas (leitura pública, escrita autenticada)
+Route::get('stores/{slug}/reviews', [ReviewController::class, 'storeReviews']);
+Route::middleware('auth:sanctum')->post('stores/{slug}/reviews', [ReviewController::class, 'submitStoreReview']);
+
+// Feedback / Reclamações / Sugestões (envio público ou autenticado)
+Route::post('feedback', [FeedbackController::class, 'store']);
+
+// Rastreamento de entrega
+Route::get('delivery/track/{trackingCode}', [DeliveryController::class, 'track']);
+
+// Planos de visibilidade
+Route::get('visibility-plans', [VisibilityController::class, 'plans']);
+
+// Callbacks de pagamento (gateways)
+Route::post('payments/emola/callback', [PaymentController::class, 'emolaCallback'])
+    ->name('payment.emola.callback');
+Route::post('payments/mpesa/callback', [PaymentController::class, 'mpesaCallback'])
+    ->name('payment.mpesa.callback');
+
+// WEBHOOK de stock (sistemas externos enviam stock aqui, sem autenticação por token)
+Route::post('stores/{storeToken}/stock/webhook', [StockImportController::class, 'webhook'])
+    ->name('stock.webhook');
+
+// =============================================
+// ROTAS AUTENTICADAS
+// =============================================
+Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
+
+    // Perfil
+    Route::prefix('auth')->group(function () {
+        Route::post('logout', [AuthController::class, 'logout']);
+        Route::get('me', [AuthController::class, 'me']);
+        Route::post('profile', [AuthController::class, 'updateProfile']);
+        Route::post('change-password', [AuthController::class, 'changePassword']);
+        Route::post('claim-role', [AuthController::class, 'claimRole']);
+
+        // Notificações do utilizador
+        Route::prefix('notifications')->group(function () {
+            Route::get('/', [NotificationController::class, 'index']);
+            Route::get('unread-count', [NotificationController::class, 'unreadCount']);
+            Route::post('read-all', [NotificationController::class, 'markAllRead']);
+            Route::post('{id}/read', [NotificationController::class, 'markRead']);
+        });
+    });
+
+    // Carrinho
+    Route::prefix('cart')->group(function () {
+        Route::get('/', [CartController::class, 'index']);
+        Route::post('items', [CartController::class, 'addItem']);
+        Route::put('items/{cartItem}', [CartController::class, 'updateItem']);
+        Route::delete('items/{cartItem}', [CartController::class, 'removeItem']);
+        Route::delete('/', [CartController::class, 'clear']);
+    });
+
+    // Pedidos (cliente)
+    Route::prefix('orders')->group(function () {
+        Route::get('/', [OrderController::class, 'myOrders']);
+        Route::post('checkout', [OrderController::class, 'checkout'])->middleware('throttle:checkout');
+        Route::get('{order}', [OrderController::class, 'show']);
+        Route::post('{order}/cancel', [OrderController::class, 'cancel']);
+    });
+
+    // Pagamentos
+    Route::prefix('payments')->group(function () {
+        Route::get('/', [PaymentController::class, 'myPayments']);
+        Route::get('{payment}/status', [PaymentController::class, 'checkStatus']);
+    });
+
+    // Entrega
+    Route::prefix('delivery')->group(function () {
+        Route::post('estimate', [DeliveryController::class, 'estimate']);
+        Route::post('register-driver', [DeliveryController::class, 'registerAsDriver']);
+        Route::post('availability', [DeliveryController::class, 'updateAvailability']);
+        Route::post('{delivery}/accept', [DeliveryController::class, 'acceptDelivery']);
+        Route::post('{delivery}/status', [DeliveryController::class, 'updateDeliveryStatus']);
+    });
+
+    // =============================================
+    // ROTAS DO DONO DE LOJA (e funcionários)
+    // =============================================
+    Route::middleware('role:store_owner')->prefix('store')->group(function () {
+        Route::get('/', [StoreController::class, 'myStore']);
+        Route::post('/', [StoreController::class, 'store']);
+        Route::post('update', [StoreController::class, 'updateMyStore']);
+        Route::get('dashboard', [StoreController::class, 'dashboard']);
+
+        // Produtos
+        Route::get('products', [ProductController::class, 'myProducts']);
+        Route::post('products', [ProductController::class, 'storeProduct']);
+        Route::put('products/{product}', [ProductController::class, 'updateProduct']);
+        Route::delete('products/{product}', [ProductController::class, 'destroyProduct']);
+        Route::post('products/{product}/stock', [ProductController::class, 'updateStock']);
+        Route::get('products/{product}/stock/movements', [ProductController::class, 'stockMovements']);
+        Route::post('products/fetch-image', [ProductController::class, 'fetchAutoImage']);
+
+        // Pedidos da loja
+        Route::get('orders', [OrderController::class, 'storeOrders']);
+        Route::put('orders/{storeOrder}/status', [OrderController::class, 'updateStoreOrderStatus']);
+
+        // Visibilidade/Posicionamento
+        Route::post('visibility/purchase', [VisibilityController::class, 'purchase']);
+
+        // ─── IMPORTAÇÃO DE STOCK ─────────────────────────────────────────
+        Route::prefix('stock')->group(function () {
+            // Pré-visualizar ficheiro (mostra colunas e sugestão de mapeamento)
+            Route::post('preview', [StockImportController::class, 'preview']);
+
+            // Importar de Excel/CSV
+            Route::post('import-file', [StockImportController::class, 'importFile']);
+
+            // Importar via JSON (de qualquer sistema externo)
+            Route::post('import-json', [StockImportController::class, 'importJson']);
+
+            // Histórico de importações
+            Route::get('history', [StockImportController::class, 'importHistory']);
+
+            // APIs externas
+            Route::get('external-apis', [StockImportController::class, 'listExternalApis']);
+            Route::post('external-apis', [StockImportController::class, 'configureExternalApi']);
+            Route::post('external-apis/test', [StockImportController::class, 'testExternalApi']);
+            Route::post('external-apis/{api}/sync', [StockImportController::class, 'syncNow']);
+        });
+
+        // ─── QUEIMA DE STOCK ─────────────────────────────────────────────
+        Route::prefix('flash-sales')->group(function () {
+            Route::get('/', [FlashSaleController::class, 'index']);
+            Route::get('eligible', [FlashSaleController::class, 'eligibleProducts']);
+            Route::post('launch', [FlashSaleController::class, 'launch']);
+            Route::delete('{product}', [FlashSaleController::class, 'cancel']);
+        });
+
+        // ─── SECÇÕES / CATEGORIAS DA LOJA ───────────────────────────────
+        Route::prefix('sections')->group(function () {
+            Route::get('/', [StoreSectionController::class, 'index']);
+            Route::post('/', [StoreSectionController::class, 'store']);
+            Route::post('/reorder', [StoreSectionController::class, 'reorder']);
+            Route::put('/{section}', [StoreSectionController::class, 'update']);
+            Route::delete('/{section}', [StoreSectionController::class, 'destroy']);
+        });
+
+        // ─── GESTÃO DE FUNCIONÁRIOS ──────────────────────────────────────
+        Route::prefix('employees')->group(function () {
+            Route::get('/', [StockImportController::class, 'listEmployees']);
+            Route::post('/', [StockImportController::class, 'addEmployee']);
+            Route::delete('{employee}', [StockImportController::class, 'removeEmployee']);
+        });
+    });
+
+    // =============================================
+    // ROTAS POS (Point of Sale)
+    // Acessível a owners e funcionários activos
+    // =============================================
+    Route::prefix('pos')->group(function () {
+        Route::get('products',        [PosController::class, 'products']);
+        Route::post('sync',           [PosController::class, 'sync'])->middleware('throttle:pos-sync');
+        Route::get('stock',           [PosController::class, 'stock']);
+        Route::post('stock/movement', [PosController::class, 'stockMovement']);
+        Route::get('stock/history',   [PosController::class, 'stockHistory']);
+        Route::get('reports',         [PosController::class, 'reports']);
+        Route::get('employees',       [PosController::class, 'employees']);
+        Route::post('employees',      [PosController::class, 'addEmployee']);
+        Route::delete('employees/{employee}', [PosController::class, 'removeEmployee']);
+    });
+
+    // =============================================
+    // ROTAS DE ADMIN
+    // =============================================
+    Route::middleware('role:admin')->prefix('admin')->group(function () {
+        // Feedbacks / Reclamações / Sugestões
+        Route::get('feedbacks', [FeedbackController::class, 'index']);
+        Route::put('feedbacks/{feedback}', [FeedbackController::class, 'update']);
+
+        // Visão geral
+        Route::get('overview', [AdminController::class, 'overview']);
+
+        // Gestão de utilizadores
+        Route::get('users', [AdminController::class, 'users']);
+        Route::put('users/{user}/promote-store-owner', [AdminController::class, 'promoteToStoreOwner']);
+        Route::put('users/{user}/demote-customer', [AdminController::class, 'demoteToCustomer']);
+        Route::put('users/{user}/toggle', [AdminController::class, 'toggleUserStatus']);
+
+        // Gestão de lojas
+        Route::get('stores', [AdminController::class, 'stores']);
+        Route::put('stores/{store}/approve', [AdminController::class, 'approveStore']);
+        Route::put('stores/{store}/reject', [AdminController::class, 'rejectStore']);
+        Route::put('stores/{store}/suspend', [AdminController::class, 'suspendStore']);
+
+        // Estafetas
+        Route::get('drivers', fn() => \App\Models\DeliveryDriver::with('user')->paginate(20));
+        Route::put('drivers/{driver}/approve', function (\App\Models\DeliveryDriver $driver) {
+            $driver->update(['status' => 'approved']);
+            return response()->json(['message' => 'Estafeta aprovado.']);
+        });
+
+        // ─── COMISSÕES ────────────────────────────────────────────────────
+        Route::prefix('commissions')->group(function () {
+            Route::get('dashboard', [AdminController::class, 'commissionDashboard']);
+            Route::get('/', [AdminController::class, 'commissions']);
+            Route::post('payout', [AdminController::class, 'processCommissionPayout']);
+            Route::get('payouts', [AdminController::class, 'payoutHistory']);
+        });
+    });
+});
