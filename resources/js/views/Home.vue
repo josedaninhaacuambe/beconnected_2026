@@ -156,15 +156,18 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 
+// LivePulse está acima da dobra — carrega imediatamente
 import LivePulse from '@/components/hooks/LivePulse.vue'
-import FlashDeals from '@/components/hooks/FlashDeals.vue'
-import TrendingProducts from '@/components/hooks/TrendingProducts.vue'
-import DailyDrop from '@/components/hooks/DailyDrop.vue'
-import PriceDrops from '@/components/hooks/PriceDrops.vue'
+
+// Hooks abaixo da dobra — carregam em paralelo após o hero ser pintado
+const FlashDeals       = defineAsyncComponent(() => import('@/components/hooks/FlashDeals.vue'))
+const TrendingProducts = defineAsyncComponent(() => import('@/components/hooks/TrendingProducts.vue'))
+const DailyDrop        = defineAsyncComponent(() => import('@/components/hooks/DailyDrop.vue'))
+const PriceDrops       = defineAsyncComponent(() => import('@/components/hooks/PriceDrops.vue'))
 
 const router = useRouter()
 const heroBroken = ref(false)

@@ -37,8 +37,10 @@ const pinia = createPinia()
 app.use(pinia)
 app.use(router)
 
-// Carregar dados do utilizador antes de montar (para guards de router funcionarem)
+// Montar a app IMEDIATAMENTE — utilizador vê a página sem esperar pela API
+// O localStorage já tem os dados do utilizador para render instantâneo
+// initAuth() corre em background e actualiza silenciosamente
+app.mount('#app')
+
 const authStore = useAuthStore()
-authStore.initAuth().finally(() => {
-    app.mount('#app')
-})
+authStore.initAuth() // background — não bloqueia

@@ -3,21 +3,27 @@ import { ref, computed } from 'vue'
 import axios from 'axios'
 
 export const useAuthStore = defineStore('auth', () => {
-    const user = ref(null)
+    // Restaurar utilizador do localStorage imediatamente — sem esperar pela API
+    const _cached = localStorage.getItem('bc_user')
+    const user  = ref(_cached ? JSON.parse(_cached) : null)
     const token = ref(localStorage.getItem('bc_token'))
 
     const isAuthenticated = computed(() => !!token.value)
-    const isStoreOwner = computed(() => user.value?.role === 'store_owner')
-    const isAdmin = computed(() => user.value?.role === 'admin')
+    const isStoreOwner    = computed(() => user.value?.role === 'store_owner')
+    const isAdmin         = computed(() => user.value?.role === 'admin')
 
+    // initAuth() é chamado em background — NÃO bloqueia o mount da app
+    // Usa dados em cache do localStorage para render imediato,
+    // depois actualiza silenciosamente a partir da API
     async function initAuth() {
-        if (token.value) {
-            try {
-                const { data } = await axios.get('/auth/me')
-                user.value = data
-            } catch {
-                logout()
-            }
+        if (!token.value) return
+
+        try {
+            const { data } = await axios.get('/auth/me')
+            user.value = data
+            localStorage.setItem('bc_user', JSON.stringify(data))
+        } catch {
+            logout()
         }
     }
 
@@ -42,6 +48,7 @@ export const useAuthStore = defineStore('auth', () => {
         token.value = null
         user.value = null
         localStorage.removeItem('bc_token')
+        localStorage.removeItem('bc_user')
     }
 
     async function updateProfile(formData) {
@@ -49,6 +56,7 @@ export const useAuthStore = defineStore('auth', () => {
             headers: { 'Content-Type': 'multipart/form-data' }
         })
         user.value = data
+        localStorage.setItem('bc_user', JSON.stringify(data))
         return data
     }
 
