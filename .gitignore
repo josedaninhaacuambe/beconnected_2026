@@ -28,3 +28,17 @@ rr
 **/caddy
 frankenphp
 frankenphp-worker.php
+
+# Binários compilados
+rr.exe
+*.exe
+*.pdb
+
+# Ficheiros de cache do framework (gerados automaticamente)
+storage/framework/views/
+bootstrap/cache/*.php
+
+# Ficheiros com nomes inválidos criados acidentalmente
+getNameWithReadWriteType()
+isUniqueConstraintError($e)
+prepareBindings($bindings)
