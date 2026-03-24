@@ -4,14 +4,17 @@
     <section class="relative w-full overflow-hidden" style="background-color:#1C2B3C; min-height: clamp(320px, 45vw, 620px);">
 
       <!-- Imagem decorativa (cobre toda a secção) -->
-      <img
-        v-if="!heroBroken"
-        :src="heroBannerUrl"
-        alt=""
-        class="absolute inset-0 w-full h-full object-cover object-center"
-        style="pointer-events: none;"
-        @error="heroBroken = true"
-      />
+      <picture v-if="!heroBroken">
+        <source :srcset="'/images/Hero-Banner2.webp'" type="image/webp" />
+        <img
+          :src="heroBannerUrl"
+          alt=""
+          class="absolute inset-0 w-full h-full object-cover object-center"
+          style="pointer-events: none;"
+          fetchpriority="high"
+          @error="heroBroken = true"
+        />
+      </picture>
 
       <!-- Gradiente para legibilidade do texto à esquerda -->
       <div class="absolute inset-0" style="background: linear-gradient(to right, #1C2B3C 35%, #1C2B3Ccc 52%, transparent 70%);"></div>
