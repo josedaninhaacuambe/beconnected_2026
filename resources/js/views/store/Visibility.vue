@@ -5,18 +5,29 @@
 
     <!-- Plano gratuito (sem contrato) -->
     <div class="card-african border border-bc-surface-2 p-5 mb-6">
-      <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="flex flex-wrap items-start justify-between gap-4 mb-4">
         <div>
           <h3 class="text-bc-light font-bold text-lg mb-1">🔓 Sem Plano (Gratuito)</h3>
-          <p class="text-bc-muted text-sm mb-3">Acesso básico à plataforma com funcionalidades limitadas.</p>
+          <p class="text-bc-muted text-sm">Acesso basico a plataforma com funcionalidades limitadas.</p>
         </div>
         <span class="text-bc-muted text-sm border border-bc-surface-2 rounded-lg px-3 py-1">Plano actual</span>
       </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
         <div v-for="f in freePlanFeatures" :key="f.text" class="flex items-start gap-2 text-sm">
           <span :class="f.ok ? 'text-green-400' : 'text-red-400'">{{ f.ok ? '✓' : '✗' }}</span>
           <span :class="f.ok ? 'text-bc-muted' : 'text-red-400/70'">{{ f.text }}</span>
         </div>
+      </div>
+      <div class="bg-orange-900/20 border border-orange-500/30 rounded-lg p-3">
+        <p class="text-orange-400 text-xs font-semibold mb-1">⚠ Restricoes do plano gratuito</p>
+        <ul class="text-orange-300/80 text-xs space-y-0.5">
+          <li>• Maximo de 100 produtos carregados</li>
+          <li>• Produtos aparecem em ULTIMO lugar nas pesquisas e na apresentacao da loja</li>
+          <li>• Nao pode carregar logotipo nem capa da loja — o sistema pedira upgrade</li>
+          <li>• Nao tem acesso a queima de stock nem importacao de stock</li>
+          <li>• Apenas 1 funcionario adicional permitido</li>
+          <li>• Nao tem acesso a categorias, seccoes, POS nem Scan & Go</li>
+        </ul>
       </div>
     </div>
 
@@ -143,57 +154,60 @@ function formatPrice(v) {
 
 const freePlanFeatures = [
   { ok: true,  text: 'Controlo de pedidos' },
-  { ok: true,  text: 'Gestão de stock' },
-  { ok: true,  text: 'Máximo 100 produtos' },
-  { ok: true,  text: '1 funcionário adicional' },
+  { ok: true,  text: 'Gestao de stock' },
+  { ok: true,  text: 'Maximo 100 produtos' },
+  { ok: true,  text: '1 funcionario adicional' },
   { ok: false, text: 'Queima de stock' },
-  { ok: false, text: 'Importação de stock' },
-  { ok: false, text: 'Categorias e secções' },
-  { ok: false, text: 'Relatórios de vendas' },
+  { ok: false, text: 'Importacao de stock' },
+  { ok: false, text: 'Categorias e seccoes' },
+  { ok: false, text: 'Relatorios de vendas' },
   { ok: false, text: 'Personalizar loja (logo/capa)' },
   { ok: false, text: 'Sistema POS' },
   { ok: false, text: 'Scan & Go' },
-  { ok: false, text: 'Produtos aparecem no fim das pesquisas' },
+  { ok: false, text: 'Produtos ficam em ultimo nas pesquisas' },
 ]
 
 const planFeaturesMap = {
   500: [
     { text: 'Tudo do plano gratuito' },
-    { text: '1 utilizador adicional (fora do dono)' },
-    { text: 'Relatórios de vendas no sistema' },
-    { text: 'Gestão de produtos / Stock / Pedidos' },
+    { text: '1 utilizador adicional fora do dono da loja' },
+    { text: 'Visibilidade dos relatorios de vendas feitas no sistema' },
+    { text: 'Gestao completa de Produtos / Stock / Pedidos' },
     { text: 'Importar stock via ficheiro' },
+    { text: 'Produtos com maior visibilidade nas pesquisas' },
   ],
   1000: [
-    { text: 'Tudo do Plano 500' },
-    { text: '2 funcionários (fora do dono)' },
-    { text: 'Organizar por categorias e secções' },
-    { text: 'Queima de stock — até 10 produtos/dia' },
-    { text: 'Posição melhorada nas pesquisas' },
+    { text: 'Tudo do Pacote 500' },
+    { text: '2 funcionarios fora do dono da loja' },
+    { text: 'Organizar a loja por filtro de categorias e seccoes' },
+    { text: 'Queima de stock — ate 10 produtos por dia' },
+    { text: 'Importar stock' },
+    { text: 'Posicao melhorada nas pesquisas de produtos' },
   ],
   2000: [
-    { text: 'Tudo do Plano 1000' },
-    { text: '5 funcionários permitidos' },
-    { text: 'Queima de stock — até 20 produtos/dia' },
-    { text: 'Personalizar perfil da loja (logo e capa)' },
-    { text: 'Posição 2 nas pesquisas e página inicial' },
+    { text: 'Tudo do Pacote 1000' },
+    { text: '5 funcionarios permitidos' },
+    { text: 'Queima de stock — ate 20 produtos por dia' },
+    { text: 'Acesso a personalizar o perfil da loja (logo e capa)' },
+    { text: 'Posicao privilegiada nas pesquisas — posicao 2' },
+    { text: 'Destaque na pagina inicial do sistema — posicao 2' },
   ],
   15000: [
-    { text: 'Tudo dos planos anteriores' },
-    { text: 'Funcionários ilimitados' },
+    { text: 'Todos os direitos dos pacotes anteriores' },
+    { text: 'Funcionarios ilimitados' },
     { text: 'Sistema POS incluso' },
-    { text: 'Queima de stock — mais de 50 produtos/dia' },
-    { text: 'Posição 1 em TUDO (pesquisas, destaque, página inicial)' },
-    { text: 'Acesso ao Scan & Go' },
-    { text: 'Actualizações do sistema em tempo real' },
+    { text: 'Queima de stock — mais de 50 produtos por dia' },
+    { text: '1a posicao garantida em TUDO: pesquisas, destaque, pagina inicial' },
+    { text: 'Acesso ao Scan & Go (exclusivo deste pacote)' },
+    { text: 'Actualizacoes do sistema em tempo real assim que sairem' },
   ],
 }
 
 const planExtras = {
-  500:   { icon: '🚀', badge: null,         highlighted: false, isPremium: false, highlightFeature: null },
-  1000:  { icon: '⭐', badge: 'Mais Popular', highlighted: true,  isPremium: false, highlightFeature: 'Queima de stock incluída' },
-  2000:  { icon: '💎', badge: 'Recomendado', highlighted: false, isPremium: false, highlightFeature: 'Posição privilegiada nas pesquisas' },
-  15000: { icon: '👑', badge: 'Plano Máximo', highlighted: false, isPremium: true,  highlightFeature: '1ª posição garantida + POS + Scan & Go' },
+  500:   { icon: '🚀', badge: null,          highlighted: false, isPremium: false, highlightFeature: 'Relatorios de vendas + importar stock' },
+  1000:  { icon: '⭐', badge: 'Mais Popular', highlighted: true,  isPremium: false, highlightFeature: 'Queima de stock incluida' },
+  2000:  { icon: '💎', badge: 'Recomendado',  highlighted: false, isPremium: false, highlightFeature: 'Posicao 2 em pesquisas + personalizar perfil' },
+  15000: { icon: '👑', badge: 'Plano Maximo', highlighted: false, isPremium: true,  highlightFeature: '1a posicao garantida + POS + Scan & Go exclusivo' },
 }
 
 const enrichedPlans = computed(() =>
@@ -205,16 +219,18 @@ const enrichedPlans = computed(() =>
 )
 
 const comparisonTable = [
-  { label: 'Produtos máximos',    values: ['100',  '∞',    '∞',    '∞',    '∞'] },
-  { label: 'Funcionários',        values: ['1',    '1',    '2',    '5',    '∞'] },
-  { label: 'Relatórios de vendas',values: [false,  true,   true,   true,   true] },
-  { label: 'Importar stock',      values: [false,  true,   true,   true,   true] },
-  { label: 'Categorias/Secções',  values: [false,  false,  true,   true,   true] },
-  { label: 'Queima de stock',     values: [false,  false, '10/dia','20/dia','50+/dia'] },
-  { label: 'Personalizar perfil', values: [false,  false,  false,  true,   true] },
-  { label: 'Sistema POS',         values: [false,  false,  false,  false,  true] },
-  { label: 'Scan & Go',           values: [false,  false,  false,  false,  true] },
-  { label: 'Posição pesquisas',   values: ['Último','Alta', 'Alta', '2ª',   '1ª'] },
+  { label: 'Produtos maximos',      values: ['100',    'Ilimitado', 'Ilimitado', 'Ilimitado', 'Ilimitado'] },
+  { label: 'Funcionarios',          values: ['1',      '1',         '2',         '5',         'Ilimitados'] },
+  { label: 'Relatorios de vendas',  values: [false,    true,        true,        true,        true] },
+  { label: 'Importar stock',        values: [false,    true,        true,        true,        true] },
+  { label: 'Categorias/Seccoes',    values: [false,    false,       true,        true,        true] },
+  { label: 'Queima de stock/dia',   values: [false,    false,       '10/dia',    '20/dia',    '50+/dia'] },
+  { label: 'Personalizar perfil',   values: [false,    false,       false,       true,        true] },
+  { label: 'Sistema POS',           values: [false,    false,       false,       false,       true] },
+  { label: 'Scan & Go',             values: [false,    false,       false,       false,       true] },
+  { label: 'Posicao nas pesquisas', values: ['Ultimo', 'Alta',      'Alta',      '2a pos.',   '1a pos.'] },
+  { label: 'Logo e capa da loja',   values: [false,    false,       false,       true,        true] },
+  { label: 'Actualizacoes auto.',   values: [false,    false,       false,       false,       true] },
 ]
 
 function selectPlan(plan) { selectedPlan.value = plan }

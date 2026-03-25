@@ -9,6 +9,7 @@ const routes = [
         children: [
             { path: '', name: 'home', component: () => import('../views/Home.vue') },
             { path: 'pesquisa', name: 'search', component: () => import('../views/Search.vue') },
+            { path: 'produtos', name: 'products', component: () => import('../views/Products.vue') },
             { path: 'lojas', name: 'stores', component: () => import('../views/Stores.vue') },
             { path: 'lojas/:slug', name: 'store', component: () => import('../views/StoreDetail.vue') },
             { path: 'lojas/:storeSlug/produtos/:productSlug', name: 'product', component: () => import('../views/ProductDetail.vue') },

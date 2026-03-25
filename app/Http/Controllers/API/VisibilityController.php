@@ -71,4 +71,36 @@ class VisibilityController extends Controller
             'is_featured' => $plan->is_featured_badge,
         ]);
     }
+
+    // Contratos a expirar nos próximos N dias (admin)
+    public function expiringContracts(Request $request): JsonResponse
+    {
+        $days = (int) ($request->get('days', 7));
+
+        $purchases = StoreVisibilityPurchase::with(['store.owner', 'plan'])
+            ->where('status', 'active')
+            ->whereBetween('expires_at', [now(), now()->addDays($days)])
+            ->orderBy('expires_at')
+            ->get()
+            ->map(fn($p) => [
+                'id'          => $p->id,
+                'store_name'  => $p->store->name,
+                'store_email' => $p->store->owner?->email,
+                'plan_name'   => $p->plan->name,
+                'expires_at'  => $p->expires_at,
+                'days_left'   => (int) now()->diffInDays($p->expires_at, false),
+            ]);
+
+        return response()->json($purchases);
+    }
+
+    // Enviar notificação de renovação para a loja (admin)
+    public function notifyRenewal(Request $request, StoreVisibilityPurchase $purchase): JsonResponse
+    {
+        $store = $purchase->store()->with('owner')->first();
+        if ($store?->owner) {
+            $store->owner->notify(new \App\Notifications\ContractExpiryNotification($purchase));
+        }
+        return response()->json(['message' => 'Notificação enviada.']);
+    }
 }

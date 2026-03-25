@@ -10,6 +10,23 @@
       </button>
     </div>
 
+    <!-- Alertas de contratos a expirar -->
+    <div v-if="expiringContracts.length > 0" class="card-african border border-orange-500/40 p-4 mb-6 bg-orange-900/10">
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-orange-400 font-bold text-sm">⚠ Contratos a expirar em breve ({{ expiringContracts.length }})</p>
+        <button @click="showExpiring = !showExpiring" class="text-orange-400/70 text-xs hover:text-orange-400">{{ showExpiring ? 'Ocultar' : 'Ver todos' }}</button>
+      </div>
+      <div v-if="showExpiring" class="space-y-2 max-h-48 overflow-y-auto">
+        <div v-for="c in expiringContracts" :key="c.id" class="flex items-center justify-between bg-bc-surface-2 rounded-lg px-3 py-2">
+          <div>
+            <p class="text-bc-light text-sm font-medium">{{ c.store_name }}</p>
+            <p class="text-orange-400 text-xs">Expira em {{ c.days_left }} dia(s) — {{ c.plan_name }}</p>
+          </div>
+          <a :href="`mailto:${c.store_email}`" class="text-bc-gold text-xs border border-bc-gold/30 rounded px-2 py-0.5 hover:bg-bc-gold/10">Notificar</a>
+        </div>
+      </div>
+    </div>
+
     <!-- Resumo por estado -->
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
       <button
@@ -131,13 +148,20 @@
             <p class="text-bc-light text-sm font-medium">{{ selected.driver.user?.name }}</p>
             <p class="text-bc-muted text-xs">{{ selected.driver.vehicle_type }} · {{ selected.driver.user?.phone }}</p>
             <div v-if="selected.driver.current_latitude" class="mt-2">
-              <p class="text-green-400 text-xs">📡 Localização actual:</p>
-              <p class="text-bc-muted text-xs font-mono">{{ selected.driver.current_latitude?.toFixed(5) }}, {{ selected.driver.current_longitude?.toFixed(5) }}</p>
-              <a
-                :href="`https://www.google.com/maps?q=${selected.driver.current_latitude},${selected.driver.current_longitude}`"
-                target="_blank"
-                class="text-bc-gold text-xs hover:underline mt-1 inline-block"
-              >🗺 Ver no Google Maps</a>
+              <p class="text-green-400 text-xs mb-1">📡 Localizacao actual em tempo real:</p>
+              <p class="text-bc-muted text-xs font-mono mb-1">{{ selected.driver.current_latitude?.toFixed(5) }}, {{ selected.driver.current_longitude?.toFixed(5) }}</p>
+              <div class="flex gap-2 flex-wrap">
+                <a
+                  :href="`https://www.google.com/maps?q=${selected.driver.current_latitude},${selected.driver.current_longitude}`"
+                  target="_blank"
+                  class="text-bc-gold text-xs border border-bc-gold/30 rounded px-2 py-0.5 hover:bg-bc-gold/10"
+                >🗺 Google Maps</a>
+                <a
+                  :href="`https://www.google.com/maps/dir/?api=1&destination=${selected.dropoff_latitude},${selected.dropoff_longitude}&origin=${selected.driver.current_latitude},${selected.driver.current_longitude}&travelmode=driving`"
+                  target="_blank"
+                  class="text-green-400 text-xs border border-green-500/30 rounded px-2 py-0.5 hover:bg-green-900/20"
+                >🚗 Rota ao cliente</a>
+              </div>
             </div>
           </div>
           <div v-else>
@@ -213,7 +237,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 
 const deliveries = ref([])
@@ -227,6 +251,8 @@ const selectedDriverId = ref(null)
 const assignLoading = ref(false)
 const availableDrivers = ref([])
 const statusCount = ref({})
+const expiringContracts = ref([])
+const showExpiring = ref(true)
 let refreshTimer = null
 
 const statusFilters = [
@@ -316,10 +342,29 @@ async function doReassign() {
   }
 }
 
+async function loadExpiringContracts() {
+  try {
+    const { data } = await axios.get('/admin/visibility/pending-renewals')
+    // Normalizar formato dos dados
+    const list = data.data ?? data
+    expiringContracts.value = list.map(p => ({
+      id:          p.id,
+      store_name:  p.store?.name ?? p.store_name ?? '—',
+      store_email: p.store?.owner?.email ?? p.store_email ?? '',
+      plan_name:   p.plan?.name ?? p.plan_name ?? '—',
+      expires_at:  p.expires_at,
+      days_left:   Math.max(0, Math.floor((new Date(p.expires_at) - Date.now()) / 86400000)),
+    })).filter(p => p.days_left <= 7)
+  } catch {
+    expiringContracts.value = []
+  }
+}
+
 onMounted(() => {
   load()
   loadStatusCounts()
-  refreshTimer = setInterval(() => { load(); loadStatusCounts() }, 30000) // auto-refresh 30s
+  loadExpiringContracts()
+  refreshTimer = setInterval(() => { load(); loadStatusCounts() }, 30000)
 })
 
 onUnmounted(() => clearInterval(refreshTimer))

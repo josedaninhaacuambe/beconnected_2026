@@ -189,37 +189,59 @@
 
           <!-- Lista de estafetas próximos -->
           <div v-if="nearbyDrivers.length > 0">
-            <p class="text-bc-muted text-xs font-semibold uppercase tracking-wide mb-2">📍 Estafetas num raio de 1km</p>
+            <p class="text-bc-muted text-xs font-semibold uppercase tracking-wide mb-2">📍 Estafetas num raio de 1km — GPS em tempo real</p>
             <div class="space-y-2">
               <div
                 v-for="driver in nearbyDrivers"
                 :key="driver.id"
-                class="flex items-center justify-between bg-bc-dark/50 rounded-lg px-3 py-2 border border-bc-gold/10"
+                class="bg-bc-dark/50 rounded-lg px-3 py-2 border border-bc-gold/10"
               >
-                <div class="flex items-center gap-2">
-                  <span class="text-lg">{{ driver.vehicle_type === 'moto' ? '🏍️' : driver.vehicle_type === 'carro' ? '🚗' : '🚲' }}</span>
-                  <div>
-                    <p class="text-bc-light text-sm font-medium">{{ driver.name }}</p>
-                    <p class="text-bc-muted text-xs">~{{ driver.distance_km }} km · {{ driver.vehicle_type }}</p>
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg">{{ driver.vehicle_type === 'moto' ? '🏍️' : driver.vehicle_type === 'carro' ? '🚗' : '🚲' }}</span>
+                    <div>
+                      <p class="text-bc-light text-sm font-medium">{{ driver.name }}</p>
+                      <p class="text-bc-muted text-xs">~{{ driver.distance_km }} km · {{ driver.vehicle_type }}</p>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <a
+                      v-if="driver.latitude && driver.longitude"
+                      :href="`https://www.google.com/maps?q=${driver.latitude},${driver.longitude}`"
+                      target="_blank"
+                      class="text-green-400 text-xs border border-green-500/30 rounded-lg px-2 py-1 hover:bg-green-900/20 transition"
+                    >📡 GPS</a>
+                    <a v-if="driver.phone" :href="`tel:${driver.phone}`" class="text-bc-gold text-xs border border-bc-gold/30 rounded-lg px-2 py-1 hover:bg-bc-gold/10 transition">
+                      📞 {{ driver.phone }}
+                    </a>
                   </div>
                 </div>
-                <a v-if="driver.phone" :href="`tel:${driver.phone}`" class="text-bc-gold text-xs border border-bc-gold/30 rounded-lg px-2 py-1 hover:bg-bc-gold/10 transition">
-                  📞 Contactar
-                </a>
               </div>
             </div>
           </div>
 
-          <!-- Contacto do cliente -->
-          <div class="border-t border-bc-gold/10 pt-3">
-            <p class="text-bc-muted text-xs mb-2">📱 O teu contacto para o estafeta</p>
-            <p class="text-bc-light text-sm">{{ authStore.user?.phone || authStore.user?.email }}</p>
+          <!-- Contactos: cliente e estafeta -->
+          <div class="border-t border-bc-gold/10 pt-3 grid grid-cols-2 gap-3">
+            <div>
+              <p class="text-bc-muted text-xs mb-1">📱 O teu contacto (cliente)</p>
+              <p class="text-bc-light text-sm font-medium">{{ authStore.user?.phone || authStore.user?.email }}</p>
+            </div>
+            <div v-if="nearbyDrivers.length > 0">
+              <p class="text-bc-muted text-xs mb-1">🏍️ Estafeta atribuido apos confirmacao</p>
+              <p class="text-bc-muted text-xs">Contacto visivel no detalhe do pedido</p>
+            </div>
           </div>
 
-          <!-- Info GPS -->
-          <div class="flex items-center gap-2 bg-green-900/20 border border-green-500/20 rounded-lg px-3 py-2">
-            <span class="text-green-400 text-sm">📡</span>
-            <p class="text-green-400 text-xs">Acompanhamento GPS em tempo real disponível após confirmação do pedido</p>
+          <!-- Info GPS e confirmação -->
+          <div class="space-y-2">
+            <div class="flex items-center gap-2 bg-green-900/20 border border-green-500/20 rounded-lg px-3 py-2">
+              <span class="text-green-400 text-sm">📡</span>
+              <p class="text-green-400 text-xs">Acompanhamento GPS em tempo real disponivel apos confirmacao do pedido — link enviado para o teu contacto</p>
+            </div>
+            <div class="flex items-center gap-2 bg-blue-900/20 border border-blue-500/20 rounded-lg px-3 py-2">
+              <span class="text-blue-400 text-sm">⭐</span>
+              <p class="text-blue-400 text-xs">Apos a entrega podes confirmar o recebimento e avaliar o estafeta para ganhar estrelas de fidelidade</p>
+            </div>
           </div>
 
           <p v-if="estimate.available_drivers === 0" class="text-orange-400 text-xs bg-orange-900/20 rounded-lg px-3 py-2">

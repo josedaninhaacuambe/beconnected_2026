@@ -129,8 +129,8 @@ class CartController extends Controller
         // Invalidar cache de produtos da loja
         $storeSlug = \App\Models\Store::find($info['store_id'])->slug ?? null;
         if ($storeSlug) {
-            foreach (['featured', 'newest', 'price_asc', 'price_desc'] as $sort) {
-                for ($pg = 1; $pg <= 3; $pg++) {
+            foreach (['featured', 'newest', 'price_asc', 'price_desc', 'rating'] as $sort) {
+                for ($pg = 1; $pg <= 5; $pg++) {
                     Cache::forget("store_products_{$storeSlug}_p{$pg}_{$sort}");
                 }
             }

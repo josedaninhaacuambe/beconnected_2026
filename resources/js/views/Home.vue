@@ -31,6 +31,23 @@
           O mercado digital de Moçambique
         </p>
 
+        <!-- Barra de pesquisa rápida no hero -->
+        <form @submit.prevent="goSearch" class="flex gap-2 mb-6 w-full max-w-lg">
+          <input
+            v-model="heroSearch"
+            type="text"
+            placeholder="Pesquisar produto, marca, loja..."
+            class="flex-1 rounded-xl px-4 py-3 text-sm font-medium outline-none border-2 border-white/20 focus:border-bc-gold bg-white/10 text-white placeholder-white/50 backdrop-blur-sm"
+          />
+          <button
+            type="submit"
+            class="rounded-xl font-black uppercase tracking-wider text-white transition hover:opacity-90 active:scale-95 flex items-center gap-2"
+            style="background-color:#F07820; padding: 0.75rem 1.25rem; font-size: 0.9rem;"
+          >
+            🔍
+          </button>
+        </form>
+
         <!-- Botões grandes e funcionais -->
         <div class="flex flex-wrap gap-4">
           <RouterLink
@@ -42,11 +59,11 @@
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
           </RouterLink>
           <RouterLink
-            to="/pesquisa"
+            to="/produtos"
             class="inline-flex items-center gap-3 font-black uppercase tracking-wider rounded-xl text-white transition hover:opacity-90 active:scale-95"
             style="background-color:#F07820; padding: 0.875rem 2rem; font-size: 1rem;"
           >
-            🔍 Buscar Produto
+            🛍 Todos os Produtos
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
           </RouterLink>
         </div>
@@ -173,6 +190,12 @@ const PriceDrops       = defineAsyncComponent(() => import('@/components/hooks/P
 
 const router = useRouter()
 const heroBroken = ref(false)
+const heroSearch = ref('')
+
+function goSearch() {
+  const q = heroSearch.value.trim()
+  router.push({ name: 'search', query: q ? { q } : {} })
+}
 const heroBannerUrl = '/images/Hero-Banner2.png'
 const provinces = ref([])
 const cities = ref([])
