@@ -113,8 +113,39 @@
       </div>
     </div>
   </div>
-  <div v-else class="flex items-center justify-center min-h-screen">
-    <div class="text-bc-muted">A carregar loja...</div>
+  <div v-else class="flex flex-col items-center justify-center min-h-screen gap-6">
+    <!-- Spinner animado -->
+    <div class="relative w-20 h-20">
+      <!-- Anel externo -->
+      <div class="absolute inset-0 rounded-full border-4 border-bc-gold/10"></div>
+      <!-- Anel a girar -->
+      <div class="absolute inset-0 rounded-full border-4 border-transparent border-t-bc-gold animate-spin"></div>
+      <!-- Anel interior a girar ao contrário -->
+      <div class="absolute inset-2 rounded-full border-4 border-transparent border-b-bc-gold/50" style="animation: spin 1.4s linear infinite reverse;"></div>
+      <!-- Ícone central -->
+      <div class="absolute inset-0 flex items-center justify-center">
+        <span class="text-2xl">🏪</span>
+      </div>
+    </div>
+
+    <!-- Texto -->
+    <div class="text-center">
+      <p class="text-bc-light font-semibold text-base">A carregar loja...</p>
+      <p class="text-bc-muted text-xs mt-1">Por favor aguarde</p>
+    </div>
+
+    <!-- Barra de progresso animada -->
+    <div class="w-48 h-1 bg-bc-surface-2 rounded-full overflow-hidden">
+      <div class="h-full bg-gradient-to-r from-bc-gold to-bc-orange rounded-full" style="animation: loading-bar 1.5s ease-in-out infinite;"></div>
+    </div>
+
+    <style scoped>
+      @keyframes loading-bar {
+        0%   { width: 0%; margin-left: 0%; }
+        50%  { width: 60%; margin-left: 20%; }
+        100% { width: 0%; margin-left: 100%; }
+      }
+    </style>
   </div>
 </template>
 
