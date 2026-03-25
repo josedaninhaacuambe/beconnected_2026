@@ -17,6 +17,10 @@ class StoreController extends Controller
     {
         $store = Store::where('slug', $slug)->where('status', 'active')->firstOrFail();
 
+        if (!$store->canUseScanAndGo()) {
+            return response()->json(['message' => 'Scan & Go disponível apenas para pacote 15000.'], 403);
+        }
+
         $barcode = trim($request->query('barcode', ''));
         if (!$barcode) {
             return response()->json(['message' => 'Código de barras obrigatório'], 422);
@@ -50,6 +54,10 @@ class StoreController extends Controller
 
         $store = Store::where('slug', $slug)->where('status', 'active')->firstOrFail();
         $user  = $request->user();
+
+        if (!$store->canUseScanAndGo()) {
+            return response()->json(['message' => 'Scan & Go disponível apenas para pacote 15000.'], 403);
+        }
 
         // Verificar que todos os produtos pertencem à loja e têm stock
         $productIds = collect($validated['items'])->pluck('product_id');

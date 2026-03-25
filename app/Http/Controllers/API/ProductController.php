@@ -30,6 +30,7 @@ class ProductController extends Controller
             'lat'             => 'nullable|numeric|between:-90,90',
             'lng'             => 'nullable|numeric|between:-180,180',
             'radius'          => 'nullable|numeric|min:1|max:100',
+            'only_visibility' => 'nullable|boolean',
         ]);
 
         // Cache non-geo searches (most common case)
@@ -49,7 +50,8 @@ class ProductController extends Controller
     {
         $query = Product::with(['store.province', 'store.city', 'brand', 'category', 'stock'])
             ->where('is_active', true)
-            ->whereHas('store', fn($q) => $q->where('status', 'active'));
+            ->whereHas('store', fn($q) => $q->where('status', 'active'))
+            ->whereHas('store', fn($q) => $q->whereHas('visibilityPurchases', fn($vp) => $vp->where('expires_at', '>', now())));
 
         if ($request->q) {
             $term = $request->q;
@@ -161,6 +163,12 @@ class ProductController extends Controller
         ];
     }
 
+    // Todos os produtos de lojas com visibilidade (para página de produtos)
+    public function allProducts(Request $request): JsonResponse
+    {
+        return $this->search($request);
+    }
+
     // Produtos de uma loja específica (COM PREÇO)
     public function storeProducts(Request $request, string $storeSlug): JsonResponse
     {
@@ -188,6 +196,20 @@ class ProductController extends Controller
         $query = Product::with(['brand', 'category', 'stock'])
             ->where('store_id', $store->id)
             ->where('is_active', true);
+
+        // Aplicar limitações se não houver visibilidade activa
+        if (!$store->hasActiveVisibility()) {
+            $maxProducts = $store->getMaxProducts();
+            $query->whereIn('id', function ($sub) use ($store, $maxProducts) {
+                $sub->select('id')
+                    ->from('products')
+                    ->where('store_id', $store->id)
+                    ->where('is_active', true)
+                    ->orderByDesc('is_featured')
+                    ->orderByDesc('created_at')
+                    ->limit($maxProducts);
+            });
+        }
 
         if ($request->q) {
             $term = $request->q;
@@ -558,5 +580,50 @@ class ProductController extends Controller
     public function brands(): JsonResponse
     {
         return response()->json(Brand::orderBy('name')->get());
+    }
+
+    // Queimar stock (reduzir stock para promover vendas)
+    public function burnStock(Request $request, Product $product): JsonResponse
+    {
+        $this->authorize('update', $product);
+
+        $store = $product->store;
+        if (!$store->canBurnStock()) {
+            return response()->json(['message' => 'Seu pacote não permite queima de stock.'], 403);
+        }
+
+        $validated = $request->validate([
+            'quantity' => 'required|integer|min:1',
+        ]);
+
+        $maxBurn = $store->getMaxStockBurnPerDay();
+        // Check daily burn limit (simplified, in real app use cache or table)
+        $todayBurn = $product->stockMovements()
+            ->where('type', 'burn')
+            ->whereDate('created_at', today())
+            ->sum('quantity');
+
+        if ($todayBurn + $validated['quantity'] > $maxBurn) {
+            return response()->json(['message' => "Limite diário de queima: {$maxBurn} unidades."], 422);
+        }
+
+        $stock = $product->stock;
+        $before = $stock->quantity;
+        $after = max(0, $before - $validated['quantity']);
+
+        $stock->update(['quantity' => $after]);
+
+        \Cache::forget("cart_product_{$product->id}");
+
+        $product->stockMovements()->create([
+            'type' => 'burn',
+            'quantity' => $validated['quantity'],
+            'quantity_before' => $before,
+            'quantity_after' => $after,
+            'reason' => 'Queima de stock para promoção',
+            'user_id' => $request->user()->id,
+        ]);
+
+        return response()->json(['message' => 'Stock queimado com sucesso.', 'stock' => $stock->fresh()]);
     }
 }

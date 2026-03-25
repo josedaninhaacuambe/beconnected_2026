@@ -12,5 +12,8 @@ Artisan::command('inspire', function () {
 // sem limpeza, o SELECT por token fica mais lento com o tempo
 Schedule::command('sanctum:prune-expired --hours=24')->daily();
 
+// Notificar admins sobre lojas com contrato de visibilidade expirando em 7 dias
+Schedule::command('visibilities:notify-expiring')->daily();
+
 // Limpar jobs falhados com mais de 7 dias da tabela failed_jobs
 Schedule::command('queue:flush')->weekly();

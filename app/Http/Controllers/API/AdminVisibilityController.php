@@ -53,6 +53,19 @@ class AdminVisibilityController extends Controller
         return response()->json($purchases);
     }
 
+    // ─── Expiring/pending renewals (next 7 dias) ──────────────────────────────
+    public function pendingRenewals(): JsonResponse
+    {
+        $now = now();
+        $purchases = StoreVisibilityPurchase::with(['store', 'plan'])
+            ->where('status', 'active')
+            ->whereBetween('expires_at', [$now, $now->copy()->addDays(7)])
+            ->orderBy('expires_at', 'asc')
+            ->get();
+
+        return response()->json($purchases);
+    }
+
     // ─── Store history ────────────────────────────────────────────────────────
 
     public function storeHistory(Store $store): JsonResponse

@@ -61,6 +61,7 @@ Route::middleware('throttle:api-public')->group(function () {
 
 // Pesquisa global de produtos (SEM PREÇO)
 Route::get('products/search', [ProductController::class, 'search'])->middleware('throttle:api-public');
+Route::get('products/all', [ProductController::class, 'allProducts'])->middleware('throttle:api-public');
 
 // ─── Viral hooks (públicos, sem autenticação) ─────────────────────────────
 Route::middleware('throttle:api-public')->group(function () {
@@ -184,6 +185,30 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
         // Pedidos da loja
         Route::get('orders', [OrderController::class, 'storeOrders']);
         Route::put('orders/{storeOrder}/status', [OrderController::class, 'updateStoreOrderStatus']);
+
+        // Carrinhos activos (potenciais vendas)
+        Route::get('active-carts', function (Illuminate\Http\Request $req) {
+            $store = \App\Models\Store::where('user_id', $req->user()->id)->firstOrFail();
+            $carts = \App\Models\CartItem::with(['cart.user', 'product'])
+                ->whereHas('product', fn($q) => $q->where('store_id', $store->id))
+                ->whereHas('cart', fn($q) => $q->whereNotNull('user_id'))
+                ->get()
+                ->groupBy('cart_id')
+                ->map(function ($items) {
+                    $cart = $items->first()->cart;
+                    return [
+                        'user' => $cart->user->only(['id', 'name', 'phone']),
+                        'items' => $items->map(fn($i) => [
+                            'product_name' => $i->product->name,
+                            'quantity' => $i->quantity,
+                        ]),
+                        'total_value' => $items->sum(fn($i) => $i->unit_price * $i->quantity),
+                        'added_at' => $items->max('created_at'),
+                    ];
+                })
+                ->values();
+            return response()->json($carts);
+        });
 
         // Visibilidade/Posicionamento
         Route::post('visibility/purchase', [VisibilityController::class, 'purchase']);
@@ -319,6 +344,7 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
         // ─── VISIBILITY ───────────────────────────────────────────────────
         Route::get('visibility/dashboard', [AdminVisibilityController::class, 'dashboard']);
         Route::get('visibility', [AdminVisibilityController::class, 'index']);
+        Route::get('visibility/pending-renewals', [AdminVisibilityController::class, 'pendingRenewals']);
         Route::get('visibility/stores/{store}/history', [AdminVisibilityController::class, 'storeHistory']);
         Route::get('visibility/{purchase}/history', [AdminVisibilityController::class, 'purchaseHistory']);
         Route::post('visibility/stores/{store}/activate', [AdminVisibilityController::class, 'activate']);

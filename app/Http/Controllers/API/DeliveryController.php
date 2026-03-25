@@ -56,6 +56,38 @@ class DeliveryController extends Controller
         ]);
     }
 
+    // Listar entregadores disponíveis para uma localização
+    public function availableDrivers(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'latitude'  => 'required|numeric',
+            'longitude' => 'required|numeric',
+            'radius'    => 'nullable|numeric|min:0.1|max:10',
+        ]);
+
+        $lat    = (float) $validated['latitude'];
+        $lng    = (float) $validated['longitude'];
+        $radius = (float) ($validated['radius'] ?? 1);
+
+        $drivers = $this->deliveryService->findAvailableDrivers($lat, $lng, $radius)
+            ->with('user')
+            ->get()
+            ->map(function ($driver) use ($lat, $lng) {
+                $distance = $this->deliveryService->calculateDistance($lat, $lng, $driver->current_latitude, $driver->current_longitude);
+                return [
+                    'id' => $driver->id,
+                    'name' => $driver->user->name,
+                    'contact' => $driver->user->phone ?? $driver->user->whatsapp,
+                    'address' => 'Endereço baseado em GPS', // Placeholder
+                    'distance_km' => round($distance, 2),
+                    'vehicle_type' => $driver->vehicle_type,
+                    'rating' => 4.5, // Placeholder
+                ];
+            });
+
+        return response()->json($drivers);
+    }
+
     // Rastrear entrega
     public function track(string $trackingCode): JsonResponse
     {

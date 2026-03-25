@@ -88,4 +88,88 @@ class Store extends Model
         }
         return 0;
     }
+
+    public function getActiveVisibilityPlan()
+    {
+        return $this->visibilityPurchases()
+            ->where('status', 'active')
+            ->where('expires_at', '>', now())
+            ->with('plan')
+            ->first()?->plan;
+    }
+
+    public function hasActiveVisibility(): bool
+    {
+        return $this->getActiveVisibilityPlan() !== null;
+    }
+
+    public function getMaxProducts(): int
+    {
+        $plan = $this->getActiveVisibilityPlan();
+        return match ($plan?->price) {
+            500 => 500, // or unlimited? but user said for no package 100
+            1000 => 1000,
+            2000 => 2000,
+            15000 => 15000,
+            default => 100, // no package
+        };
+    }
+
+    public function getMaxEmployees(): int
+    {
+        $plan = $this->getActiveVisibilityPlan();
+        return match ($plan?->price) {
+            500 => 1,
+            1000 => 2,
+            2000 => 5,
+            15000 => 999, // unlimited
+            default => 1,
+        };
+    }
+
+    public function canBurnStock(): bool
+    {
+        $plan = $this->getActiveVisibilityPlan();
+        return in_array($plan?->price, [1000, 2000, 15000]);
+    }
+
+    public function getMaxStockBurnPerDay(): int
+    {
+        $plan = $this->getActiveVisibilityPlan();
+        return match ($plan?->price) {
+            1000 => 10,
+            2000 => 20,
+            15000 => 50,
+            default => 0,
+        };
+    }
+
+    public function canImportStock(): bool
+    {
+        $plan = $this->getActiveVisibilityPlan();
+        return in_array($plan?->price, [500, 1000, 2000, 15000]);
+    }
+
+    public function canCustomizeProfile(): bool
+    {
+        $plan = $this->getActiveVisibilityPlan();
+        return in_array($plan?->price, [2000, 15000]);
+    }
+
+    public function canUsePOS(): bool
+    {
+        $plan = $this->getActiveVisibilityPlan();
+        return $plan?->price === 15000;
+    }
+
+    public function canUseScanAndGo(): bool
+    {
+        return $this->canUsePOS(); // only 15000
+    }
+
+    public function canOrganizeSections(): bool
+    {
+        $plan = $this->getActiveVisibilityPlan();
+        return in_array($plan?->price, [1000, 2000, 15000]);
+    }
 }
