@@ -25,10 +25,9 @@
       <div v-else class="divide-y divide-bc-gold/10">
         <div v-for="p in activeFlashSales" :key="p.id" class="flex items-center gap-4 px-5 py-4">
           <div class="w-12 h-12 rounded-xl overflow-hidden bg-bc-surface-2 flex-shrink-0">
-            <img v-if="p.images?.[0]"
+            <AppImg v-if="p.images?.[0]"
               :src="p.images[0].startsWith('http') ? p.images[0] : `/storage/${p.images[0]}`"
               class="w-full h-full object-cover" />
-            <span v-else class="w-full h-full flex items-center justify-center text-xl">📦</span>
           </div>
           <div class="flex-1 min-w-0">
             <p class="text-bc-light font-medium text-sm">{{ p.name }}</p>
@@ -87,7 +86,7 @@
             <!-- Info do produto seleccionado -->
             <div v-if="selectedProduct" class="bg-bc-surface-2 rounded-xl p-3 text-xs">
               <div class="flex items-center gap-3">
-                <img v-if="selectedProduct.images?.[0]"
+                <AppImg v-if="selectedProduct.images?.[0]"
                   :src="selectedProduct.images[0].startsWith('http') ? selectedProduct.images[0] : `/storage/${selectedProduct.images[0]}`"
                   class="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
                 <div>

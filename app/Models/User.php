@@ -19,6 +19,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name', 'email', 'phone', 'password', 'role', 'avatar',
         'province_id', 'city_id', 'neighborhood_id', 'address', 'is_active',
+        'admin_role', 'permissions',
     ];
 
     protected $hidden = ['password', 'remember_token'];
@@ -30,6 +31,7 @@ class User extends Authenticatable
             'phone_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'permissions' => 'array',
         ];
     }
 

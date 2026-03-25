@@ -11,6 +11,11 @@ export const useAuthStore = defineStore('auth', () => {
     const isAuthenticated = computed(() => !!token.value)
     const isStoreOwner    = computed(() => user.value?.role === 'store_owner')
     const isAdmin         = computed(() => user.value?.role === 'admin')
+    const isFullAdmin     = computed(() => user.value?.role === 'admin' && !user.value?.admin_role)
+    const hasPermission   = (perm) => {
+        if (isFullAdmin.value) return true
+        return (user.value?.permissions ?? []).includes(perm)
+    }
 
     // initAuth() é chamado em background — NÃO bloqueia o mount da app
     // Usa dados em cache do localStorage para render imediato,
@@ -60,5 +65,5 @@ export const useAuthStore = defineStore('auth', () => {
         return data
     }
 
-    return { user, token, isAuthenticated, isStoreOwner, isAdmin, initAuth, login, register, logout, updateProfile }
+    return { user, token, isAuthenticated, isStoreOwner, isAdmin, isFullAdmin, hasPermission, initAuth, login, register, logout, updateProfile }
 })

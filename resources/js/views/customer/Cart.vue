@@ -27,7 +27,7 @@
         <!-- Cabeçalho da loja -->
         <div class="flex items-center gap-3 px-4 py-3 bg-bc-surface-2 border-b border-bc-gold/10">
           <div class="w-9 h-9 rounded-lg bg-bc-surface overflow-hidden flex items-center justify-center flex-shrink-0">
-            <img v-if="group.store.logo" :src="`/storage/${group.store.logo}`" class="w-full h-full object-cover" />
+            <AppImg v-if="group.store.logo" :src="`/storage/${group.store.logo}`" class="w-full h-full object-cover" />
             <span v-else class="text-bc-gold font-bold text-sm">{{ group.store.name.charAt(0) }}</span>
           </div>
           <div class="flex-1">
@@ -47,12 +47,11 @@
         <div v-if="!storePaid(group.store.id)" class="divide-y divide-bc-gold/5">
           <div v-for="item in group.items" :key="item.id" class="flex items-center gap-3 px-4 py-3">
             <div class="w-14 h-14 rounded-lg overflow-hidden bg-bc-surface-2 flex-shrink-0 flex items-center justify-center">
-              <img
+              <AppImg
                 v-if="item.product.images?.[0]"
                 :src="item.product.images[0].startsWith('http') ? item.product.images[0] : `/storage/${item.product.images[0]}`"
                 class="w-full h-full object-cover"
               />
-              <span v-else class="text-xl">📦</span>
             </div>
             <div class="flex-1 min-w-0">
               <p class="text-bc-light text-sm font-medium line-clamp-1">{{ item.product.name }}</p>

@@ -42,7 +42,7 @@
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
           </RouterLink>
           <RouterLink
-            to="/lojas"
+            to="/pesquisa"
             class="inline-flex items-center gap-3 font-black uppercase tracking-wider rounded-xl text-white transition hover:opacity-90 active:scale-95"
             style="background-color:#F07820; padding: 0.875rem 2rem; font-size: 1rem;"
           >
@@ -123,14 +123,13 @@
           class="card-african overflow-hidden hover:border-bc-gold/60 transition"
         >
           <div class="h-32 bg-bc-surface relative">
-            <img v-if="store.banner" :src="`/storage/${store.banner}`" class="w-full h-full object-cover" :alt="store.name" />
-            <div v-else class="w-full h-full flex items-center justify-center text-bc-gold/30 text-4xl">🏪</div>
+            <AppImg v-if="store.banner" :src="`/storage/${store.banner}`" class="w-full h-full object-cover" :alt="store.name" />
             <span v-if="store.is_featured" class="absolute top-2 right-2 bg-bc-gold text-bc-dark text-xs font-bold px-2 py-0.5 rounded-full">⭐ DESTAQUE</span>
           </div>
           <div class="p-3">
             <div class="flex items-center gap-2 mb-1">
               <div class="w-8 h-8 bg-bc-gold/10 rounded-full flex items-center justify-center">
-                <img v-if="store.logo" :src="`/storage/${store.logo}`" class="w-8 h-8 rounded-full object-cover" />
+                <AppImg v-if="store.logo" :src="`/storage/${store.logo}`" class="w-8 h-8 rounded-full object-cover" />
                 <span v-else class="text-bc-gold text-sm font-bold">{{ store.name.charAt(0) }}</span>
               </div>
               <h3 class="text-bc-light font-semibold text-sm">{{ store.name }}</h3>

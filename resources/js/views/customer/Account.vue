@@ -4,7 +4,7 @@
 
     <div class="card-african p-6 mb-4">
       <div class="flex items-center gap-4 mb-6">
-        <img v-if="user.avatar || user.google_avatar" :src="user.avatar || user.google_avatar" class="w-16 h-16 rounded-full object-cover" />
+        <AppImg v-if="user.avatar || user.google_avatar" :src="user.avatar || user.google_avatar" class="w-16 h-16 rounded-full object-cover" />
         <div v-else class="w-16 h-16 rounded-full bg-bc-gold/20 flex items-center justify-center text-bc-gold text-2xl font-bold">
           {{ user.name?.charAt(0)?.toUpperCase() }}
         </div>

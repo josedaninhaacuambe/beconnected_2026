@@ -31,11 +31,13 @@ axios.interceptors.response.use(
 )
 
 import { useAuthStore } from './stores/auth.js'
+import AppImg from './components/AppImg.vue'
 
 const app = createApp(App)
 const pinia = createPinia()
 app.use(pinia)
 app.use(router)
+app.component('AppImg', AppImg)
 
 // Montar a app IMEDIATAMENTE — utilizador vê a página sem esperar pela API
 // O localStorage já tem os dados do utilizador para render instantâneo

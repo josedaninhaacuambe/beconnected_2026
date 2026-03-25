@@ -124,6 +124,8 @@ class CartController extends Controller
 
         // Invalidar cache dos itens para a próxima leitura reflectir o estado real
         $this->invalidateCartCache($cartId);
+        // Invalidar cache de produtos da loja para reflectir disponibilidade actualizada
+        Cache::forget("cart_product_{$productId}");
 
         return response()->json(['message' => 'Produto adicionado ao carrinho.']);
     }

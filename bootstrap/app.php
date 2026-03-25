@@ -13,7 +13,8 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-            'role' => \App\Http\Middleware\CheckRole::class,
+            'role'             => \App\Http\Middleware\CheckRole::class,
+            'admin.permission' => \App\Http\Middleware\CheckAdminPermission::class,
         ]);
 
         // statefulApi() adicionava session/cookie/CSRF a TODAS as rotas API

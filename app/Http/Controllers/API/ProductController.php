@@ -53,11 +53,28 @@ class ProductController extends Controller
 
         if ($request->q) {
             $term = $request->q;
-            // Use FULLTEXT MATCH AGAINST for the main name/model search (uses ft_products_search index)
-            // Fall back to brand LIKE for brand matching (not covered by FT index)
-            $query->where(function ($q) use ($term) {
-                $q->whereRaw('MATCH(name, model) AGAINST (? IN BOOLEAN MODE)', ['"' . addslashes($term) . '"*'])
-                  ->orWhereHas('brand', fn($b) => $b->where('name', 'like', '%' . $term . '%'));
+            $like = '%' . addslashes($term) . '%';
+            // Para termos curtos (< 3 chars) ou que contenham espaços, usa LIKE
+            // Para termos mais longos usa FULLTEXT com fallback LIKE
+            $query->where(function ($q) use ($term, $like) {
+                if (mb_strlen($term) < 3) {
+                    $q->where('name', 'like', $like)
+                      ->orWhere('model', 'like', $like)
+                      ->orWhere('description', 'like', $like)
+                      ->orWhere('sku', 'like', $like)
+                      ->orWhereHas('brand', fn($b) => $b->where('name', 'like', $like))
+                      ->orWhereHas('category', fn($c) => $c->where('name', 'like', $like))
+                      ->orWhereHas('store', fn($s) => $s->where('name', 'like', $like));
+                } else {
+                    $ftTerm = implode(' ', array_map(fn($w) => $w . '*', preg_split('/\s+/', trim($term))));
+                    $q->whereRaw('MATCH(name, model) AGAINST (? IN BOOLEAN MODE)', [$ftTerm])
+                      ->orWhere('name', 'like', $like)
+                      ->orWhere('model', 'like', $like)
+                      ->orWhere('sku', 'like', $like)
+                      ->orWhereHas('brand', fn($b) => $b->where('name', 'like', $like))
+                      ->orWhereHas('category', fn($c) => $c->where('name', 'like', $like))
+                      ->orWhereHas('store', fn($s) => $s->where('name', 'like', $like));
+                }
             });
         }
         if ($request->brand) {
@@ -100,6 +117,15 @@ class ProductController extends Controller
                 $query->whereHas('store', fn($q) => $q->where('neighborhood_id', $request->neighborhood_id));
             }
         }
+
+        // Lojas com visibilidade activa aparecem primeiro
+        $query->orderByRaw('
+            CASE WHEN EXISTS (
+                SELECT 1 FROM store_visibility_purchases svp
+                WHERE svp.store_id = products.store_id
+                  AND svp.expires_at > NOW()
+            ) THEN 0 ELSE 1 END
+        ')->orderByDesc('products.is_featured');
 
         $products = $query->paginate(24);
 
@@ -164,7 +190,21 @@ class ProductController extends Controller
             ->where('is_active', true);
 
         if ($request->q) {
-            $query->whereRaw('MATCH(name, model) AGAINST (? IN BOOLEAN MODE)', ['"' . addslashes($request->q) . '"*']);
+            $term = $request->q;
+            $like = '%' . addslashes($term) . '%';
+            if (mb_strlen($term) < 3) {
+                $query->where(function ($q) use ($like) {
+                    $q->where('name', 'like', $like)->orWhere('model', 'like', $like)->orWhere('sku', 'like', $like);
+                });
+            } else {
+                $ftTerm = implode(' ', array_map(fn($w) => $w . '*', preg_split('/\s+/', trim($term))));
+                $query->where(function ($q) use ($ftTerm, $like) {
+                    $q->whereRaw('MATCH(name, model) AGAINST (? IN BOOLEAN MODE)', [$ftTerm])
+                      ->orWhere('name', 'like', $like)
+                      ->orWhere('model', 'like', $like)
+                      ->orWhere('sku', 'like', $like);
+                });
+            }
         }
         if ($request->category_id) {
             $query->where('product_category_id', $request->category_id);
@@ -191,8 +231,26 @@ class ProductController extends Controller
         };
 
         $paginated = $query->paginate(24);
+
+        $items = collect($paginated->items())->map(fn($p) => [
+            'id'            => $p->id,
+            'name'          => $p->name,
+            'slug'          => $p->slug,
+            'price'         => $p->price,
+            'compare_price' => $p->compare_price,
+            'flash_price'   => $p->flash_price,
+            'flash_until'   => $p->flash_until?->toISOString(),
+            'images'        => $p->images ?? [],
+            'is_featured'   => $p->is_featured,
+            'rating'        => $p->rating,
+            'total_reviews' => $p->total_reviews,
+            'brand'         => $p->brand ? ['id' => $p->brand->id, 'name' => $p->brand->name] : null,
+            'category'      => $p->category ? ['id' => $p->category->id, 'name' => $p->category->name] : null,
+            'stock'         => $p->stock ? ['quantity' => $p->stock->quantity, 'minimum_stock' => $p->stock->minimum_stock] : null,
+        ])->all();
+
         return [
-            'data'          => $paginated->items(),
+            'data'          => $items,
             'current_page'  => $paginated->currentPage(),
             'last_page'     => $paginated->lastPage(),
             'total'         => $paginated->total(),
@@ -412,6 +470,7 @@ class ProductController extends Controller
                 ->orderBy('flash_until')
                 ->get()
                 ->map(fn($p) => $this->toHookArray($p))
+                ->all()
         );
         return response()->json($products);
     }
@@ -426,6 +485,7 @@ class ProductController extends Controller
                 ->take(8)
                 ->get()
                 ->map(fn($p) => $this->toHookArray($p))
+                ->all()
         );
         return response()->json($products);
     }
@@ -442,6 +502,7 @@ class ProductController extends Controller
                 ->take(10)
                 ->get()
                 ->map(fn($p) => $this->toHookArray($p))
+                ->all()
         );
         return response()->json($products);
     }

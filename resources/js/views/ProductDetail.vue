@@ -9,13 +9,12 @@
       <!-- Galeria de imagens -->
       <div>
         <div class="aspect-square rounded-2xl overflow-hidden bg-bc-surface-2">
-          <img
+          <AppImg
             :src="currentImage"
             class="w-full h-full object-cover"
             :alt="product.name"
             @error="currentImage = null"
           />
-          <div v-if="!currentImage" class="w-full h-full flex items-center justify-center text-bc-gold/20 text-8xl">📦</div>
         </div>
         <div v-if="allImages.length > 1" class="flex gap-2 mt-3 overflow-x-auto pb-1">
           <button
@@ -25,7 +24,7 @@
             class="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition"
             :class="currentImage === img ? 'border-bc-gold' : 'border-bc-surface-2 hover:border-bc-gold/40'"
           >
-            <img :src="img" class="w-full h-full object-cover" />
+            <AppImg :src="img" class="w-full h-full object-cover" />
           </button>
         </div>
       </div>
@@ -152,12 +151,11 @@
           class="card-african overflow-hidden hover:border-bc-gold/60 transition"
         >
           <div class="h-36 bg-bc-surface-2 overflow-hidden">
-            <img
+            <AppImg
               v-if="p.images?.[0]"
               :src="p.images[0].startsWith('http') ? p.images[0] : `/storage/${p.images[0]}`"
               class="w-full h-full object-cover"
             />
-            <div v-else class="w-full h-full flex items-center justify-center text-bc-gold/20 text-3xl">📦</div>
           </div>
           <div class="p-3">
             <p class="text-bc-light text-xs font-medium line-clamp-2 mb-1">{{ p.name }}</p>

@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\API\AdminController;
+use App\Http\Controllers\API\AdminStaffController;
+use App\Http\Controllers\API\AdminVisibilityController;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\CartController;
 use App\Http\Controllers\API\DeliveryController;
@@ -153,10 +155,12 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
     // Entrega
     Route::prefix('delivery')->group(function () {
         Route::post('estimate', [DeliveryController::class, 'estimate']);
+        Route::post('nearby-drivers', [DeliveryController::class, 'nearbyDrivers']);
         Route::post('register-driver', [DeliveryController::class, 'registerAsDriver']);
         Route::post('availability', [DeliveryController::class, 'updateAvailability']);
         Route::post('{delivery}/accept', [DeliveryController::class, 'acceptDelivery']);
         Route::post('{delivery}/status', [DeliveryController::class, 'updateDeliveryStatus']);
+        Route::post('{delivery}/confirm-receipt', [DeliveryController::class, 'confirmReceipt']);
     });
 
     // =============================================
@@ -275,6 +279,27 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
             $driver->update(['status' => 'approved']);
             return response()->json(['message' => 'Estafeta aprovado.']);
         });
+        Route::put('drivers/{driver}/suspend', function (\App\Models\DeliveryDriver $driver) {
+            $driver->update(['status' => 'suspended', 'is_available' => false]);
+            return response()->json(['message' => 'Estafeta suspenso.']);
+        });
+
+        // Monitorização de entregas
+        Route::get('deliveries', function (Illuminate\Http\Request $req) {
+            $q = \App\Models\Delivery::with(['order.user', 'driver.user'])
+                ->when($req->status, fn($q) => $q->where('status', $req->status))
+                ->latest();
+            return response()->json($q->paginate(30));
+        });
+        Route::get('deliveries/{delivery}', function (\App\Models\Delivery $delivery) {
+            return response()->json($delivery->load(['order.user', 'order.storeOrders.items', 'driver.user']));
+        });
+        Route::post('deliveries/{delivery}/reassign', function (Illuminate\Http\Request $req, \App\Models\Delivery $delivery) {
+            $req->validate(['driver_id' => 'required|exists:delivery_drivers,id']);
+            $driver = \App\Models\DeliveryDriver::findOrFail($req->driver_id);
+            $delivery->update(['driver_id' => $driver->id, 'status' => 'assigned', 'assigned_at' => now()]);
+            return response()->json(['message' => 'Estafeta reatribuído.']);
+        });
 
         // ─── COMISSÕES ────────────────────────────────────────────────────
         Route::prefix('commissions')->group(function () {
@@ -283,5 +308,29 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
             Route::post('payout', [AdminController::class, 'processCommissionPayout']);
             Route::get('payouts', [AdminController::class, 'payoutHistory']);
         });
+
+        // ─── STAFF ────────────────────────────────────────────────────────
+        Route::get('staff', [AdminStaffController::class, 'index']);
+        Route::post('staff', [AdminStaffController::class, 'store']);
+        Route::put('staff/{user}', [AdminStaffController::class, 'update']);
+        Route::put('staff/{user}/toggle', [AdminStaffController::class, 'toggleStatus']);
+        Route::delete('staff/{user}', [AdminStaffController::class, 'destroy']);
+
+        // ─── VISIBILITY ───────────────────────────────────────────────────
+        Route::get('visibility/dashboard', [AdminVisibilityController::class, 'dashboard']);
+        Route::get('visibility', [AdminVisibilityController::class, 'index']);
+        Route::get('visibility/stores/{store}/history', [AdminVisibilityController::class, 'storeHistory']);
+        Route::get('visibility/{purchase}/history', [AdminVisibilityController::class, 'purchaseHistory']);
+        Route::post('visibility/stores/{store}/activate', [AdminVisibilityController::class, 'activate']);
+        Route::put('visibility/{purchase}/status', [AdminVisibilityController::class, 'updateStatus']);
+        Route::delete('visibility/{purchase}', [AdminVisibilityController::class, 'remove']);
+        Route::post('visibility/{purchase}/remind', [AdminVisibilityController::class, 'sendPaymentReminder']);
+
+        // ─── ORDERS (enhanced) ────────────────────────────────────────────
+        Route::get('orders', [AdminController::class, 'allOrders']);
+        Route::put('orders/{order}/resolve', [AdminController::class, 'resolveOrder']);
+
+        // ─── ALERTS ───────────────────────────────────────────────────────
+        Route::get('alerts/count', [AdminController::class, 'alertsCount']);
     });
 });

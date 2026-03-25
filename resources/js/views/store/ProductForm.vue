@@ -10,14 +10,14 @@
 
         <div v-if="imagePreviews.length > 0" class="flex flex-wrap gap-2 mb-3">
           <div v-for="(img, i) in imagePreviews" :key="i" class="relative w-20 h-20">
-            <img :src="img" class="w-full h-full object-cover rounded-xl border border-bc-gold/20" />
+            <AppImg :src="img" class="w-full h-full object-cover rounded-xl border border-bc-gold/20" />
             <button type="button" @click="removeImage(i)"
               class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600">✕</button>
           </div>
         </div>
         <div v-else-if="autoImageUrl" class="mb-3 flex items-start gap-3">
           <div class="relative w-20 h-20 flex-shrink-0">
-            <img :src="autoImageUrl" class="w-full h-full object-cover rounded-xl border-2 border-bc-gold/40" />
+            <AppImg :src="autoImageUrl" class="w-full h-full object-cover rounded-xl border-2 border-bc-gold/40" />
             <span class="absolute bottom-0 left-0 right-0 bg-bc-gold/90 text-bc-dark text-[9px] text-center py-0.5 rounded-b-xl font-bold">AUTO</span>
           </div>
           <p class="text-bc-muted text-xs mt-1">Imagem automática encontrada. Adiciona a tua própria para substituir.</p>

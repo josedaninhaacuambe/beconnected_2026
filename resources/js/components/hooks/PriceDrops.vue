@@ -26,13 +26,11 @@
 
           <!-- Image -->
           <div class="h-40 bg-bc-surface relative overflow-hidden">
-            <img
-              v-if="product.images && product.images.length"
-              :src="`/storage/${product.images[0]}`"
+            <AppImg
+              :src="product.images?.length ? `/storage/${product.images[0]}` : ''"
               :alt="product.name"
               class="w-full h-full object-cover"
             />
-            <div v-else class="w-full h-full flex items-center justify-center text-5xl">💸</div>
           </div>
 
           <!-- Content -->

@@ -7,7 +7,7 @@
         <div class="flex items-center gap-3 min-w-0">
           <!-- Logo da loja -->
           <div class="w-10 h-10 rounded-xl overflow-hidden bg-bc-gold flex-shrink-0 flex items-center justify-center">
-            <img v-if="store?.logo"
+            <AppImg v-if="store?.logo"
               :src="store.logo.startsWith('http') ? store.logo : `/storage/${store.logo}`"
               class="w-full h-full object-cover" />
             <span v-else class="text-white font-black text-lg">{{ store?.name?.charAt(0) }}</span>
@@ -114,7 +114,7 @@
           <div class="flex gap-4">
             <!-- Imagem -->
             <div class="w-20 h-20 rounded-xl overflow-hidden bg-bc-surface-2 flex-shrink-0 flex items-center justify-center">
-              <img v-if="foundProduct.images?.[0]"
+              <AppImg v-if="foundProduct.images?.[0]"
                 :src="foundProduct.images[0].startsWith('http') ? foundProduct.images[0] : `/storage/${foundProduct.images[0]}`"
                 class="w-full h-full object-cover" />
               <span v-else class="text-3xl">📦</span>
@@ -169,7 +169,7 @@
         <div class="divide-y divide-bc-gold/10">
           <div v-for="item in cart" :key="item.product.id" class="flex items-center gap-3 px-4 py-2.5">
             <div class="w-8 h-8 rounded-lg overflow-hidden bg-bc-surface-2 flex-shrink-0 flex items-center justify-center">
-              <img v-if="item.product.images?.[0]"
+              <AppImg v-if="item.product.images?.[0]"
                 :src="item.product.images[0].startsWith('http') ? item.product.images[0] : `/storage/${item.product.images[0]}`"
                 class="w-full h-full object-cover" />
               <span v-else class="text-base">📦</span>
@@ -212,7 +212,7 @@
             </div>
             <div v-for="item in cart" :key="item.product.id" class="flex items-center gap-3 px-5 py-3">
               <div class="w-12 h-12 rounded-xl overflow-hidden bg-bc-surface-2 flex-shrink-0 flex items-center justify-center">
-                <img v-if="item.product.images?.[0]"
+                <AppImg v-if="item.product.images?.[0]"
                   :src="item.product.images[0].startsWith('http') ? item.product.images[0] : `/storage/${item.product.images[0]}`"
                   class="w-full h-full object-cover" />
                 <span v-else class="text-xl">📦</span>

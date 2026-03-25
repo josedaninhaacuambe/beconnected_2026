@@ -77,6 +77,10 @@ const routes = [
             { path: 'lojas', name: 'admin-stores', component: () => import('../views/admin/Stores.vue') },
             { path: 'comissoes', name: 'admin-commissions', component: () => import('../views/admin/CommissionDashboard.vue') },
             { path: 'feedbacks', name: 'admin-feedbacks', component: () => import('../views/admin/Feedbacks.vue') },
+            { path: 'entregas', name: 'admin-deliveries', component: () => import('../views/admin/Deliveries.vue') },
+            { path: 'colaboradores', name: 'admin-staff', component: () => import('../views/admin/Colaboradores.vue') },
+            { path: 'visibilidade', name: 'admin-visibility', component: () => import('../views/admin/Visibilidade.vue') },
+            { path: 'pedidos', name: 'admin-pedidos', component: () => import('../views/admin/Pedidos.vue') },
         ],
     },
 

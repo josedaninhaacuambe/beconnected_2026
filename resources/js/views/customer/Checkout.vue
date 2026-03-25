@@ -168,7 +168,8 @@
         </div>
 
         <!-- Resultado da estimativa -->
-        <div v-if="estimate" class="bg-bc-surface-2 rounded-xl p-4 space-y-2">
+        <div v-if="estimate" class="bg-bc-surface-2 rounded-xl p-4 space-y-3">
+          <!-- Taxa + tempo -->
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="text-2xl">💰</span>
@@ -185,6 +186,42 @@
               <p class="text-bc-muted text-xs">⏱ ~{{ estimate.estimated_minutes }} minutos</p>
             </div>
           </div>
+
+          <!-- Lista de estafetas próximos -->
+          <div v-if="nearbyDrivers.length > 0">
+            <p class="text-bc-muted text-xs font-semibold uppercase tracking-wide mb-2">📍 Estafetas num raio de 1km</p>
+            <div class="space-y-2">
+              <div
+                v-for="driver in nearbyDrivers"
+                :key="driver.id"
+                class="flex items-center justify-between bg-bc-dark/50 rounded-lg px-3 py-2 border border-bc-gold/10"
+              >
+                <div class="flex items-center gap-2">
+                  <span class="text-lg">{{ driver.vehicle_type === 'moto' ? '🏍️' : driver.vehicle_type === 'carro' ? '🚗' : '🚲' }}</span>
+                  <div>
+                    <p class="text-bc-light text-sm font-medium">{{ driver.name }}</p>
+                    <p class="text-bc-muted text-xs">~{{ driver.distance_km }} km · {{ driver.vehicle_type }}</p>
+                  </div>
+                </div>
+                <a v-if="driver.phone" :href="`tel:${driver.phone}`" class="text-bc-gold text-xs border border-bc-gold/30 rounded-lg px-2 py-1 hover:bg-bc-gold/10 transition">
+                  📞 Contactar
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Contacto do cliente -->
+          <div class="border-t border-bc-gold/10 pt-3">
+            <p class="text-bc-muted text-xs mb-2">📱 O teu contacto para o estafeta</p>
+            <p class="text-bc-light text-sm">{{ authStore.user?.phone || authStore.user?.email }}</p>
+          </div>
+
+          <!-- Info GPS -->
+          <div class="flex items-center gap-2 bg-green-900/20 border border-green-500/20 rounded-lg px-3 py-2">
+            <span class="text-green-400 text-sm">📡</span>
+            <p class="text-green-400 text-xs">Acompanhamento GPS em tempo real disponível após confirmação do pedido</p>
+          </div>
+
           <p v-if="estimate.available_drivers === 0" class="text-orange-400 text-xs bg-orange-900/20 rounded-lg px-3 py-2">
             Sem estafetas disponíveis no momento. Podes confirmar o pedido e será atribuído quando um estafeta ficar disponível.
           </p>
@@ -417,9 +454,11 @@ import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useCartStore } from '../../stores/cart.js'
+import { useAuthStore } from '../../stores/auth.js'
 
 const router = useRouter()
 const cartStore = useCartStore()
+const authStore = useAuthStore()
 
 const COMMISSION_PER_ITEM = 0.50
 
@@ -432,6 +471,7 @@ const provinces   = ref([])
 const cities      = ref([])
 const estimate    = ref(null)
 const estimateLoading = ref(false)
+const nearbyDrivers = ref([])
 
 const addressMode = ref('auto') // 'auto' | 'manual'
 const gpsLoading  = ref(false)
@@ -618,10 +658,27 @@ async function fetchEstimate() {
       weight_kg: form.weight_kg || 1,
     })
     estimate.value = data
+    if (form.delivery_latitude && form.delivery_longitude) {
+      fetchNearbyDrivers()
+    }
   } catch {
     // silent
   } finally {
     estimateLoading.value = false
+  }
+}
+
+async function fetchNearbyDrivers() {
+  if (!form.delivery_latitude || !form.delivery_longitude) return
+  try {
+    const { data } = await axios.post('/delivery/nearby-drivers', {
+      latitude:  form.delivery_latitude,
+      longitude: form.delivery_longitude,
+      radius_km: 1,
+    })
+    nearbyDrivers.value = data
+  } catch {
+    nearbyDrivers.value = []
   }
 }
 

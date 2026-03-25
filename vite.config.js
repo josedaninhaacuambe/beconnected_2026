@@ -14,6 +14,7 @@ export default defineConfig({
         tailwindcss(),
         VitePWA({
             registerType: 'autoUpdate',
+            devOptions: { enabled: true, type: 'module' },
             includeAssets: ['favicon.ico', 'icons/*.png'],
             manifest: {
                 name: 'Beconnect - Mercado Virtual de Moçambique',

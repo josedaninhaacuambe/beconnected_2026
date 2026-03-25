@@ -91,13 +91,11 @@
 
           <!-- Imagem -->
           <div class="h-44 bg-bc-surface-2 relative overflow-hidden">
-            <img
-              v-if="p.images?.[0]"
-              :src="p.images[0].startsWith('http') ? p.images[0] : `/storage/${p.images[0]}`"
+            <AppImg
+              :src="p.images?.[0] ? (p.images[0].startsWith('http') ? p.images[0] : `/storage/${p.images[0]}`) : ''"
               class="w-full h-full object-cover group-hover:scale-105 transition"
               :alt="p.name"
             />
-            <div v-else class="w-full h-full flex items-center justify-center text-4xl">📦</div>
           </div>
 
           <!-- Info -->

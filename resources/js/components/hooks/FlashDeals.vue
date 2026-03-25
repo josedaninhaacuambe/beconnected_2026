@@ -38,13 +38,11 @@
 
           <!-- Product image -->
           <div class="h-44 bg-bc-surface relative overflow-hidden">
-            <img
-              v-if="deal.images && deal.images.length"
-              :src="`/storage/${deal.images[0]}`"
+            <AppImg
+              :src="deal.images?.length ? `/storage/${deal.images[0]}` : ''"
               :alt="deal.name"
               class="w-full h-full object-cover"
             />
-            <div v-else class="w-full h-full flex items-center justify-center text-5xl">🛍️</div>
           </div>
 
           <!-- Info -->

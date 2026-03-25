@@ -143,6 +143,62 @@ class DeliveryController extends Controller
         return response()->json(['message' => 'Entrega aceite.', 'delivery' => $delivery]);
     }
 
+    // Listar estafetas disponíveis perto do cliente (para o checkout)
+    public function nearbyDrivers(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'latitude'  => 'required|numeric',
+            'longitude' => 'required|numeric',
+            'radius_km' => 'nullable|numeric|min:0.5|max:10',
+        ]);
+
+        $radius  = (float) ($validated['radius_km'] ?? 1);
+        $lat     = (float) $validated['latitude'];
+        $lng     = (float) $validated['longitude'];
+        $drivers = $this->deliveryService->findAvailableDrivers($lat, $lng, $radius);
+
+        $result = $drivers->values()->map(fn($d) => [
+            'id'           => $d->id,
+            'name'         => $d->user->name,
+            'phone'        => $d->user->phone ?? null,
+            'vehicle_type' => $d->vehicle_type,
+            'latitude'     => $d->current_latitude,
+            'longitude'    => $d->current_longitude,
+            'distance_km'  => round($this->deliveryService->calculateDistance(
+                $lat, $lng, $d->current_latitude, $d->current_longitude
+            ), 2),
+        ])->all();
+
+        return response()->json($result);
+    }
+
+    // Confirmar recebimento + avaliar estafeta
+    public function confirmReceipt(Request $request, Delivery $delivery): JsonResponse
+    {
+        if ($delivery->order->user_id !== $request->user()->id) {
+            return response()->json(['message' => 'Não autorizado.'], 403);
+        }
+
+        if ($delivery->status !== 'delivered') {
+            return response()->json(['message' => 'A entrega ainda não foi marcada como entregue pelo estafeta.'], 422);
+        }
+
+        $validated = $request->validate([
+            'rating' => 'required|integer|min:1|max:5',
+            'comment' => 'nullable|string|max:255',
+        ]);
+
+        $delivery->update([
+            'client_confirmed_at' => now(),
+            'driver_rating'       => $validated['rating'],
+            'driver_rating_comment' => $validated['comment'] ?? null,
+        ]);
+
+        $delivery->order->update(['status' => 'completed']);
+
+        return response()->json(['message' => 'Recebimento confirmado. Obrigado pela avaliação!']);
+    }
+
     // Actualizar estado da entrega (estafeta)
     public function updateDeliveryStatus(Request $request, Delivery $delivery): JsonResponse
     {

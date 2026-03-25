@@ -2,13 +2,13 @@
   <div v-if="store" class="pb-mobile">
     <!-- Banner da loja -->
     <div class="relative h-48 bg-bc-surface overflow-hidden">
-      <img v-if="store.banner" :src="`/storage/${store.banner}`" class="w-full h-full object-cover" />
+      <AppImg v-if="store.banner" :src="`/storage/${store.banner}`" class="w-full h-full object-cover" />
       <div v-else class="w-full h-full african-pattern-bar opacity-20"></div>
       <div class="absolute inset-0 bg-gradient-to-t from-bc-dark/80"></div>
 
       <div class="absolute bottom-4 left-4 flex items-center gap-3">
         <div class="w-16 h-16 bg-bc-dark rounded-xl border-2 border-bc-gold/30 flex items-center justify-center">
-          <img v-if="store.logo" :src="`/storage/${store.logo}`" class="w-full h-full rounded-xl object-cover" />
+          <AppImg v-if="store.logo" :src="`/storage/${store.logo}`" class="w-full h-full rounded-xl object-cover" />
           <span v-else class="text-bc-gold text-xl font-bold">{{ store.name.charAt(0) }}</span>
         </div>
         <div>
@@ -87,8 +87,7 @@
         >
           <RouterLink :to="`/lojas/${store.slug}/produtos/${product.slug}`">
             <div class="h-40 bg-bc-surface-2 overflow-hidden relative">
-              <img v-if="product.images?.[0]" :src="product.images[0].startsWith('http') ? product.images[0] : `/storage/${product.images[0]}`" class="w-full h-full object-cover" />
-              <div v-else class="w-full h-full flex items-center justify-center text-bc-gold/20 text-3xl">📦</div>
+              <AppImg :src="product.images?.[0] ? (product.images[0].startsWith('http') ? product.images[0] : `/storage/${product.images[0]}`) : ''" class="w-full h-full object-cover" />
               <span v-if="!product.stock || product.stock.quantity === 0" class="absolute inset-0 bg-black/60 flex items-center justify-center text-red-400 font-bold text-xs">Esgotado</span>
             </div>
             <div class="p-3">

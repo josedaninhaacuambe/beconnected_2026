@@ -112,8 +112,16 @@ class OrderController extends Controller
                         'user_id'         => $user->id,
                     ]);
 
-                    // Invalidar cache de disponibilidade do produto no carrinho
+                    // Invalidar caches de produto e da loja para reflectir stock actualizado
                     \Illuminate\Support\Facades\Cache::forget("cart_product_{$item->product_id}");
+                    \Illuminate\Support\Facades\Cache::forget('products_flash');
+                    \Illuminate\Support\Facades\Cache::forget('products_trending');
+                    // Invalidar todas as páginas da loja (páginas 1-3, ordenações comuns)
+                    foreach (['featured', 'newest', 'price_asc', 'price_desc'] as $sort) {
+                        for ($pg = 1; $pg <= 3; $pg++) {
+                            \Illuminate\Support\Facades\Cache::forget("store_products_{$item->product->store->slug}_p{$pg}_{$sort}");
+                        }
+                    }
                 }
             }
 

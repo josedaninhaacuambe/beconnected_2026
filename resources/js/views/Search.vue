@@ -85,13 +85,11 @@
           class="card-african overflow-hidden hover:border-bc-gold/60 transition group"
         >
           <div class="h-40 bg-bc-surface-2 relative overflow-hidden">
-            <img
-              v-if="product.images?.[0]"
-              :src="product.images[0].startsWith('http') ? product.images[0] : `/storage/${product.images[0]}`"
+            <AppImg
+              :src="product.images?.[0] ? (product.images[0].startsWith('http') ? product.images[0] : `/storage/${product.images[0]}`) : ''"
               class="w-full h-full object-cover group-hover:scale-105 transition"
               :alt="product.name"
             />
-            <div v-else class="w-full h-full flex items-center justify-center text-bc-gold/20 text-4xl">📦</div>
             <span v-if="!product.in_stock" class="absolute inset-0 bg-black/60 flex items-center justify-center text-red-400 font-bold text-sm">Esgotado</span>
 
             <!-- Badge de distância -->
@@ -139,7 +137,7 @@ import axios from 'axios'
 const route = useRoute()
 const products = ref([])
 const meta = ref({ total: 0, last_page: 1 })
-const loading = ref(false)
+const loading = ref(true)
 const currentPage = ref(1)
 const provinces = ref([])
 const cities = ref([])

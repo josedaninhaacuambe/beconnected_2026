@@ -17,6 +17,7 @@ class Order extends Model
         'status', 'payment_status', 'payment_method',
         'delivery_address', 'province_id', 'city_id', 'neighborhood_id',
         'delivery_latitude', 'delivery_longitude', 'notes',
+        'admin_note', 'resolved_at', 'refund_flag',
     ];
 
     protected function casts(): array
@@ -25,6 +26,8 @@ class Order extends Model
             'subtotal' => 'float',
             'delivery_fee' => 'float',
             'total' => 'float',
+            'resolved_at' => 'datetime',
+            'refund_flag' => 'boolean',
         ];
     }
 

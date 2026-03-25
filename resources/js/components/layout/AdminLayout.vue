@@ -9,7 +9,18 @@
           </div>
           <span class="text-white font-bold text-lg">ADMIN</span>
         </RouterLink>
-        <p class="text-red-100 text-xs">Painel de Administração</p>
+        <div class="flex items-center justify-between mt-2">
+          <p class="text-red-100 text-xs">Painel de Administração</p>
+          <button @click="showAlertPanel = !showAlertPanel" class="relative p-1">
+            <span class="text-white text-base">🔔</span>
+            <span v-if="alertCount > 0" class="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">{{ alertCount }}</span>
+          </button>
+        </div>
+        <!-- Alert dropdown -->
+        <div v-if="showAlertPanel && alertCount > 0" class="mt-2 bg-bc-dark/95 border border-red-500/30 rounded-xl p-3 text-xs space-y-1">
+          <p v-if="alerts.expiring_visibility > 0" class="text-yellow-300">⚠ {{ alerts.expiring_visibility }} plano(s) a expirar em 7 dias</p>
+          <p v-if="alerts.unresolved_orders > 0" class="text-red-300">🚨 {{ alerts.unresolved_orders }} pedido(s) com reembolso pendente</p>
+        </div>
       </div>
 
       <nav class="flex-1 p-4 space-y-1">
@@ -40,7 +51,13 @@
       <!-- Topbar mobile -->
       <header class="md:hidden sticky top-0 bg-bc-navy p-4 flex items-center justify-between z-40 border-b border-white/10">
         <RouterLink to="/" class="text-white font-bold">← Admin</RouterLink>
-        <button @click="mobileMenuOpen = !mobileMenuOpen" class="text-white text-xl">☰</button>
+        <div class="flex items-center gap-3">
+          <button @click="showAlertPanel = !showAlertPanel" class="relative p-1">
+            <span class="text-white text-base">🔔</span>
+            <span v-if="alertCount > 0" class="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">{{ alertCount }}</span>
+          </button>
+          <button @click="mobileMenuOpen = !mobileMenuOpen" class="text-white text-xl">☰</button>
+        </div>
       </header>
 
       <!-- Menu mobile -->
@@ -68,15 +85,34 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { useAuthStore } from '../../stores/auth.js'
+import { useAdminAlerts } from '../../composables/useAdminAlerts.js'
 
 const mobileMenuOpen = ref(false)
+const showAlertPanel = ref(false)
 
-const navItems = [
-  { to: '/admin', icon: '📊', label: 'Visão Geral' },
-  { to: '/admin/utilizadores', icon: '👥', label: 'Utilizadores' },
-  { to: '/admin/lojas', icon: '🏪', label: 'Lojas' },
-  { to: '/admin/comissoes', icon: '💰', label: 'Comissões' },
-  { to: '/admin/feedbacks', icon: '💬', label: 'Feedbacks' },
-]
+const auth = useAuthStore()
+const { alertCount, alerts } = useAdminAlerts()
+
+const navItems = computed(() => {
+  const all = [
+    { to: '/admin', icon: '📊', label: 'Visão Geral', fullAdminOnly: true },
+    { to: '/admin/utilizadores', icon: '👥', label: 'Utilizadores', fullAdminOnly: true },
+    { to: '/admin/lojas', icon: '🏪', label: 'Lojas', fullAdminOnly: true },
+    { to: '/admin/colaboradores', icon: '🤝', label: 'Colaboradores', fullAdminOnly: true },
+    { to: '/admin/visibilidade', icon: '📡', label: 'Visibilidade', permission: 'manage_visibility' },
+    { to: '/admin/pedidos', icon: '📦', label: 'Pedidos', permission: 'manage_orders' },
+    { to: '/admin/entregas', icon: '🚚', label: 'Entregas', permission: 'manage_deliveries' },
+    { to: '/admin/comissoes', icon: '💰', label: 'Comissões', fullAdminOnly: true },
+    { to: '/admin/feedbacks', icon: '💬', label: 'Feedbacks', fullAdminOnly: true },
+  ]
+
+  return all.filter(item => {
+    if (auth.isFullAdmin) return true
+    if (item.fullAdminOnly) return false
+    if (item.permission) return auth.hasPermission(item.permission)
+    return true
+  })
+})
 </script>

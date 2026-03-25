@@ -5,7 +5,7 @@
       <div class="african-pattern-bar absolute top-0 left-0 right-0 h-1"></div>
       <div class="flex items-center gap-4 pt-2">
         <div class="w-16 h-16 bg-bc-gold/10 rounded-full border-2 border-bc-gold/30 flex items-center justify-center flex-shrink-0">
-          <img v-if="store?.logo" :src="`/storage/${store.logo}`" class="w-16 h-16 rounded-full object-cover" />
+          <AppImg v-if="store?.logo" :src="`/storage/${store.logo}`" class="w-16 h-16 rounded-full object-cover" />
           <span v-else class="text-bc-gold text-2xl font-bold">{{ store?.name?.charAt(0) }}</span>
         </div>
         <div>

@@ -10,6 +10,7 @@ class StoreVisibilityPurchase extends Model
     protected $fillable = [
         'store_id', 'visibility_plan_id', 'amount_paid',
         'payment_method', 'payment_reference', 'starts_at', 'expires_at',
+        'status', 'next_payment_at', 'payment_notified_at', 'invoice_number', 'notes',
     ];
 
     protected function casts(): array
@@ -18,6 +19,8 @@ class StoreVisibilityPurchase extends Model
             'amount_paid' => 'float',
             'starts_at' => 'datetime',
             'expires_at' => 'datetime',
+            'next_payment_at' => 'datetime',
+            'payment_notified_at' => 'datetime',
         ];
     }
 

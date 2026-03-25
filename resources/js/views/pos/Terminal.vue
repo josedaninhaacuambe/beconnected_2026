@@ -36,7 +36,7 @@
           >
             <!-- Imagem ou placeholder -->
             <div class="w-full h-16 rounded-lg overflow-hidden bg-gray-100 mb-2 flex items-center justify-center">
-              <img v-if="p.image" :src="p.image.startsWith('http') ? p.image : '/storage/' + p.image" class="w-full h-full object-cover" />
+              <AppImg v-if="p.image" :src="p.image.startsWith('http') ? p.image : '/storage/' + p.image" class="w-full h-full object-cover" />
               <span v-else class="text-2xl">🛍️</span>
             </div>
             <p class="text-xs font-semibold text-gray-800 line-clamp-2 leading-tight mb-1">{{ p.name }}</p>

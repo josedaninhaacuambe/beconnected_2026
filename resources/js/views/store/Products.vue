@@ -29,10 +29,9 @@
             <td class="p-4">
               <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-lg overflow-hidden bg-bc-surface-2 flex-shrink-0 flex items-center justify-center">
-                  <img v-if="p.images?.[0]"
+                  <AppImg v-if="p.images?.[0]"
                     :src="p.images[0].startsWith('http') ? p.images[0] : `/storage/${p.images[0]}`"
                     class="w-full h-full object-cover" />
-                  <span v-else class="text-base">📦</span>
                 </div>
                 <div>
                   <p class="text-bc-light font-medium">{{ p.name }}</p>

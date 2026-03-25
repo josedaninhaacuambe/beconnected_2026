@@ -8,6 +8,7 @@ use App\Models\CommissionPayout;
 use App\Models\Order;
 use App\Models\Store;
 use App\Models\StoreEmployee;
+use App\Models\StoreVisibilityPurchase;
 use App\Models\User;
 use App\Services\CommissionService;
 use Illuminate\Http\JsonResponse;
@@ -163,6 +164,57 @@ class AdminController extends Controller
     public function payoutHistory(): JsonResponse
     {
         return response()->json(CommissionPayout::latest()->paginate(20));
+    }
+
+    // ─── Gestão de Pedidos (admin) ────────────────────────────────────────────
+
+    public function allOrders(Request $request): JsonResponse
+    {
+        $orders = Order::with(['user', 'storeOrders.store', 'delivery'])
+            ->when($request->status, fn($q) => $q->where('status', $request->status))
+            ->when($request->store_id, fn($q) => $q->whereHas('storeOrders', fn($sq) => $sq->where('store_id', $request->store_id)))
+            ->when($request->search, fn($q) => $q->where(function ($sq) use ($request) {
+                $sq->where('order_number', 'like', '%' . $request->search . '%')
+                   ->orWhereHas('user', fn($uq) => $uq->where('name', 'like', '%' . $request->search . '%')
+                       ->orWhere('email', 'like', '%' . $request->search . '%'));
+            }))
+            ->when($request->date_from, fn($q) => $q->whereDate('created_at', '>=', $request->date_from))
+            ->when($request->date_to,   fn($q) => $q->whereDate('created_at', '<=', $request->date_to))
+            ->latest()
+            ->paginate(30);
+
+        return response()->json($orders);
+    }
+
+    public function resolveOrder(Request $request, Order $order): JsonResponse
+    {
+        $data = $request->validate([
+            'admin_note'  => 'nullable|string',
+            'status'      => 'nullable|string',
+            'refund_flag' => 'nullable|boolean',
+        ]);
+
+        $data['resolved_at'] = now();
+        $order->update($data);
+
+        return response()->json($order->fresh(['user', 'storeOrders.store', 'delivery']));
+    }
+
+    public function alertsCount(): JsonResponse
+    {
+        $expiringVisibility = StoreVisibilityPurchase::where('status', 'active')
+            ->whereBetween('expires_at', [now(), now()->addDays(7)])
+            ->count();
+
+        $unresolvedOrders = Order::where('refund_flag', true)
+            ->whereNull('resolved_at')
+            ->count();
+
+        return response()->json([
+            'total'               => $expiringVisibility + $unresolvedOrders,
+            'expiring_visibility' => $expiringVisibility,
+            'unresolved_orders'   => $unresolvedOrders,
+        ]);
     }
 
     // ─── Estatísticas gerais ─────────────────────────────────────────────────

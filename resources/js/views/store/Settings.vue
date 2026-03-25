@@ -17,9 +17,9 @@
           class="relative w-full h-36 rounded-xl overflow-hidden border-2 border-dashed border-bc-gold/30 hover:border-bc-gold/60 cursor-pointer transition group"
           @click="$refs.bannerInput.click()"
         >
-          <img v-if="bannerPreview" :src="bannerPreview" class="w-full h-full object-cover" />
+          <AppImg v-if="bannerPreview" :src="bannerPreview" class="w-full h-full object-cover" />
           <div v-else-if="currentBanner" class="w-full h-full">
-            <img :src="currentBanner.startsWith('http') ? currentBanner : `/storage/${currentBanner}`" class="w-full h-full object-cover" />
+            <AppImg :src="currentBanner.startsWith('http') ? currentBanner : `/storage/${currentBanner}`" class="w-full h-full object-cover" />
           </div>
           <div v-else class="w-full h-full flex flex-col items-center justify-center text-bc-muted gap-1">
             <span class="text-3xl">🖼</span>
@@ -42,8 +42,8 @@
             class="w-24 h-24 rounded-2xl overflow-hidden border-2 border-dashed border-bc-gold/30 hover:border-bc-gold cursor-pointer flex items-center justify-center bg-bc-surface-2 transition relative group flex-shrink-0"
             @click="$refs.logoInput.click()"
           >
-            <img v-if="logoPreview" :src="logoPreview" class="w-full h-full object-cover" />
-            <img v-else-if="currentLogo" :src="currentLogo.startsWith('http') ? currentLogo : `/storage/${currentLogo}`" class="w-full h-full object-cover" />
+            <AppImg v-if="logoPreview" :src="logoPreview" class="w-full h-full object-cover" />
+            <AppImg v-else-if="currentLogo" :src="currentLogo.startsWith('http') ? currentLogo : `/storage/${currentLogo}`" class="w-full h-full object-cover" />
             <span v-else class="text-bc-gold text-2xl font-bold">{{ form.name?.charAt(0) || '?' }}</span>
             <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center rounded-2xl">
               <span class="text-white text-xs">✏</span>
