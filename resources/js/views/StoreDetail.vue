@@ -197,12 +197,14 @@ function addToCart(product) {
 }
 
 onMounted(async () => {
-  const [storeRes, sectionsRes] = await Promise.all([
+  const [storeRes, sectionsRes, productsRes] = await Promise.all([
     axios.get(`/stores/${route.params.slug}`),
     axios.get(`/stores/${route.params.slug}/sections`).catch(() => ({ data: [] })),
+    axios.get(`/stores/${route.params.slug}/products`, { params: { sort: sortBy.value } }),
   ])
   store.value = storeRes.data
   sections.value = sectionsRes.data
-  await loadProducts()
+  products.value = productsRes.data.data
+  loading.value = false
 })
 </script>

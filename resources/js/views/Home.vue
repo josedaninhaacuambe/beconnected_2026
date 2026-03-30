@@ -49,7 +49,7 @@
         </form>
 
         <!-- Botões grandes e funcionais -->
-        <div class="flex flex-wrap gap-4">
+        <div class="flex flex-nowrap gap-3">
           <RouterLink
             to="/lojas"
             class="inline-flex items-center gap-3 font-black uppercase tracking-wider rounded-xl text-white transition hover:opacity-90 active:scale-95"

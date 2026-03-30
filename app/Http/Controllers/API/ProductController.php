@@ -198,17 +198,19 @@ class ProductController extends Controller
             ->where('is_active', true);
 
         // Aplicar limitações se não houver visibilidade activa
+        // MySQL 8.0 não suporta LIMIT em subquery com IN — buscar IDs primeiro
         if (!$store->hasActiveVisibility()) {
             $maxProducts = $store->getMaxProducts();
-            $query->whereIn('id', function ($sub) use ($store, $maxProducts) {
-                $sub->select('id')
-                    ->from('products')
-                    ->where('store_id', $store->id)
-                    ->where('is_active', true)
-                    ->orderByDesc('is_featured')
-                    ->orderByDesc('created_at')
-                    ->limit($maxProducts);
-            });
+            $limitedIds = \DB::table('products')
+                ->where('store_id', $store->id)
+                ->where('is_active', true)
+                ->whereNull('deleted_at')
+                ->orderByDesc('is_featured')
+                ->orderByDesc('created_at')
+                ->limit($maxProducts)
+                ->pluck('id')
+                ->all();
+            $query->whereIn('id', $limitedIds);
         }
 
         if ($request->q) {

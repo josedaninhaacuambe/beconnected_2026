@@ -91,11 +91,16 @@ class Store extends Model
 
     public function getActiveVisibilityPlan()
     {
-        return $this->visibilityPurchases()
-            ->where('status', 'active')
-            ->where('expires_at', '>', now())
-            ->with('plan')
-            ->first()?->plan;
+        // Cache per request using a static map — avoids repeated DB queries within the same request
+        static $cache = [];
+        if (!array_key_exists($this->id, $cache)) {
+            $cache[$this->id] = $this->visibilityPurchases()
+                ->where('status', 'active')
+                ->where('expires_at', '>', now())
+                ->with('plan')
+                ->first()?->plan;
+        }
+        return $cache[$this->id];
     }
 
     public function hasActiveVisibility(): bool
