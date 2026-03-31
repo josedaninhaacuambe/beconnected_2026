@@ -1,5 +1,5 @@
 <template>
-  <section v-if="products.length > 0" class="price-drops-section py-10 px-4">
+  <section v-if="isLoading || products.length > 0 || error" class="price-drops-section py-10 px-4">
     <div class="container mx-auto">
       <!-- Header -->
       <div class="flex items-center gap-3 mb-6">
@@ -12,11 +12,35 @@
 
       <!-- Grid -->
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <div
-          v-for="product in products"
-          :key="product.id"
-          class="drop-card rounded-2xl overflow-hidden relative flex flex-col"
-        >
+        <template v-if="isLoading">
+          <div v-for="n in 8" :key="`price-skel-${n}`" class="drop-card rounded-2xl overflow-hidden relative flex flex-col animate-pulse bg-slate-800">
+            <div class="h-40 bg-slate-700"></div>
+            <div class="p-4 flex flex-col flex-1 space-y-2">
+              <div class="h-3 bg-slate-700 rounded"></div>
+              <div class="h-3 bg-slate-700 rounded"></div>
+              <div class="h-3 bg-slate-700 rounded w-1/2"></div>
+              <div class="h-8 bg-slate-700 rounded"></div>
+            </div>
+          </div>
+        </template>
+
+        <template v-else-if="error">
+          <div class="col-span-full bg-red-500/15 text-red-200 rounded-xl p-4 text-center">
+            <p>{{ error }}</p>
+            <button @click="retryDiscounts" class="mt-3 px-4 py-2 bg-red-500 text-white rounded">Tentar novamente</button>
+          </div>
+        </template>
+
+        <template v-else-if="products.length === 0">
+          <div class="col-span-full bg-bc-surface rounded-xl p-6 text-center text-bc-muted">Nenhuma redução de preço no momento.</div>
+        </template>
+
+        <template v-else>
+          <div
+            v-for="product in products"
+            :key="product.id"
+            class="drop-card rounded-2xl overflow-hidden relative flex flex-col"
+          >
           <!-- Pulsing % badge -->
           <div class="absolute top-3 left-3 z-10">
             <span class="pct-badge font-black text-sm px-2 py-1 rounded-xl shadow-lg">
@@ -71,16 +95,30 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import { trackEvent } from '@/utils/analytics.js'
 
 const products = ref([])
+const isLoading = ref(true)
+const error = ref(null)
 
 async function fetchDiscounts() {
+  isLoading.value = true
+  error.value = null
+
   try {
     const { data } = await axios.get('/products/discounts')
     products.value = Array.isArray(data) ? data : (data.data ?? [])
   } catch (e) {
     products.value = []
+    error.value = 'Falha ao carregar ofertas de preço. Tenta novamente.'
+    trackEvent('hook_load_failed', { hook: 'PriceDrops', message: e.message || 'unknown' })
+  } finally {
+    isLoading.value = false
   }
+}
+
+function retryDiscounts() {
+  fetchDiscounts()
 }
 
 function discountPct(product) {

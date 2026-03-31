@@ -131,7 +131,7 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
     });
 
     // Carrinho
-    Route::prefix('cart')->group(function () {
+    Route::prefix('cart')->middleware('throttle:cart')->group(function () {
         Route::get('/', [CartController::class, 'index']);
         Route::post('items', [CartController::class, 'addItem']);
         Route::put('items/{cartItem}', [CartController::class, 'updateItem']);

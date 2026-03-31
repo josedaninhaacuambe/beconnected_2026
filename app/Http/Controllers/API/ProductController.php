@@ -3,15 +3,18 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\IndexProductInSearch;
 use App\Models\Brand;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductStock;
 use App\Models\Store;
 use App\Services\ProductImageService;
+use App\Services\Search\ProductSearchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class ProductController extends Controller
@@ -33,17 +36,17 @@ class ProductController extends Controller
             'only_visibility' => 'nullable|boolean',
         ]);
 
-        // Cache non-geo searches (most common case)
+        // Delegar ao ProductSearchService (Meilisearch com fallback MySQL)
+        $searchService = app(ProductSearchService::class);
         $hasGeo = $request->lat && $request->lng;
+
         if (!$hasGeo) {
             $cacheKey = 'search_' . md5(serialize($request->only(['q','brand','model','category_id','province_id','city_id','neighborhood_id','page'])));
-            $data = \Cache::remember($cacheKey, 120, function () use ($request) {
-                return $this->buildSearchData($request);
-            });
+            $data = Cache::remember($cacheKey, 120, fn() => $searchService->search($request));
             return response()->json($data);
         }
 
-        return response()->json($this->buildSearchData($request));
+        return response()->json($searchService->search($request));
     }
 
     private function buildSearchData(Request $request): array
@@ -182,7 +185,7 @@ class ProductController extends Controller
 
         if (!$hasFilters) {
             $cacheKey = "store_products_{$storeSlug}_p{$page}_{$sort}";
-            $data = \Cache::remember($cacheKey, 180, function () use ($store, $request, $sort) {
+            $data = Cache::remember($cacheKey, 180, function () use ($store, $request, $sort) {
                 return $this->buildStoreProductsData($store, $request, $sort);
             });
             return response()->json($data);
@@ -201,7 +204,7 @@ class ProductController extends Controller
         // MySQL 8.0 não suporta LIMIT em subquery com IN — buscar IDs primeiro
         if (!$store->hasActiveVisibility()) {
             $maxProducts = $store->getMaxProducts();
-            $limitedIds = \DB::table('products')
+            $limitedIds = DB::table('products')
                 ->where('store_id', $store->id)
                 ->where('is_active', true)
                 ->whereNull('deleted_at')
@@ -365,6 +368,9 @@ class ProductController extends Controller
             'unit' => $validated['unit'] ?? 'unidade',
         ]);
 
+        // Indexar no Meilisearch de forma assíncrona
+        IndexProductInSearch::dispatch($product->id)->onQueue('search_index');
+
         return response()->json($product->load(['brand', 'category', 'stock']), 201);
     }
 
@@ -407,13 +413,19 @@ class ProductController extends Controller
             $product->stock->update(['minimum_stock' => $request->minimum_stock]);
         }
 
+        // Re-indexar no Meilisearch
+        IndexProductInSearch::dispatch($product->id)->onQueue('search_index');
+
         return response()->json($product->fresh()->load(['brand', 'category', 'stock']));
     }
 
     public function destroyProduct(Product $product): JsonResponse
     {
         $this->authorize('delete', $product);
+        $productId = $product->id;
         $product->delete();
+        // Remover do índice de pesquisa
+        IndexProductInSearch::dispatch($productId, delete: true)->onQueue('search_index');
         return response()->json(['message' => 'Produto removido.']);
     }
 
@@ -440,7 +452,7 @@ class ProductController extends Controller
         $stock->update(['quantity' => $after]);
 
         // Invalidate cart availability cache for this product
-        \Cache::forget("cart_product_{$product->id}");
+        Cache::forget("cart_product_{$product->id}");
 
         $product->stockMovements()->create([
             'type' => $validated['type'],
@@ -615,7 +627,7 @@ class ProductController extends Controller
 
         $stock->update(['quantity' => $after]);
 
-        \Cache::forget("cart_product_{$product->id}");
+        Cache::forget("cart_product_{$product->id}");
 
         $product->stockMovements()->create([
             'type' => 'burn',

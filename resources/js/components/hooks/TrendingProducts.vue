@@ -1,5 +1,5 @@
 <template>
-  <section v-if="products.length > 0" class="trending-section py-10 px-4">
+  <section v-if="isLoading || products.length > 0 || error" class="trending-section py-10 px-4">
     <div class="container mx-auto">
       <!-- Header -->
       <div class="flex items-center gap-3 mb-6">
@@ -12,11 +12,35 @@
 
       <!-- Grid -->
       <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-4">
-        <div
-          v-for="(product, index) in products"
-          :key="product.id"
-          class="trending-card rounded-2xl overflow-hidden relative flex flex-col"
-        >
+        <template v-if="isLoading">
+          <div v-for="n in 8" :key="`trending-skel-${n}`" class="trending-card rounded-2xl overflow-hidden relative flex flex-col animate-pulse bg-slate-800">
+            <div class="h-36 bg-slate-700"></div>
+            <div class="p-3 flex flex-col flex-1 space-y-2">
+              <div class="h-3 bg-slate-700 rounded"></div>
+              <div class="h-3 bg-slate-700 rounded w-5/6"></div>
+              <div class="h-3 bg-slate-700 rounded w-2/3"></div>
+              <div class="mt-auto h-8 bg-slate-700 rounded"></div>
+            </div>
+          </div>
+        </template>
+
+        <template v-else-if="error">
+          <div class="col-span-full bg-red-500/15 text-red-200 rounded-xl p-4 text-center">
+            <p>{{ error }}</p>
+            <button @click="retryTrending" class="mt-3 px-4 py-2 bg-red-500 text-white rounded">Tentar novamente</button>
+          </div>
+        </template>
+
+        <template v-else-if="products.length === 0">
+          <div class="col-span-full bg-bc-surface rounded-xl p-6 text-center text-bc-muted">Nenhum produto em destaque no momento.</div>
+        </template>
+
+        <template v-else>
+          <div
+            v-for="(product, index) in products"
+            :key="product.id"
+            class="trending-card rounded-2xl overflow-hidden relative flex flex-col"
+          >
           <!-- Rank badge -->
           <div class="absolute top-2 left-2 z-10">
             <span class="rank-badge text-xs font-black px-2 py-0.5 rounded-full" :class="rankClass(index)">
@@ -74,18 +98,32 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
+import { trackEvent } from '@/utils/analytics.js'
 
 const products = ref([])
+const isLoading = ref(true)
+const error = ref(null)
 let minuteInterval = null
 const currentHour = ref(new Date().getHours())
 
 async function fetchTrending() {
+  isLoading.value = true
+  error.value = null
+
   try {
     const { data } = await axios.get('/products/trending')
     products.value = Array.isArray(data) ? data : (data.data ?? [])
   } catch (e) {
     products.value = []
+    error.value = 'Falha ao carregar produtos em destaque. Tenta novamente.'
+    trackEvent('hook_load_failed', { hook: 'TrendingProducts', message: e.message || 'unknown' })
+  } finally {
+    isLoading.value = false
   }
+}
+
+function retryTrending() {
+  fetchTrending()
 }
 
 // Deterministic viewer count: (product.id * hour_of_day) % 47 + 3

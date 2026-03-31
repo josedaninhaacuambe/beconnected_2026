@@ -111,15 +111,24 @@
     <section class="container mx-auto px-4 py-12">
       <h2 class="text-2xl font-bold text-bc-gold mb-6">Categorias de Lojas</h2>
       <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-        <RouterLink
-          v-for="cat in storeCategories"
-          :key="cat.id"
-          :to="`/lojas?category=${cat.id}`"
-          class="card-african flex flex-col items-center text-center p-4 hover:border-bc-gold/60 transition"
-        >
-          <span class="text-3xl mb-2">{{ getCategoryEmoji(cat.slug) }}</span>
-          <span class="text-bc-light text-sm font-medium">{{ cat.name }}</span>
-        </RouterLink>
+        <template v-if="isHomeDataLoading">
+          <Skeleton
+            :count="10"
+            item-class="animate-pulse rounded-xl bg-bc-surface h-28"
+            container-class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"
+          />
+        </template>
+        <template v-else>
+          <RouterLink
+            v-for="cat in storeCategories"
+            :key="cat.id"
+            :to="`/lojas?category=${cat.id}`"
+            class="card-african flex flex-col items-center text-center p-4 hover:border-bc-gold/60 transition"
+          >
+            <span class="text-3xl mb-2">{{ getCategoryEmoji(cat.slug) }}</span>
+            <span class="text-bc-light text-sm font-medium">{{ cat.name }}</span>
+          </RouterLink>
+        </template>
       </div>
     </section>
 
@@ -133,31 +142,40 @@
         <RouterLink to="/lojas" class="text-bc-gold text-sm hover:underline">Ver todas →</RouterLink>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        <RouterLink
-          v-for="store in featuredStores"
-          :key="store.id"
-          :to="`/lojas/${store.slug}`"
-          class="card-african overflow-hidden hover:border-bc-gold/60 transition"
-        >
-          <div class="h-32 bg-bc-surface relative">
-            <AppImg v-if="store.banner" :src="`/storage/${store.banner}`" class="w-full h-full object-cover" :alt="store.name" />
-            <span v-if="store.is_featured" class="absolute top-2 right-2 bg-bc-gold text-bc-dark text-xs font-bold px-2 py-0.5 rounded-full">⭐ DESTAQUE</span>
-          </div>
-          <div class="p-3">
-            <div class="flex items-center gap-2 mb-1">
-              <div class="w-8 h-8 bg-bc-gold/10 rounded-full flex items-center justify-center">
-                <AppImg v-if="store.logo" :src="`/storage/${store.logo}`" class="w-8 h-8 rounded-full object-cover" />
-                <span v-else class="text-bc-gold text-sm font-bold">{{ store.name.charAt(0) }}</span>
+        <template v-if="isHomeDataLoading">
+          <Skeleton
+            :count="8"
+            item-class="p-4 bg-bc-surface rounded-xl animate-pulse h-56"
+            container-class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
+          />
+        </template>
+        <template v-else>
+          <RouterLink
+            v-for="store in featuredStores"
+            :key="store.id"
+            :to="`/lojas/${store.slug}`"
+            class="card-african overflow-hidden hover:border-bc-gold/60 transition"
+          >
+            <div class="h-32 bg-bc-surface relative">
+              <AppImg v-if="store.banner" :src="`/storage/${store.banner}`" class="w-full h-full object-cover" :alt="store.name" />
+              <span v-if="store.is_featured" class="absolute top-2 right-2 bg-bc-gold text-bc-dark text-xs font-bold px-2 py-0.5 rounded-full">⭐ DESTAQUE</span>
+            </div>
+            <div class="p-3">
+              <div class="flex items-center gap-2 mb-1">
+                <div class="w-8 h-8 bg-bc-gold/10 rounded-full flex items-center justify-center">
+                  <AppImg v-if="store.logo" :src="`/storage/${store.logo}`" class="w-8 h-8 rounded-full object-cover" />
+                  <span v-else class="text-bc-gold text-sm font-bold">{{ store.name.charAt(0) }}</span>
+                </div>
+                <h3 class="text-bc-light font-semibold text-sm">{{ store.name }}</h3>
               </div>
-              <h3 class="text-bc-light font-semibold text-sm">{{ store.name }}</h3>
+              <p class="text-bc-muted text-xs">{{ store.city?.name }}, {{ store.province?.name }}</p>
+              <div class="flex items-center justify-between mt-2">
+                <span class="text-yellow-400 text-xs">★ {{ store.rating?.toFixed(1) }}</span>
+                <span class="text-bc-muted text-xs">{{ store.category?.name }}</span>
+              </div>
             </div>
-            <p class="text-bc-muted text-xs">{{ store.city?.name }}, {{ store.province?.name }}</p>
-            <div class="flex items-center justify-between mt-2">
-              <span class="text-yellow-400 text-xs">★ {{ store.rating?.toFixed(1) }}</span>
-              <span class="text-bc-muted text-xs">{{ store.category?.name }}</span>
-            </div>
-          </div>
-        </RouterLink>
+          </RouterLink>
+        </template>
       </div>
     </section>
 
@@ -178,9 +196,11 @@
 import { ref, onMounted, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
+import { trackEvent } from '@/utils/analytics.js'
 
 // LivePulse está acima da dobra — carrega imediatamente
 import LivePulse from '@/components/hooks/LivePulse.vue'
+import Skeleton from '@/components/Skeleton.vue'
 
 // Hooks abaixo da dobra — carregam em paralelo após o hero ser pintado
 const FlashDeals       = defineAsyncComponent(() => import('@/components/hooks/FlashDeals.vue'))
@@ -203,6 +223,7 @@ const storeCategories = ref([])
 const featuredStores = ref([])
 const selectedProvince = ref('')
 const selectedCity = ref('')
+const isHomeDataLoading = ref(true)
 let deferredPrompt = null
 
 const categoryEmojis = {
@@ -230,21 +251,29 @@ function searchByLocation() {
 }
 
 onMounted(async () => {
-  const [provincesRes, categoriesRes, storesRes] = await Promise.all([
-    axios.get('/locations/provinces'),
-    axios.get('/store-categories'),
-    axios.get('/stores', { params: { per_page: 8 } }),
-  ])
-  provinces.value = provincesRes.data
-  storeCategories.value = categoriesRes.data
-  featuredStores.value = storesRes.data.data
+    trackEvent('home_skeleton_shown', { page: 'Home' })
+    try {
+      const [provincesRes, categoriesRes, storesRes] = await Promise.all([
+        axios.get('/locations/provinces'),
+        axios.get('/store-categories'),
+        axios.get('/stores', { params: { per_page: 8 } }),
+      ])
+      provinces.value = provincesRes.data
+      storeCategories.value = categoriesRes.data
+      featuredStores.value = storesRes.data.data
+      trackEvent('home_data_loaded', { stores: featuredStores.value.length, categories: storeCategories.value.length })
+    } catch (error) {
+      console.error('Erro ao carregar home data', error)
+      trackEvent('hook_load_failed', { hook: 'Home', message: error.message || 'unknown' })
+    } finally {
+      isHomeDataLoading.value = false
+    }
 
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault()
-    deferredPrompt = e
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault()
+      deferredPrompt = e
+    })
   })
-})
-
 async function installPWA() {
   if (deferredPrompt) {
     deferredPrompt.prompt()

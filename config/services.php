@@ -76,7 +76,13 @@ return [
         'payout_phone_emola' => env('COMMISSION_PHONE_EMOLA', '258973157227'),
         'payout_method' => env('COMMISSION_PAYOUT_METHOD', 'mpesa'), // método principal de recebimento
         'auto_payout' => env('COMMISSION_AUTO_PAYOUT', true),
-        'payout_threshold' => env('COMMISSION_PAYOUT_THRESHOLD', 100), // pagar quando acumular >= 100 MZN
+        'payout_threshold' => env('COMMISSION_PAYOUT_THRESHOLD', 100),
+    ],
+
+    // ─── Meilisearch (motor de pesquisa de produtos) ──────────────────────
+    'meilisearch' => [
+        'host' => env('MEILISEARCH_HOST', 'http://meilisearch:7700'),
+        'key'  => env('MEILISEARCH_KEY', 'beconnect_meili_secret'),
     ],
 
 ];

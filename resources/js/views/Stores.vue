@@ -50,7 +50,15 @@
 
     <!-- Grid de lojas -->
     <div v-if="loading" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div v-for="i in 6" :key="i" class="skeleton h-48 rounded-2xl"></div>
+      <Skeleton
+        :count="6"
+        item-class="skeleton h-48 rounded-2xl"
+        container-class="grid grid-cols-1 md:grid-cols-3 gap-4"
+      />
+    </div>
+
+    <div v-else-if="isCacheUsed" class="text-sm text-bc-muted mb-3">
+      {{ cacheStatus() }} (conteúdo em cache enquanto atualiza no servidor...)
     </div>
 
     <div v-else-if="stores.length === 0" class="text-center py-16 text-bc-muted">
@@ -154,14 +162,52 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import Skeleton from '@/components/Skeleton.vue'
+import { trackEvent } from '@/utils/analytics.js'
 
 const stores = ref([])
 const categories = ref([])
 const provinces = ref([])
 const loading = ref(true)
+const isCacheUsed = ref(false)
+const cacheLastUpdated = ref(null)
 const search = ref('')
 const categoryId = ref('')
 const provinceId = ref('')
+
+const STORE_CACHE_KEY = 'beconnect_stores_cache'
+const STORE_CACHE_TTL_MS = 2 * 60 * 1000 // 2 minutos
+
+function setStoreCache(payload) {
+  localStorage.setItem(
+    STORE_CACHE_KEY,
+    JSON.stringify({ updatedAt: Date.now(), stores: payload })
+  )
+}
+
+function getStoreCache() {
+  try {
+    const raw = localStorage.getItem(STORE_CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed?.updatedAt || !Array.isArray(parsed.stores)) return null
+
+    if (Date.now() - parsed.updatedAt > STORE_CACHE_TTL_MS) {
+      localStorage.removeItem(STORE_CACHE_KEY)
+      return null
+    }
+
+    return parsed
+  } catch (error) {
+    localStorage.removeItem(STORE_CACHE_KEY)
+    return null
+  }
+}
+
+function cacheStatus() {
+  if (!isCacheUsed.value || !cacheLastUpdated.value) return null
+  return `Dados de cache carregados há ${Math.round((Date.now() - cacheLastUpdated.value) / 1000)}s` 
+}
 
 // Near me
 const nearMeActive = ref(false)
@@ -172,7 +218,12 @@ const nearLng = ref(null)
 const nearRadius = ref(10)
 
 async function load() {
-  loading.value = true
+  const wasCacheLoaded = isCacheUsed.value
+
+  if (!wasCacheLoaded) {
+    loading.value = true
+  }
+
   try {
     const params = {
       search: search.value,
@@ -186,6 +237,14 @@ async function load() {
     }
     const { data } = await axios.get('/stores', { params })
     stores.value = data.data ?? data
+    setStoreCache(stores.value)
+    isCacheUsed.value = false
+    cacheLastUpdated.value = Date.now()
+    trackEvent('stores_data_loaded', { source: 'network', count: stores.value.length })
+  } catch (error) {
+    if (!wasCacheLoaded) {
+      trackEvent('hook_load_failed', { hook: 'Stores', message: error.message || 'unknown' })
+    }
   } finally {
     loading.value = false
   }
@@ -228,14 +287,28 @@ function clearNearMe() {
 }
 
 onMounted(async () => {
-  const [storesRes, catsRes, provsRes] = await Promise.all([
-    axios.get('/stores'),
-    axios.get('/store-categories'),
-    axios.get('/locations/provinces'),
-  ])
-  stores.value = storesRes.data.data ?? storesRes.data
-  categories.value = catsRes.data
-  provinces.value = provsRes.data
-  loading.value = false
+  trackEvent('home_skeleton_shown', { page: 'Stores' })
+
+  const cache = getStoreCache()
+  if (cache) {
+    stores.value = cache.stores
+    isCacheUsed.value = true
+    cacheLastUpdated.value = cache.updatedAt
+    loading.value = false
+    trackEvent('stores_data_loaded', { source: 'cache', count: stores.value.length })
+  }
+
+  try {
+    const [catsRes, provsRes] = await Promise.all([
+      axios.get('/store-categories'),
+      axios.get('/locations/provinces'),
+    ])
+    categories.value = catsRes.data
+    provinces.value = provsRes.data
+  } catch (e) {
+    trackEvent('hook_load_failed', { hook: 'StoresMeta', message: e.message || 'unknown' })
+  } finally {
+    await load()
+  }
 })
 </script>

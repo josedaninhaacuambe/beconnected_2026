@@ -1,5 +1,5 @@
 <template>
-  <section v-if="drops.length > 0" class="daily-drop-section py-10 px-4">
+  <section v-if="isLoading || drops.length > 0 || error" class="daily-drop-section py-10 px-4">
     <div class="container mx-auto">
       <!-- Header -->
       <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
@@ -18,12 +18,36 @@
 
       <!-- Cards -->
       <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <div
-          v-for="(product, index) in drops"
-          :key="product.id"
-          class="drop-card rounded-2xl overflow-hidden relative flex flex-col"
-          :style="{ animationDelay: `${index * 100}ms` }"
-        >
+        <template v-if="isLoading">
+          <div v-for="n in 6" :key="`drop-skel-${n}`" class="drop-card rounded-2xl overflow-hidden relative flex flex-col animate-pulse bg-slate-800">
+            <div class="h-32 bg-slate-700"></div>
+            <div class="p-3 flex flex-col flex-1 space-y-2">
+              <div class="h-3 bg-slate-700 rounded"></div>
+              <div class="h-3 bg-slate-700 rounded"></div>
+              <div class="h-3 bg-slate-700 rounded w-1/2"></div>
+              <div class="h-8 bg-slate-700 rounded"></div>
+            </div>
+          </div>
+        </template>
+
+        <template v-else-if="error">
+          <div class="col-span-full bg-red-500/15 text-red-200 rounded-xl p-4 text-center">
+            <p>{{ error }}</p>
+            <button @click="retryDrops" class="mt-3 px-4 py-2 bg-red-500 text-white rounded">Tentar novamente</button>
+          </div>
+        </template>
+
+        <template v-else-if="drops.length === 0">
+          <div class="col-span-full bg-bc-surface rounded-xl p-6 text-center text-bc-muted">Nenhum produto disponível no momento.</div>
+        </template>
+
+        <template v-else>
+          <div
+            v-for="(product, index) in drops"
+            :key="product.id"
+            class="drop-card rounded-2xl overflow-hidden relative flex flex-col"
+            :style="{ animationDelay: `${index * 100}ms` }"
+          >
           <!-- "Novo" badge -->
           <div class="absolute top-2 left-2 z-10">
             <span class="new-badge text-xs font-bold px-2 py-0.5 rounded-full">Novo às 00:00</span>
@@ -62,9 +86,12 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
+import { trackEvent } from '@/utils/analytics.js'
 
 const drops = ref([])
 const midnightCountdown = ref('--:--:--')
+const isLoading = ref(true)
+const error = ref(null)
 let intervalId = null
 
 // Deterministic seeded shuffle using today's date string as entropy
@@ -84,6 +111,9 @@ function seededShuffle(arr, seed) {
 }
 
 async function fetchDrops() {
+  isLoading.value = true
+  error.value = null
+
   try {
     const { data } = await axios.get('/products/trending')
     const today = new Date().toDateString()
@@ -91,7 +121,15 @@ async function fetchDrops() {
     drops.value = shuffled.slice(0, 6)
   } catch (e) {
     drops.value = []
+    error.value = 'Falha ao carregar descoberta do dia. Tenta novamente.'
+    trackEvent('hook_load_failed', { hook: 'DailyDrop', message: e.message || 'unknown' })
+  } finally {
+    isLoading.value = false
   }
+}
+
+function retryDrops() {
+  fetchDrops()
 }
 
 function pad(n) { return String(n).padStart(2, '0') }

@@ -5,6 +5,15 @@ import router from './router/index.js'
 import App from './App.vue'
 import axios from 'axios'
 import './bootstrap'
+import { trackEvent } from './utils/analytics.js'
+
+// Expor utilitários de analytics para todo o app
+if (typeof window !== 'undefined') {
+  window.trackEvent = trackEvent
+  window.addEventListener('analytics', (event) => {
+    console.debug('[Analytics Event]', event.detail)
+  })
+}
 
 // Configurar Axios
 axios.defaults.baseURL = import.meta.env.VITE_API_URL || '/api'
@@ -16,17 +25,64 @@ axios.interceptors.request.use((config) => {
     if (token) {
         config.headers.Authorization = `Bearer ${token}`
     }
+    // Track request start for diagnostics
+    trackEvent('axios_request', { method: config.method, url: config.url })
     return config
 })
 
+const AXIOS_RETRY_MAX = 3
+const AXIOS_RETRY_BASE_DELAY_MS = 500
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 axios.interceptors.response.use(
     (response) => response,
-    (error) => {
-        if (error.response?.status === 401) {
+    async (error) => {
+        const status = error.response?.status
+
+        if (status === 401) {
             localStorage.removeItem('bc_token')
             router.push('/login')
+            return Promise.reject(error)
         }
-        return Promise.reject(error)
+
+        const config = error.config
+        if (!config) {
+            trackEvent('axios_error', { error: error.message })
+            return Promise.reject(error)
+        }
+
+        config.__retryCount = config.__retryCount || 0
+
+        if (config.__retryCount >= AXIOS_RETRY_MAX) {
+            trackEvent('axios_retry_exhausted', {
+                method: config.method,
+                url: config.url,
+                status,
+                retries: config.__retryCount,
+            })
+            return Promise.reject(error)
+        }
+
+        const shouldRetry = !status || status >= 500 || status === 429
+        if (!shouldRetry) {
+            return Promise.reject(error)
+        }
+
+        config.__retryCount += 1
+        const backoff = AXIOS_RETRY_BASE_DELAY_MS * Math.pow(2, config.__retryCount - 1)
+        trackEvent('axios_retry', {
+            method: config.method,
+            url: config.url,
+            status,
+            retry: config.__retryCount,
+            backoff,
+        })
+
+        await delay(backoff)
+        return axios(config)
     }
 )
 

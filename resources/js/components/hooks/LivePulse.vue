@@ -1,6 +1,43 @@
 <template>
-  <div v-if="messages.length > 0" class="live-pulse-bar overflow-hidden">
+  <div class="live-pulse-bar overflow-hidden">
     <div class="pulse-inner flex items-center gap-4 px-3 py-2">
+      <template v-if="isLoading">
+        <span class="text-sm text-white/70">Carregando atualizações ao vivo...</span>
+      </template>
+      <template v-else-if="error">
+        <div class="w-full text-center text-red-200 text-sm flex items-center justify-between">
+          <span>{{ error }}</span>
+          <button @click="retryLivePulse" class="ml-3 text-white bg-red-500 px-2 py-1 text-xs rounded">Tentar novamente</button>
+        </div>
+      </template>
+      <template v-else-if="messages.length === 0">
+        <span class="text-sm text-white/70">Sem atualizações recentes</span>
+      </template>
+      <template v-else>
+        <!-- Live indicator -->
+        <div class="live-dot-wrapper flex items-center gap-1.5 shrink-0">
+          <span class="live-dot"></span>
+          <span class="text-red-400 font-black text-xs uppercase tracking-widest">AO VIVO</span>
+        </div>
+
+        <!-- Separator -->
+        <div class="h-4 w-px bg-bc-muted/30 shrink-0"></div>
+
+        <!-- Scrolling ticker -->
+        <div class="ticker-overflow overflow-hidden flex-1">
+          <div class="ticker-track flex gap-12" :style="tickerStyle">
+            <span
+              v-for="(msg, i) in duplicatedMessages"
+              :key="i"
+              class="ticker-item text-bc-light text-xs whitespace-nowrap shrink-0"
+              v-html="msg"
+            ></span>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+</template>
       <!-- Live indicator -->
       <div class="live-dot-wrapper flex items-center gap-1.5 shrink-0">
         <span class="live-dot"></span>
@@ -28,8 +65,11 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
+import { trackEvent } from '@/utils/analytics.js'
 
 const messages = ref([])
+const isLoading = ref(true)
+const error = ref(null)
 let refreshInterval = null
 
 const cities = ['Maputo', 'Matola', 'Beira', 'Nampula', 'Tete', 'Quelimane', 'Inhambane', 'Chimoio']
@@ -84,13 +124,24 @@ function buildMessages(products) {
 }
 
 async function fetchAndBuild() {
+  isLoading.value = true
+  error.value = null
+
   try {
     const { data } = await axios.get('/products/trending')
     const list = Array.isArray(data) ? data : (data.data ?? [])
     messages.value = buildMessages(list)
   } catch (e) {
     messages.value = []
+    error.value = 'Não foi possível carregar o pulso ao vivo. Tenta novamente.'
+    trackEvent('hook_load_failed', { hook: 'LivePulse', message: e.message || 'unknown' })
+  } finally {
+    isLoading.value = false
   }
+}
+
+function retryLivePulse() {
+  fetchAndBuild()
 }
 
 // Duplicate messages for seamless CSS loop

@@ -112,15 +112,24 @@ class CartController extends Controller
 
         $now = now()->toDateTimeString();
 
-        // 4. Escrita atómica — INSERT ... ON DUPLICATE KEY UPDATE
-        //    Uma única query substitui: SELECT + (UPDATE ou INSERT)
-        DB::statement("
+        $cartProductLock = Cache::lock("cart_item_{$cartId}_{$productId}", 8);
+        if (!$cartProductLock->block(2)) {
+            return response()->json(['message' => 'Operação do carrinho concorrente em andamento. Tente novamente.'], 429);
+        }
+
+        try {
+            // 4. Escrita atómica — INSERT ... ON DUPLICATE KEY UPDATE
+            //    Uma única query substitui: SELECT + (UPDATE ou INSERT)
+            DB::statement("
             INSERT INTO cart_items (cart_id, product_id, store_id, quantity, unit_price, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 quantity   = quantity + VALUES(quantity),
                 updated_at = VALUES(updated_at)
         ", [$cartId, $productId, $info['store_id'], $qty, $info['price'], $now, $now]);
+        } finally {
+            $cartProductLock->release();
+        }
 
         // Invalidar cache dos itens para a próxima leitura reflectir o estado real
         $this->invalidateCartCache($cartId);
@@ -193,7 +202,17 @@ class CartController extends Controller
             return response()->json(['message' => 'Stock insuficiente.', 'available' => $availableStock], 422);
         }
 
-        $cartItem->update(['quantity' => $validated['quantity']]);
+        $cartProductLock = Cache::lock("cart_item_{$cartItem->cart_id}_{$cartItem->product_id}", 8);
+        if (!$cartProductLock->block(2)) {
+            return response()->json(['message' => 'Operação do carrinho concorrente em andamento. Tente novamente.' ], 429);
+        }
+
+        try {
+            $cartItem->update(['quantity' => $validated['quantity']]);
+        } finally {
+            $cartProductLock->release();
+        }
+
         $this->invalidateCartCache($cartItem->cart_id);
 
         return response()->json(['message' => 'Carrinho actualizado.']);
@@ -203,7 +222,18 @@ class CartController extends Controller
     public function removeItem(CartItem $cartItem): JsonResponse
     {
         $cartId = $cartItem->cart_id;
-        $cartItem->delete();
+
+        $cartProductLock = Cache::lock("cart_item_{$cartId}_{$cartItem->product_id}", 8);
+        if (!$cartProductLock->block(2)) {
+            return response()->json(['message' => 'Operação do carrinho concorrente em andamento. Tente novamente.'], 429);
+        }
+
+        try {
+            $cartItem->delete();
+        } finally {
+            $cartProductLock->release();
+        }
+
         $this->invalidateCartCache($cartId);
 
         return response()->json(['message' => 'Item removido do carrinho.']);
@@ -214,7 +244,17 @@ class CartController extends Controller
     {
         $cartId = $this->getCartId($request);
 
-        Cart::find($cartId)?->items()->delete();
+        $cartLock = Cache::lock("cart_{$cartId}", 12);
+        if (!$cartLock->block(2)) {
+            return response()->json(['message' => 'Operação do carrinho concorrente em andamento. Tente novamente.'], 429);
+        }
+
+        try {
+            Cart::find($cartId)?->items()->delete();
+        } finally {
+            $cartLock->release();
+        }
+
         $this->invalidateCartCache($cartId);
 
         return response()->json(['message' => 'Carrinho limpo.']);

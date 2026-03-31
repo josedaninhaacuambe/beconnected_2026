@@ -48,6 +48,11 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
         });
 
+        // Carrinho: 60 req/min por usuário/IP para evitar spam de update/add/delete
+        RateLimiter::for('cart', function (Request $request) {
+            return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+        });
+
         // Feedback / reviews: 5 submissões por 10 min
         RateLimiter::for('submit', function (Request $request) {
             return Limit::perMinutes(10, 5)->by($request->user()?->id ?: $request->ip());

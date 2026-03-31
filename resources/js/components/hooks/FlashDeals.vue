@@ -1,5 +1,5 @@
 <template>
-  <section v-if="deals.length > 0" class="flash-deals-section py-10 px-4">
+  <section class="flash-deals-section py-10 px-4">
     <!-- Header -->
     <div class="container mx-auto">
       <div class="flash-header rounded-2xl p-5 mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -18,12 +18,36 @@
 
       <!-- Product grid -->
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-        <div
-          v-for="deal in deals"
-          :key="deal.id"
-          class="flash-card rounded-2xl overflow-hidden relative flex flex-col"
-          :class="{ 'flash-expired': isExpired(deal) }"
-        >
+        <template v-if="isLoading">
+          <div v-for="n in 8" :key="`flash-skel-${n}`" class="flash-card rounded-2xl overflow-hidden relative flex flex-col animate-pulse bg-slate-800">
+            <div class="h-44 bg-slate-700"></div>
+            <div class="p-4 flex-1 space-y-2">
+              <div class="h-3 bg-slate-700 rounded"></div>
+              <div class="h-3 bg-slate-700 rounded w-3/4"></div>
+              <div class="h-4 bg-slate-700 rounded"></div>
+              <div class="h-7 bg-slate-700 rounded"></div>
+            </div>
+          </div>
+        </template>
+
+        <template v-else-if="error">
+          <div class="col-span-full bg-red-500/15 text-red-200 rounded-xl p-4 text-center">
+            <p>{{ error }}</p>
+            <button @click="retryFetchDeals" class="mt-3 px-4 py-2 bg-red-500 text-white rounded">Tentar novamente</button>
+          </div>
+        </template>
+
+        <template v-else-if="deals.length === 0">
+          <div class="col-span-full bg-bc-surface rounded-xl p-6 text-center text-bc-muted">Nenhuma oferta relâmpago disponível no momento.</div>
+        </template>
+
+        <template v-else>
+          <div
+            v-for="deal in deals"
+            :key="deal.id"
+            class="flash-card rounded-2xl overflow-hidden relative flex flex-col"
+            :class="{ 'flash-expired': isExpired(deal) }"
+          >
           <!-- % off badge -->
           <div class="absolute top-3 left-3 z-10">
             <span class="bg-red-600 text-white font-black text-sm px-2 py-1 rounded-lg shadow-lg">
@@ -79,18 +103,32 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
+import { trackEvent } from '@/utils/analytics.js'
 
 const deals = ref([])
 const countdowns = ref({})
+const isLoading = ref(true)
+const error = ref(null)
 let intervalId = null
 
 async function fetchDeals() {
+  isLoading.value = true
+  error.value = null
+
   try {
     const { data } = await axios.get('/products/flash')
     deals.value = Array.isArray(data) ? data : (data.data ?? [])
   } catch (e) {
     deals.value = []
+    error.value = 'Não foi possível carregar ofertas relâmpago. Tenta novamente.'
+    trackEvent('hook_load_failed', { hook: 'FlashDeals', message: e.message || 'unknown' })
+  } finally {
+    isLoading.value = false
   }
+}
+
+function retryFetchDeals() {
+  fetchDeals()
 }
 
 function isExpired(deal) {

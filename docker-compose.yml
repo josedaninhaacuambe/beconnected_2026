@@ -42,7 +42,7 @@ services:
     container_name: beconnect_mysql
     restart: unless-stopped
     ports:
-      - "3308:3306"          # porta 3308 no host (não conflicta com Laragon/3306 nem 3307)
+      - "3308:3306"
     environment:
       MYSQL_ROOT_PASSWORD: beconnect_secret
       MYSQL_DATABASE: beconnect
@@ -59,7 +59,7 @@ services:
     networks:
       - beconnect
 
-  # ─── phpMyAdmin (porta 8081 — igual ao teu setup actual) ──────────────────
+  # ─── phpMyAdmin ────────────────────────────────────────────────────────────
   phpmyadmin:
     image: phpmyadmin:latest
     container_name: beconnect_phpmyadmin
@@ -78,7 +78,7 @@ services:
       mysql:
         condition: service_healthy
 
-  # ─── Redis (filas e cache) ─────────────────────────────────────────────────
+  # ─── Redis (cache + filas) ─────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: beconnect_redis
@@ -95,7 +95,118 @@ services:
     networks:
       - beconnect
 
-  # ─── Worker de filas (comissões, notificações, stock sync) ─────────────────
+  # ─── Meilisearch (motor de pesquisa de produtos) ──────────────────────────
+  meilisearch:
+    image: getmeili/meilisearch:v1.7
+    container_name: beconnect_meilisearch
+    restart: unless-stopped
+    ports:
+      - "7700:7700"
+    environment:
+      MEILI_MASTER_KEY: "${MEILISEARCH_KEY:-beconnect_meili_secret}"
+      MEILI_ENV: development
+    volumes:
+      - beconnect_meili_data:/meili_data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:7700/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - beconnect
+
+  # ─── Soketi (WebSockets — tracking entrega em tempo real) ─────────────────
+  soketi:
+    image: quay.io/soketi/soketi:latest-16-alpine
+    container_name: beconnect_soketi
+    restart: unless-stopped
+    ports:
+      - "6001:6001"
+      - "9601:9601"   # painel de métricas Soketi
+    environment:
+      SOKETI_DEFAULT_APP_ID: "${PUSHER_APP_ID:-beconnect}"
+      SOKETI_DEFAULT_APP_KEY: "${PUSHER_APP_KEY:-beconnect_key}"
+      SOKETI_DEFAULT_APP_SECRET: "${PUSHER_APP_SECRET:-beconnect_secret}"
+      SOKETI_DEFAULT_APP_MAX_CONNS: "1000"
+      SOKETI_DEBUG: "0"
+    networks:
+      - beconnect
+
+  # ─── Worker: Pagamentos (alta prioridade, 5 tentativas) ───────────────────
+  queue_payments:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: beconnect_queue_payments
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - .:/var/www
+    command: php artisan queue:work --queue=payments --sleep=2 --tries=5 --backoff=30 --max-time=3600 --memory=256
+    networks:
+      - beconnect
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ─── Worker: Entregas + Pedidos (tempo real) ──────────────────────────────
+  queue_delivery:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: beconnect_queue_delivery
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - .:/var/www
+    command: php artisan queue:work --queue=delivery,orders --sleep=2 --tries=3 --backoff=10 --max-time=3600 --memory=128
+    networks:
+      - beconnect
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ─── Worker: Notificações + Indexação de pesquisa ─────────────────────────
+  queue_notifications:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: beconnect_queue_notifications
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - .:/var/www
+    command: php artisan queue:work --queue=notifications,search_index --sleep=5 --tries=3 --backoff=60 --max-time=3600 --memory=128
+    networks:
+      - beconnect
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ─── Worker: Checkout assíncrono (stock lock + criação de pedido) ──────────
+  queue_checkout:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: beconnect_queue_checkout
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - .:/var/www
+    command: php artisan queue:work --queue=checkout --sleep=1 --tries=3 --backoff=5 --max-time=3600 --memory=256
+    networks:
+      - beconnect
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ─── Worker: Filas genéricas (default + stock imports + baixa prioridade) ──
   queue:
     build:
       context: .
@@ -105,7 +216,7 @@ services:
     working_dir: /var/www
     volumes:
       - .:/var/www
-    command: php artisan queue:work --sleep=3 --tries=3 --max-time=3600
+    command: php artisan queue:work --queue=default --sleep=3 --tries=3 --max-time=3600 --memory=128
     networks:
       - beconnect
     depends_on:
@@ -114,7 +225,7 @@ services:
       redis:
         condition: service_healthy
 
-  # ─── Scheduler (tarefas agendadas: sync APIs externas, etc.) ──────────────
+  # ─── Scheduler (tarefas agendadas) ────────────────────────────────────────
   scheduler:
     build:
       context: .
@@ -132,7 +243,7 @@ services:
       mysql:
         condition: service_healthy
 
-  # ─── Node.js (build único do frontend) ────────────────────────────────────
+  # ─── Node.js (build frontend — executar com: docker compose run --rm node npm run build) ──
   node:
     image: node:20-alpine
     container_name: beconnect_node
@@ -141,7 +252,7 @@ services:
       - .:/var/www
     command: sh -c "npm install --legacy-peer-deps && npm run build"
     profiles:
-      - build          # apenas executado com: docker compose --profile build up node
+      - build
 
 networks:
   beconnect:
@@ -150,3 +261,4 @@ networks:
 volumes:
   beconnect_mysql_data:
   beconnect_redis_data:
+  beconnect_meili_data:

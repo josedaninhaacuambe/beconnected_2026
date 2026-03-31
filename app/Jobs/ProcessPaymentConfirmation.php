@@ -15,8 +15,9 @@ class ProcessPaymentConfirmation implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 3;
-    public int $backoff = 10;
+    public string $queue = 'payments';
+    public int $tries = 5;
+    public int $backoff = 30;
 
     public function __construct(
         private string $reference,
