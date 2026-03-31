@@ -206,7 +206,7 @@ function getStoreCache() {
 
 function cacheStatus() {
   if (!isCacheUsed.value || !cacheLastUpdated.value) return null
-  return `Dados de cache carregados há ${Math.round((Date.now() - cacheLastUpdated.value) / 1000)}s` 
+  return `Dados de cache carregados há ${Math.round((Date.now() - cacheLastUpdated.value) / 1000)}s`
 }
 
 // Near me
