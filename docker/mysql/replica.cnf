@@ -1,0 +1,38 @@
+[mysqld]
+# server-id é injectado via variável de ambiente no docker-compose
+# (MYSQL_SERVER_ID = 2 ou 3)
+
+# ─── GTID replication ────────────────────────────────────────────────────────
+gtid-mode                = ON
+enforce-gtid-consistency = ON
+log-bin                  = mysql-bin
+log-slave-updates        = ON
+binlog-format            = ROW
+binlog-row-image         = MINIMAL
+read-only                = ON               # réplica só aceita leituras
+super-read-only          = ON               # bloqueia mesmo o super user
+
+# ─── Replica-specific ────────────────────────────────────────────────────────
+relay-log                = relay-bin
+relay-log-recovery       = ON
+slave-net-timeout        = 60
+slave-parallel-workers   = 4
+slave-parallel-type      = LOGICAL_CLOCK
+
+# ─── Performance (optimizado para leitura) ────────────────────────────────────
+innodb_buffer_pool_size      = 512M
+innodb_buffer_pool_instances = 2
+innodb_flush_log_at_trx_commit = 2          # mais rápido em réplica (leitura)
+innodb_log_file_size         = 256M
+max_connections              = 300
+thread_cache_size            = 32
+table_open_cache             = 2048
+
+# ─── Charset ──────────────────────────────────────────────────────────────────
+character-set-server  = utf8mb4
+collation-server      = utf8mb4_unicode_ci
+default-time-zone     = '+02:00'
+max_allowed_packet    = 64M
+
+[client]
+default-character-set = utf8mb4

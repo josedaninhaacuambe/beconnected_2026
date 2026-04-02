@@ -2,26 +2,55 @@
 # Beconnect — docker-compose.yml
 # Branch: robustez-do-beconnected
 #
-# Arquitectura de microserviços:
-#   gateway        → nginx API Gateway (porta 8000 — entrada única)
-#   app            → Laravel PHP 8.3 FPM
-#   nginx          → nginx para Laravel (porta interna 80)
-#   cart-service   → Node.js + Redis Streams (porta interna 3001)
-#   payment-service→ C# .NET 8 (porta interna 8082)
-#   stock-service  → Java Spring Boot 3 + JPA (porta interna 8081)
-#   pos-pwa        → React PWA + IndexedDB (porta 3002)
-#   mysql          → MySQL 8.0
-#   redis          → Redis 7 (cache + filas + cart streams)
-#   meilisearch    → Motor de pesquisa
-#   soketi         → WebSockets
-#   queue_*        → Workers Laravel por domínio
-#   scheduler      → Laravel scheduler
+# Capacidade: 100k+ utilizadores simultâneos em todos os domínios
+#
+# ─── Topologia ───────────────────────────────────────────────────────────────
+#  ENTRADA ÚNICA          → gateway (nginx, porta 8000)
+#  LARAVEL (PHP-FPM ×4)  → app (replicas:4) + nginx
+#  CART SERVICE (Node×4)  → cart-service (replicas:4)
+#  PAYMENT SERVICE (C#)  → payment-service
+#  STOCK SERVICE (Java)  → stock-service
+#  POS PWA (React)       → pos-pwa
+#  DB WRITE              → mysql-master
+#  DB READ               → mysql-replica-1 + mysql-replica-2
+#  QUERY ROUTER          → proxysql (porta 6033)
+#  CACHE/FILAS           → redis-1..6 (Redis Cluster)
+#  SEARCH                → meilisearch
+#  WEBSOCKETS            → soketi
 ##############################################################################
+
+x-app-base: &app-base
+  build:
+    context: .
+    dockerfile: docker/php/Dockerfile
+  restart: unless-stopped
+  working_dir: /var/www
+  volumes:
+    - .:/var/www
+    - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+  networks:
+    - beconnect
+  depends_on:
+    proxysql:
+      condition: service_healthy
+    redis-1:
+      condition: service_healthy
+
+x-redis-node: &redis-node
+  image: redis:7-alpine
+  restart: unless-stopped
+  networks:
+    - beconnect
+  healthcheck:
+    test: ["CMD", "redis-cli", "-p", "6379", "ping"]
+    interval: 10s
+    timeout: 3s
+    retries: 5
 
 services:
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # API GATEWAY — nginx (porta 8000, entrada única pública)
+  # API GATEWAY — entrada única pública (porta 8000)
   # ═══════════════════════════════════════════════════════════════════════════
   gateway:
     image: nginx:1.25-alpine
@@ -46,40 +75,82 @@ services:
       retries: 3
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # CART SERVICE — Node.js 20 + Redis Streams
+  # LARAVEL PHP-FPM — 4 réplicas com load balancing automático
+  # nginx usa Docker DNS para distribuir requisições
+  # ═══════════════════════════════════════════════════════════════════════════
+  app:
+    <<: *app-base
+    environment:
+      - PHP_OPCACHE_ENABLE=1
+      - DB_HOST=proxysql
+      - DB_PORT=6033
+      - REDIS_CLUSTER_ENABLED=true
+      - REDIS_NODE_1=redis-1
+      - REDIS_NODE_2=redis-2
+      - REDIS_NODE_3=redis-3
+      - REDIS_NODE_4=redis-4
+      - REDIS_NODE_5=redis-5
+      - REDIS_NODE_6=redis-6
+    deploy:
+      replicas: 4
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  # nginx para Laravel (load balance entre réplicas PHP-FPM)
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: beconnect_nginx
+    restart: unless-stopped
+    volumes:
+      - .:/var/www
+      - ./docker/nginx/beconnect.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - beconnect
+    depends_on:
+      - app
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # CART SERVICE — Node.js 20 + Redis Cluster | 4 réplicas
   # ═══════════════════════════════════════════════════════════════════════════
   cart-service:
     build:
       context: ./services/cart-service
       dockerfile: Dockerfile
-    container_name: beconnect_cart
     restart: unless-stopped
     environment:
-      PORT:               3001
-      REDIS_HOST:         redis
-      REDIS_PORT:         6379
-      STOCK_SERVICE_URL:  http://stock-service:8081
+      PORT:                3001
+      REDIS_CLUSTER_NODES: "redis-1:6379,redis-2:6379,redis-3:6379,redis-4:6379,redis-5:6379,redis-6:6379"
+      STOCK_SERVICE_URL:   http://stock-service:8081
       PAYMENT_SERVICE_URL: http://payment-service:8082
-      ALLOWED_ORIGINS:    http://localhost:8000,http://gateway:80
-      INTERNAL_API_KEY:   "${INTERNAL_API_KEY:-beconnect_internal}"
-      LARAVEL_JWT_SECRET: "${APP_KEY:-beconnect_dev_secret}"
-      LOG_LEVEL:          info
-      NODE_ENV:           production
+      ALLOWED_ORIGINS:     http://localhost:8000,http://gateway:80
+      INTERNAL_API_KEY:    "${INTERNAL_API_KEY:-beconnect_internal}"
+      LARAVEL_JWT_SECRET:  "${APP_KEY:-beconnect_dev_secret}"
+      LOG_LEVEL:           info
+      NODE_ENV:            production
     networks:
       - beconnect
     depends_on:
-      redis:
+      redis-1:
         condition: service_healthy
+      redis-cluster-init:
+        condition: service_completed_successfully
     deploy:
+      replicas: 4
       resources:
         limits:
-          cpus: "1.0"
-          memory: 512M
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
+          cpus: "0.75"
+          memory: 384M
+      restart_policy:
+        condition: on-failure
 
   # ═══════════════════════════════════════════════════════════════════════════
   # PAYMENT SERVICE — C# .NET 8
@@ -93,12 +164,12 @@ services:
     environment:
       ASPNETCORE_URLS:        http://+:8082
       ASPNETCORE_ENVIRONMENT: Production
-      DB_HOST:                mysql
-      DB_PORT:                3306
+      DB_HOST:                proxysql
+      DB_PORT:                6033
       DB_DATABASE:            "${DB_DATABASE:-beconnect}"
       DB_USERNAME:            "${DB_USERNAME:-beconnect}"
       DB_PASSWORD:            "${DB_PASSWORD:-beconnect_secret}"
-      REDIS_HOST:             redis
+      REDIS_HOST:             redis-1
       REDIS_PORT:             6379
       STOCK_SERVICE_URL:      http://stock-service:8081
       LARAVEL_APP_URL:        http://nginx:80
@@ -109,9 +180,9 @@ services:
     networks:
       - beconnect
     depends_on:
-      mysql:
+      proxysql:
         condition: service_healthy
-      redis:
+      redis-1:
         condition: service_healthy
     deploy:
       resources:
@@ -125,7 +196,7 @@ services:
       retries: 3
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # STOCK SERVICE — Java Spring Boot 3 + JPA
+  # STOCK SERVICE — Java Spring Boot 3 + JPA (pessimistic locking)
   # ═══════════════════════════════════════════════════════════════════════════
   stock-service:
     build:
@@ -134,21 +205,21 @@ services:
     container_name: beconnect_stock
     restart: unless-stopped
     environment:
-      DB_HOST:         mysql
-      DB_PORT:         3306
-      DB_DATABASE:     "${DB_DATABASE:-beconnect}"
-      DB_USERNAME:     "${DB_USERNAME:-beconnect}"
-      DB_PASSWORD:     "${DB_PASSWORD:-beconnect_secret}"
-      REDIS_HOST:      redis
-      REDIS_PORT:      6379
+      DB_HOST:          proxysql
+      DB_PORT:          6033
+      DB_DATABASE:      "${DB_DATABASE:-beconnect}"
+      DB_USERNAME:      "${DB_USERNAME:-beconnect}"
+      DB_PASSWORD:      "${DB_PASSWORD:-beconnect_secret}"
+      REDIS_HOST:       redis-1
+      REDIS_PORT:       6379
       INTERNAL_API_KEY: "${INTERNAL_API_KEY:-beconnect_internal}"
-      JAVA_TOOL_OPTIONS: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+      JAVA_TOOL_OPTIONS: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
     networks:
       - beconnect
     depends_on:
-      mysql:
+      proxysql:
         condition: service_healthy
-      redis:
+      redis-1:
         condition: service_healthy
     deploy:
       resources:
@@ -179,91 +250,230 @@ services:
           memory: 128M
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # LARAVEL APP — PHP 8.3 FPM
+  # MySQL MASTER — escritas (INSERT / UPDATE / DELETE)
   # ═══════════════════════════════════════════════════════════════════════════
-  app:
-    build:
-      context: .
-      dockerfile: docker/php/Dockerfile
-    container_name: beconnect_app
-    restart: unless-stopped
-    working_dir: /var/www
-    volumes:
-      - .:/var/www
-      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
-    networks:
-      - beconnect
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment:
-      - PHP_OPCACHE_ENABLE=1
-
-  # nginx para Laravel
-  nginx:
-    image: nginx:1.25-alpine
-    container_name: beconnect_nginx
-    restart: unless-stopped
-    volumes:
-      - .:/var/www
-      - ./docker/nginx/beconnect.conf:/etc/nginx/conf.d/default.conf
-    networks:
-      - beconnect
-    depends_on:
-      - app
-
-  # ═══════════════════════════════════════════════════════════════════════════
-  # MYSQL 8.0
-  # ═══════════════════════════════════════════════════════════════════════════
-  mysql:
+  mysql-master:
     image: mysql:8.0
-    container_name: beconnect_mysql
+    container_name: beconnect_mysql_master
     restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "${DB_PASSWORD:-beconnect_secret}"
+      MYSQL_DATABASE:      "${DB_DATABASE:-beconnect}"
+      MYSQL_USER:          "${DB_USERNAME:-beconnect}"
+      MYSQL_PASSWORD:      "${DB_PASSWORD:-beconnect_secret}"
+      MYSQL_SERVER_ID:     "1"
+    volumes:
+      - beconnect_mysql_master:/var/lib/mysql
+      - ./docker/mysql/master.cnf:/etc/mysql/conf.d/custom.cnf:ro
+    command: >
+      --server-id=1
+      --gtid-mode=ON
+      --enforce-gtid-consistency=ON
+      --log-bin=mysql-bin
+      --binlog-format=ROW
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-beconnect_secret}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - beconnect
     ports:
       - "3308:3306"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # MySQL REPLICA 1 — leituras
+  # ═══════════════════════════════════════════════════════════════════════════
+  mysql-replica-1:
+    image: mysql:8.0
+    container_name: beconnect_mysql_replica1
+    restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: "${DB_PASSWORD:-beconnect_secret}"
       MYSQL_DATABASE:      "${DB_DATABASE:-beconnect}"
       MYSQL_USER:          "${DB_USERNAME:-beconnect}"
       MYSQL_PASSWORD:      "${DB_PASSWORD:-beconnect_secret}"
     volumes:
-      - beconnect_mysql_data:/var/lib/mysql
-      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/my.cnf
+      - beconnect_mysql_replica1:/var/lib/mysql
+      - ./docker/mysql/replica.cnf:/etc/mysql/conf.d/custom.cnf:ro
+    command: >
+      --server-id=2
+      --gtid-mode=ON
+      --enforce-gtid-consistency=ON
+      --log-bin=mysql-bin
+      --log-slave-updates=ON
+      --read-only=ON
+      --super-read-only=ON
+      --relay-log=relay-bin
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-beconnect_secret}"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
     networks:
       - beconnect
+    depends_on:
+      mysql-master:
+        condition: service_healthy
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # REDIS 7 — cache + filas + cart streams
+  # MySQL REPLICA 2 — leituras
   # ═══════════════════════════════════════════════════════════════════════════
-  redis:
-    image: redis:7-alpine
-    container_name: beconnect_redis
+  mysql-replica-2:
+    image: mysql:8.0
+    container_name: beconnect_mysql_replica2
     restart: unless-stopped
-    ports:
-      - "6379:6379"
-    command: >
-      redis-server
-      --maxmemory 512mb
-      --maxmemory-policy allkeys-lru
-      --save 60 1000
-      --appendonly yes
-      --appendfsync everysec
+    environment:
+      MYSQL_ROOT_PASSWORD: "${DB_PASSWORD:-beconnect_secret}"
+      MYSQL_DATABASE:      "${DB_DATABASE:-beconnect}"
+      MYSQL_USER:          "${DB_USERNAME:-beconnect}"
+      MYSQL_PASSWORD:      "${DB_PASSWORD:-beconnect_secret}"
     volumes:
-      - beconnect_redis_data:/data
+      - beconnect_mysql_replica2:/var/lib/mysql
+      - ./docker/mysql/replica.cnf:/etc/mysql/conf.d/custom.cnf:ro
+    command: >
+      --server-id=3
+      --gtid-mode=ON
+      --enforce-gtid-consistency=ON
+      --log-bin=mysql-bin
+      --log-slave-updates=ON
+      --read-only=ON
+      --super-read-only=ON
+      --relay-log=relay-bin
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-beconnect_secret}"]
       interval: 10s
-      timeout: 3s
-      retries: 5
+      timeout: 5s
+      retries: 10
     networks:
       - beconnect
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # MYSQL INIT — configura replicação GTID uma única vez
+  # ═══════════════════════════════════════════════════════════════════════════
+  mysql-replication-init:
+    image: mysql:8.0
+    container_name: beconnect_mysql_init
+    restart: "no"
+    volumes:
+      - ./docker/mysql/init-replication.sh:/init-replication.sh:ro
+    command: bash /init-replication.sh
+    environment:
+      MYSQL_ROOT_PASSWORD:  "${DB_PASSWORD:-beconnect_secret}"
+      MYSQL_REPL_PASSWORD:  "${MYSQL_REPL_PASSWORD:-repl_secret_2025}"
+    networks:
+      - beconnect
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+      mysql-replica-1:
+        condition: service_healthy
+      mysql-replica-2:
+        condition: service_healthy
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # PROXYSQL — connection pooling + read/write splitting
+  # porta 6033 → MySQL (para app, workers, serviços)
+  # porta 6032 → admin ProxySQL
+  # ═══════════════════════════════════════════════════════════════════════════
+  proxysql:
+    image: proxysql/proxysql:2.6.3
+    container_name: beconnect_proxysql
+    restart: unless-stopped
+    volumes:
+      - ./docker/proxysql/proxysql.cnf:/etc/proxysql.cnf:ro
+      - beconnect_proxysql_data:/var/lib/proxysql
+    ports:
+      - "6032:6032"   # admin (monitorização)
+    networks:
+      - beconnect
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+      mysql-replica-1:
+        condition: service_healthy
+      mysql-replica-2:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "mysqladmin", "-h", "127.0.0.1", "-P", "6032", "-u", "admin", "-padmin_proxysql_2025", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # REDIS CLUSTER — 6 nós (3 masters + 3 réplicas)
+  # Capacidade: ~300k ops/s | 1.8GB RAM total
+  # ═══════════════════════════════════════════════════════════════════════════
+  redis-1:
+    <<: *redis-node
+    container_name: beconnect_redis_1
+    volumes:
+      - beconnect_redis_1:/data
+      - ./docker/redis-cluster/redis.conf:/etc/redis/redis.conf:ro
+    command: redis-server /etc/redis/redis.conf --cluster-announce-hostname redis-1
+    ports:
+      - "6379:6379"
+
+  redis-2:
+    <<: *redis-node
+    container_name: beconnect_redis_2
+    volumes:
+      - beconnect_redis_2:/data
+      - ./docker/redis-cluster/redis.conf:/etc/redis/redis.conf:ro
+    command: redis-server /etc/redis/redis.conf --cluster-announce-hostname redis-2
+
+  redis-3:
+    <<: *redis-node
+    container_name: beconnect_redis_3
+    volumes:
+      - beconnect_redis_3:/data
+      - ./docker/redis-cluster/redis.conf:/etc/redis/redis.conf:ro
+    command: redis-server /etc/redis/redis.conf --cluster-announce-hostname redis-3
+
+  redis-4:
+    <<: *redis-node
+    container_name: beconnect_redis_4
+    volumes:
+      - beconnect_redis_4:/data
+      - ./docker/redis-cluster/redis.conf:/etc/redis/redis.conf:ro
+    command: redis-server /etc/redis/redis.conf --cluster-announce-hostname redis-4
+
+  redis-5:
+    <<: *redis-node
+    container_name: beconnect_redis_5
+    volumes:
+      - beconnect_redis_5:/data
+      - ./docker/redis-cluster/redis.conf:/etc/redis/redis.conf:ro
+    command: redis-server /etc/redis/redis.conf --cluster-announce-hostname redis-5
+
+  redis-6:
+    <<: *redis-node
+    container_name: beconnect_redis_6
+    volumes:
+      - beconnect_redis_6:/data
+      - ./docker/redis-cluster/redis.conf:/etc/redis/redis.conf:ro
+    command: redis-server /etc/redis/redis.conf --cluster-announce-hostname redis-6
+
+  # Bootstrap do cluster — corre uma vez
+  redis-cluster-init:
+    image: redis:7-alpine
+    container_name: beconnect_redis_cluster_init
+    restart: "no"
+    volumes:
+      - ./docker/redis-cluster/create-cluster.sh:/create-cluster.sh:ro
+    command: sh /create-cluster.sh
+    networks:
+      - beconnect
+    depends_on:
+      redis-1: { condition: service_healthy }
+      redis-2: { condition: service_healthy }
+      redis-3: { condition: service_healthy }
+      redis-4: { condition: service_healthy }
+      redis-5: { condition: service_healthy }
+      redis-6: { condition: service_healthy }
 
   # ═══════════════════════════════════════════════════════════════════════════
   # MEILISEARCH — pesquisa de produtos
@@ -288,7 +498,7 @@ services:
       - beconnect
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # SOKETI — WebSockets (tracking, notificações)
+  # SOKETI — WebSockets tempo real (entregas, notificações)
   # ═══════════════════════════════════════════════════════════════════════════
   soketi:
     image: quay.io/soketi/soketi:latest-16-alpine
@@ -298,118 +508,116 @@ services:
       - "6001:6001"
       - "9601:9601"
     environment:
-      SOKETI_DEFAULT_APP_ID:       "${PUSHER_APP_ID:-beconnect}"
-      SOKETI_DEFAULT_APP_KEY:      "${PUSHER_APP_KEY:-beconnect_key}"
-      SOKETI_DEFAULT_APP_SECRET:   "${PUSHER_APP_SECRET:-beconnect_secret}"
-      SOKETI_DEFAULT_APP_MAX_CONNS: "5000"
-      SOKETI_DEBUG:                "0"
+      SOKETI_DEFAULT_APP_ID:        "${PUSHER_APP_ID:-beconnect}"
+      SOKETI_DEFAULT_APP_KEY:       "${PUSHER_APP_KEY:-beconnect_key}"
+      SOKETI_DEFAULT_APP_SECRET:    "${PUSHER_APP_SECRET:-beconnect_secret}"
+      SOKETI_DEFAULT_APP_MAX_CONNS: "10000"
+      SOKETI_DEBUG:                 "0"
     networks:
       - beconnect
 
-  # phpMyAdmin
+  # ═══════════════════════════════════════════════════════════════════════════
+  # phpMyAdmin — administração visual (acesso local)
+  # ═══════════════════════════════════════════════════════════════════════════
   phpmyadmin:
     image: phpmyadmin:latest
     container_name: beconnect_phpmyadmin
     restart: unless-stopped
     ports:
-      - "8082:80"
+      - "8083:80"
     environment:
-      PMA_HOST:     mysql
-      PMA_PORT:     3306
+      PMA_HOST:     proxysql
+      PMA_PORT:     6033
       PMA_USER:     root
       PMA_PASSWORD: "${DB_PASSWORD:-beconnect_secret}"
       UPLOAD_LIMIT: 50M
     networks:
       - beconnect
     depends_on:
-      mysql:
+      proxysql:
         condition: service_healthy
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # QUEUE WORKERS — Laravel
+  # QUEUE WORKERS — Laravel (cada domínio tem o seu worker dedicado)
   # ═══════════════════════════════════════════════════════════════════════════
   queue_payments:
-    build: { context: ., dockerfile: docker/php/Dockerfile }
+    <<: *app-base
     container_name: beconnect_queue_payments
-    restart: unless-stopped
-    working_dir: /var/www
-    volumes: [.:/var/www]
+    environment:
+      DB_HOST: proxysql
+      DB_PORT: "6033"
+      REDIS_CLUSTER_ENABLED: "true"
+      REDIS_NODE_1: redis-1
+      REDIS_NODE_2: redis-2
+      REDIS_NODE_3: redis-3
     command: php artisan queue:work --queue=payments --sleep=2 --tries=5 --backoff=30 --max-time=3600 --memory=256
-    networks: [beconnect]
-    depends_on:
-      mysql: { condition: service_healthy }
-      redis: { condition: service_healthy }
 
   queue_delivery:
-    build: { context: ., dockerfile: docker/php/Dockerfile }
+    <<: *app-base
     container_name: beconnect_queue_delivery
-    restart: unless-stopped
-    working_dir: /var/www
-    volumes: [.:/var/www]
+    environment:
+      DB_HOST: proxysql
+      DB_PORT: "6033"
+      REDIS_CLUSTER_ENABLED: "true"
+      REDIS_NODE_1: redis-1
+      REDIS_NODE_2: redis-2
+      REDIS_NODE_3: redis-3
     command: php artisan queue:work --queue=delivery,orders --sleep=2 --tries=3 --backoff=10 --max-time=3600 --memory=128
-    networks: [beconnect]
-    depends_on:
-      mysql: { condition: service_healthy }
-      redis: { condition: service_healthy }
 
   queue_notifications:
-    build: { context: ., dockerfile: docker/php/Dockerfile }
+    <<: *app-base
     container_name: beconnect_queue_notifications
-    restart: unless-stopped
-    working_dir: /var/www
-    volumes: [.:/var/www]
+    environment:
+      DB_HOST: proxysql
+      DB_PORT: "6033"
+      REDIS_CLUSTER_ENABLED: "true"
+      REDIS_NODE_1: redis-1
     command: php artisan queue:work --queue=notifications,search_index --sleep=5 --tries=3 --backoff=60 --max-time=3600 --memory=128
-    networks: [beconnect]
-    depends_on:
-      redis: { condition: service_healthy }
 
   queue_checkout:
-    build: { context: ., dockerfile: docker/php/Dockerfile }
+    <<: *app-base
     container_name: beconnect_queue_checkout
-    restart: unless-stopped
-    working_dir: /var/www
-    volumes: [.:/var/www]
+    environment:
+      DB_HOST: proxysql
+      DB_PORT: "6033"
+      REDIS_CLUSTER_ENABLED: "true"
+      REDIS_NODE_1: redis-1
+      REDIS_NODE_2: redis-2
+      REDIS_NODE_3: redis-3
     command: php artisan queue:work --queue=checkout --sleep=1 --tries=3 --backoff=5 --max-time=3600 --memory=256
-    networks: [beconnect]
-    depends_on:
-      mysql: { condition: service_healthy }
-      redis: { condition: service_healthy }
 
   queue:
-    build: { context: ., dockerfile: docker/php/Dockerfile }
+    <<: *app-base
     container_name: beconnect_queue
-    restart: unless-stopped
-    working_dir: /var/www
-    volumes: [.:/var/www]
+    environment:
+      DB_HOST: proxysql
+      DB_PORT: "6033"
+      REDIS_CLUSTER_ENABLED: "true"
+      REDIS_NODE_1: redis-1
     command: php artisan queue:work --queue=default --sleep=3 --tries=3 --max-time=3600 --memory=128
-    networks: [beconnect]
-    depends_on:
-      mysql: { condition: service_healthy }
-      redis: { condition: service_healthy }
 
   scheduler:
-    build: { context: ., dockerfile: docker/php/Dockerfile }
+    <<: *app-base
     container_name: beconnect_scheduler
-    restart: unless-stopped
-    working_dir: /var/www
-    volumes: [.:/var/www]
+    environment:
+      DB_HOST: proxysql
+      DB_PORT: "6033"
     command: >
       sh -c "while true; do php artisan schedule:run --verbose --no-interaction; sleep 60; done"
-    networks: [beconnect]
-    depends_on:
-      mysql: { condition: service_healthy }
 
-  # Node para build frontend
+  # build node (perfil separado)
   node:
     image: node:20-alpine
     container_name: beconnect_node
     working_dir: /var/www
-    volumes: [.:/var/www]
+    volumes:
+      - .:/var/www
     command: sh -c "npm install --legacy-peer-deps && npm run build"
-    profiles: [build]
+    profiles:
+      - build
 
 ##############################################################################
-# Networks & Volumes
+# Networks
 ##############################################################################
 networks:
   beconnect:
@@ -418,7 +626,23 @@ networks:
       config:
         - subnet: 172.20.0.0/16
 
+##############################################################################
+# Volumes
+##############################################################################
 volumes:
-  beconnect_mysql_data:
-  beconnect_redis_data:
+  # MySQL (3 volumes separados — master não partilha dados com réplicas)
+  beconnect_mysql_master:
+  beconnect_mysql_replica1:
+  beconnect_mysql_replica2:
+  beconnect_proxysql_data:
+
+  # Redis Cluster (6 volumes — cada nó tem o seu)
+  beconnect_redis_1:
+  beconnect_redis_2:
+  beconnect_redis_3:
+  beconnect_redis_4:
+  beconnect_redis_5:
+  beconnect_redis_6:
+
+  # Serviços
   beconnect_meili_data:

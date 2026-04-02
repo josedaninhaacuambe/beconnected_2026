@@ -1,0 +1,41 @@
+[mysqld]
+# ─── Identity ────────────────────────────────────────────────────────────────
+server-id                = 1
+report-host              = mysql-master
+
+# ─── GTID replication (mais simples que binlog position manual) ───────────────
+gtid-mode                = ON
+enforce-gtid-consistency = ON
+log-bin                  = mysql-bin
+log-slave-updates        = ON
+binlog-format            = ROW
+binlog-row-image         = MINIMAL
+expire-logs-days         = 7
+sync-binlog              = 1                 # durabilidade máxima
+
+# ─── Replication user (criada pelo init-replication.sh) ──────────────────────
+# repl_user / repl_password
+
+# ─── Performance ─────────────────────────────────────────────────────────────
+innodb_buffer_pool_size      = 512M
+innodb_buffer_pool_instances = 2
+innodb_flush_log_at_trx_commit = 1          # ACID completo no master
+innodb_log_file_size         = 256M
+innodb_io_capacity           = 2000
+innodb_read_io_threads       = 8
+innodb_write_io_threads      = 8
+max_connections              = 500
+thread_cache_size            = 64
+table_open_cache             = 4096
+tmp_table_size               = 64M
+max_heap_table_size          = 64M
+query_cache_type             = 0            # desactivado no MySQL 8
+
+# ─── Charset ──────────────────────────────────────────────────────────────────
+character-set-server  = utf8mb4
+collation-server      = utf8mb4_unicode_ci
+default-time-zone     = '+02:00'
+max_allowed_packet    = 64M
+
+[client]
+default-character-set = utf8mb4
