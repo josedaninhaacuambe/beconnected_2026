@@ -1,0 +1,17 @@
+{
+  "name": "Beconnect POS",
+  "short_name": "BC POS",
+  "description": "Sistema de Ponto de Venda Beconnect — Offline First",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#030712",
+  "theme_color": "#EAB308",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Terminal", "url": "/", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
