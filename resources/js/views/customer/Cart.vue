@@ -216,9 +216,11 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCartStore } from '../../stores/cart.js'
+import { useAuthStore } from '../../stores/auth.js'
 
 const router     = useRouter()
 const cartStore  = useCartStore()
+const authStore  = useAuthStore()
 
 const COMMISSION_PER_ITEM = 0.50
 
