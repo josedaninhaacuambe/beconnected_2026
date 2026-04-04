@@ -38,29 +38,6 @@
     </div>
   </div>
 </template>
-      <!-- Live indicator -->
-      <div class="live-dot-wrapper flex items-center gap-1.5 shrink-0">
-        <span class="live-dot"></span>
-        <span class="text-red-400 font-black text-xs uppercase tracking-widest">AO VIVO</span>
-      </div>
-
-      <!-- Separator -->
-      <div class="h-4 w-px bg-bc-muted/30 shrink-0"></div>
-
-      <!-- Scrolling ticker -->
-      <div class="ticker-overflow overflow-hidden flex-1">
-        <div class="ticker-track flex gap-12" :style="tickerStyle">
-          <span
-            v-for="(msg, i) in duplicatedMessages"
-            :key="i"
-            class="ticker-item text-bc-light text-xs whitespace-nowrap shrink-0"
-            v-html="msg"
-          ></span>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'

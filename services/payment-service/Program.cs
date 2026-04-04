@@ -1,12 +1,10 @@
 using Beconnect.PaymentService.Data;
 using Beconnect.PaymentService.Services;
 using Microsoft.EntityFrameworkCore;
-using Polly;
-using Polly.Extensions.Http;
+using Microsoft.Extensions.Http.Resilience;
 using Serilog;
 using StackExchange.Redis;
 
-// ─── Logger de arranque ───────────────────────────────────────────────────────
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
     .WriteTo.File("logs/payment-.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14)
@@ -19,57 +17,54 @@ try
     var builder = WebApplication.CreateBuilder(args);
     builder.Host.UseSerilog();
 
-    // ─── Configurações ────────────────────────────────────────────────────────
     var cfg = builder.Configuration;
 
-    // ─── EF Core → MySQL (mesmo DB do Laravel, schema separado) ──────────────
+    // ─── EF Core → MySQL (ProxySQL) ───────────────────────────────────────────
+    var connStr =
+        cfg.GetConnectionString("Default") ??
+        $"Server={cfg["DB_HOST"] ?? "mysql"};Port={cfg["DB_PORT"] ?? "3306"};" +
+        $"Database={cfg["DB_DATABASE"] ?? "beconnect"};" +
+        $"User={cfg["DB_USERNAME"] ?? "beconnect"};" +
+        $"Password={cfg["DB_PASSWORD"] ?? "beconnect_secret"};";
+
     builder.Services.AddDbContext<PaymentDbContext>(opt =>
-        opt.UseMySql(
-            cfg.GetConnectionString("Default") ??
-            $"Server={cfg["DB_HOST"] ?? "mysql"};Port={cfg["DB_PORT"] ?? "3306"};" +
-            $"Database={cfg["DB_DATABASE"] ?? "beconnect"};" +
-            $"User={cfg["DB_USERNAME"] ?? "beconnect"};" +
-            $"Password={cfg["DB_PASSWORD"] ?? "beconnect_secret"};",
-            ServerVersion.AutoDetect(
-                cfg.GetConnectionString("Default") ??
-                $"Server={cfg["DB_HOST"] ?? "mysql"};Port=3306;Database={cfg["DB_DATABASE"] ?? "beconnect"};" +
-                $"User={cfg["DB_USERNAME"] ?? "beconnect"};Password={cfg["DB_PASSWORD"] ?? "beconnect_secret"};"
-            )
-        )
+        opt.UseMySql(connStr, ServerVersion.AutoDetect(connStr))
     );
 
     // ─── Redis ────────────────────────────────────────────────────────────────
     builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
         ConnectionMultiplexer.Connect($"{cfg["REDIS_HOST"] ?? "redis"}:{cfg["REDIS_PORT"] ?? "6379"}"));
 
-    // ─── Retry policy Polly (3 tentativas, backoff exponencial) ───────────────
-    static IAsyncPolicy<HttpResponseMessage> RetryPolicy() =>
-        HttpPolicyExtensions
-            .HandleTransientHttpError()
-            .WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)));
-
-    // ─── HTTP Clients (Stock Service + Laravel App) ───────────────────────────
+    // ─── HTTP Clients com resilience nativo do .NET 8 ─────────────────────────
     builder.Services.AddHttpClient("StockService", c =>
     {
         c.BaseAddress = new Uri(cfg["STOCK_SERVICE_URL"] ?? "http://stock-service:8081");
         c.Timeout     = TimeSpan.FromSeconds(10);
         c.DefaultRequestHeaders.Add("X-Internal-Key", cfg["INTERNAL_API_KEY"] ?? "beconnect_internal");
-    }).AddPolicyHandler(RetryPolicy());
+    }).AddStandardResilienceHandler(options =>
+    {
+        options.Retry.MaxRetryAttempts = 3;
+        options.Retry.Delay            = TimeSpan.FromSeconds(2);
+    });
 
     builder.Services.AddHttpClient("LaravelApp", c =>
     {
         c.BaseAddress = new Uri(cfg["LARAVEL_APP_URL"] ?? "http://nginx:80");
         c.Timeout     = TimeSpan.FromSeconds(15);
         c.DefaultRequestHeaders.Add("X-Internal-Key", cfg["INTERNAL_API_KEY"] ?? "beconnect_internal");
-    }).AddPolicyHandler(RetryPolicy());
+    }).AddStandardResilienceHandler(options =>
+    {
+        options.Retry.MaxRetryAttempts = 3;
+        options.Retry.Delay            = TimeSpan.FromSeconds(2);
+    });
 
-    // ─── eMola HTTP Client ────────────────────────────────────────────────────
     builder.Services.AddHttpClient<EMolaService>(c =>
     {
         c.BaseAddress = new Uri(cfg["EMola:ApiUrl"] ?? "https://api.emola.co.mz");
         c.Timeout     = TimeSpan.FromSeconds(30);
-        c.DefaultRequestHeaders.Add("Authorization", $"Bearer {cfg["EMola:ApiKey"]}");
-    }).AddPolicyHandler(RetryPolicy());
+        if (!string.IsNullOrEmpty(cfg["EMola:ApiKey"]))
+            c.DefaultRequestHeaders.Add("Authorization", $"Bearer {cfg["EMola:ApiKey"]}");
+    }).AddStandardResilienceHandler();
 
     builder.Services.AddScoped<CheckoutService>();
     builder.Services.AddControllers();
@@ -77,7 +72,7 @@ try
 
     var app = builder.Build();
 
-    // ─── Migração automática ao arrancar ──────────────────────────────────────
+    // Migração automática
     using (var scope = app.Services.CreateScope())
     {
         var db = scope.ServiceProvider.GetRequiredService<PaymentDbContext>();
@@ -86,7 +81,6 @@ try
 
     app.UseRouting();
     app.MapControllers();
-
     app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "payment-service" }));
 
     await app.RunAsync();

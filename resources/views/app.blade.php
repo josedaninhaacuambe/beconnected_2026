@@ -28,6 +28,15 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
+    <!-- Força desregisto do Service Worker antigo ao detectar nova versão do build -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                registrations.forEach(function(sw) { sw.unregister(); });
+            });
+        }
+    </script>
+
     @vite(['resources/js/app.js'])
 </head>
 <body class="antialiased">

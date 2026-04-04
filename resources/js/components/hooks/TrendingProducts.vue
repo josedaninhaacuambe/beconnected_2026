@@ -90,6 +90,7 @@
             </RouterLink>
           </div>
         </div>
+        </template>
       </div>
     </div>
   </section>

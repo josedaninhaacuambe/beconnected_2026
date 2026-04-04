@@ -127,19 +127,25 @@ function formatMZN(v) {
 }
 
 async function addToCart() {
+  if (adding.value) return
   adding.value = true
   errorMsg.value = ''
-  try {
-    await cartStore.addItem(state.product.id, qty.value)
-    added.value = true
-    setTimeout(() => {
-      close()
-      added.value = false
-    }, 1200)
-  } catch (e) {
-    errorMsg.value = e.response?.data?.message || 'Erro ao adicionar. Tenta novamente.'
-  } finally {
+
+  // Fechar e mostrar sucesso imediatamente (optimistic)
+  added.value = true
+  setTimeout(() => {
+    close()
+    added.value = false
     adding.value = false
+  }, 600)
+
+  try {
+    await cartStore.addItem(state.product.id, qty.value, state.product)
+  } catch (e) {
+    // Reverter UI se o servidor rejeitar
+    added.value = false
+    adding.value = false
+    errorMsg.value = e.response?.data?.message || 'Erro ao adicionar. Tenta novamente.'
   }
 }
 </script>

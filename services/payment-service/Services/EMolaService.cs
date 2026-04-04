@@ -1,7 +1,5 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using Polly;
-using Polly.Extensions.Http;
 
 namespace Beconnect.PaymentService.Services;
 
@@ -28,12 +26,6 @@ public class EMolaService
         _logger         = logger;
         _merchantNumber = config["EMola:MerchantNumber"] ?? throw new InvalidOperationException("EMola:MerchantNumber not configured");
     }
-
-    // ─── Polly retry policy: 3 tentativas com backoff exponencial ─────────────
-    private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy() =>
-        HttpPolicyExtensions
-            .HandleTransientHttpError()
-            .WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)));
 
     /// <summary>
     /// Inicia uma cobrança USSD push. O cliente recebe notificação no telemóvel.

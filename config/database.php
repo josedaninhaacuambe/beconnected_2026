@@ -151,50 +151,44 @@ return [
         'client' => env('REDIS_CLIENT', 'phpredis'),
 
         'options' => [
-            // 'redis' = modo cluster nativo. 'predis' também suporta cluster.
-            'cluster'    => env('REDIS_CLUSTER', 'redis'),
             'prefix'     => env('REDIS_PREFIX', Str::slug((string) env('APP_NAME', 'laravel')).':'),
-            'persistent' => env('REDIS_PERSISTENT', false),
+            'persistent' => env('REDIS_PERSISTENT', true),
         ],
 
-        // ─── Modo standalone (dev sem cluster) ────────────────────────────────
-        // Quando REDIS_CLUSTER_ENABLED=false, usa nó único (desenvolvimento local).
-        'default' => env('REDIS_CLUSTER_ENABLED', false) ? [] : [
-            'url'      => env('REDIS_URL'),
-            'host'     => env('REDIS_HOST', '127.0.0.1'),
-            'username' => env('REDIS_USERNAME'),
+        // ─── Laravel usa redis-standalone para TODAS as operações ────────────────
+        // Redis Cluster (6 nós) é usado exclusivamente pelo Cart Service (Node.js).
+        // Laravel + Redis Cluster = problemas:
+        //   1. topology discovery em cada pedido Octane → +7s latência
+        //   2. EVAL cross-slot não suportado (filas, rate-limiting, locks)
+        //   3. SELECT database != 0 não suportado
+        // redis-standalone: 256MB RAM, suporta EVAL, SELECT, pconnect → sub-ms.
+        'default' => [
+            'host'     => env('REDIS_HOST', 'redis-standalone'),
             'password' => env('REDIS_PASSWORD'),
-            'port'     => env('REDIS_PORT', '6379'),
-            'database' => env('REDIS_DB', '0'),
+            'port'     => env('REDIS_PORT', 6379),
+            'database' => env('REDIS_DB', 0),
         ],
 
-        'cache' => env('REDIS_CLUSTER_ENABLED', false) ? [] : [
-            'url'      => env('REDIS_URL'),
-            'host'     => env('REDIS_HOST', '127.0.0.1'),
-            'username' => env('REDIS_USERNAME'),
+        'cache' => [
+            'host'     => env('REDIS_HOST', 'redis-standalone'),
             'password' => env('REDIS_PASSWORD'),
-            'port'     => env('REDIS_PORT', '6379'),
-            'database' => env('REDIS_CACHE_DB', '1'),
+            'port'     => env('REDIS_PORT', 6379),
+            'database' => env('REDIS_CACHE_DB', 1),
         ],
 
-        // ─── Redis Cluster (produção — 3 masters + 3 réplicas) ────────────────
-        // Activado com REDIS_CLUSTER_ENABLED=true no .env
-        // phpredis distribui as chaves por hash slots automaticamente.
-        'clusters' => env('REDIS_CLUSTER_ENABLED', false) ? [
-            'default' => [
-                ['host' => env('REDIS_NODE_1', 'redis-1'), 'port' => 6379, 'database' => 0, 'password' => env('REDIS_PASSWORD')],
-                ['host' => env('REDIS_NODE_2', 'redis-2'), 'port' => 6379, 'database' => 0, 'password' => env('REDIS_PASSWORD')],
-                ['host' => env('REDIS_NODE_3', 'redis-3'), 'port' => 6379, 'database' => 0, 'password' => env('REDIS_PASSWORD')],
-                ['host' => env('REDIS_NODE_4', 'redis-4'), 'port' => 6379, 'database' => 0, 'password' => env('REDIS_PASSWORD')],
-                ['host' => env('REDIS_NODE_5', 'redis-5'), 'port' => 6379, 'database' => 0, 'password' => env('REDIS_PASSWORD')],
-                ['host' => env('REDIS_NODE_6', 'redis-6'), 'port' => 6379, 'database' => 0, 'password' => env('REDIS_PASSWORD')],
-            ],
-            'cache' => [
-                ['host' => env('REDIS_NODE_1', 'redis-1'), 'port' => 6379, 'database' => 0, 'password' => env('REDIS_PASSWORD')],
-                ['host' => env('REDIS_NODE_2', 'redis-2'), 'port' => 6379, 'database' => 0, 'password' => env('REDIS_PASSWORD')],
-                ['host' => env('REDIS_NODE_3', 'redis-3'), 'port' => 6379, 'database' => 0, 'password' => env('REDIS_PASSWORD')],
-            ],
-        ] : [],
+        'session' => [
+            'host'     => env('REDIS_HOST', 'redis-standalone'),
+            'password' => env('REDIS_PASSWORD'),
+            'port'     => env('REDIS_PORT', 6379),
+            'database' => 2,
+        ],
+
+        'queue' => [
+            'host'     => env('REDIS_HOST', 'redis-standalone'),
+            'password' => env('REDIS_PASSWORD'),
+            'port'     => env('REDIS_PORT', 6379),
+            'database' => 3,
+        ],
 
     ],
 

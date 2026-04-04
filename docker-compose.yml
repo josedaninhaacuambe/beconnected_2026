@@ -69,14 +69,15 @@ services:
       - stock-service
       - pos-pwa
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/gateway/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/gateway/health"]
       interval: 15s
       timeout: 5s
       retries: 3
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # LARAVEL PHP-FPM — 4 réplicas com load balancing automático
-  # nginx usa Docker DNS para distribuir requisições
+  # LARAVEL OCTANE (RoadRunner) — 4 réplicas × auto workers (14 CPUs cada)
+  # Workers PHP persistentes: sem bootstrap por pedido (~10ms vs ~100ms)
+  # nginx usa Docker DNS least_conn para distribuir requisições → port 8080
   # ═══════════════════════════════════════════════════════════════════════════
   app:
     <<: *app-base
@@ -95,11 +96,11 @@ services:
       replicas: 4
       resources:
         limits:
-          cpus: "1.0"
-          memory: 512M
+          cpus: "2.0"
+          memory: 1G
         reservations:
           cpus: "0.5"
-          memory: 256M
+          memory: 512M
       restart_policy:
         condition: on-failure
         delay: 5s
@@ -190,7 +191,7 @@ services:
           cpus: "1.0"
           memory: 512M
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8082/health"]
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/8082"]
       interval: 20s
       timeout: 10s
       retries: 3
@@ -457,6 +458,25 @@ services:
       - ./docker/redis-cluster/redis.conf:/etc/redis/redis.conf:ro
     command: redis-server /etc/redis/redis.conf --cluster-announce-hostname redis-6
 
+  # ─── Redis Standalone — sessões, filas e rate-limiting ───────────────────────
+  # Redis Cluster não suporta EVAL multi-slot nem SELECT (database != 0).
+  # Laravel usa EVAL para filas (migrateExpiredJobs) e rate-limiting.
+  # Nó standalone separado do cluster garante operações atómicas sem restrições.
+  redis-standalone:
+    image: redis:7-alpine
+    container_name: beconnect_redis_standalone
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly yes
+    volumes:
+      - beconnect_redis_standalone:/data
+    networks:
+      - beconnect
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   # Bootstrap do cluster — corre uma vez
   redis-cluster-init:
     image: redis:7-alpine
@@ -490,7 +510,7 @@ services:
     volumes:
       - beconnect_meili_data:/meili_data
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:7700/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:7700/health"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -622,9 +642,6 @@ services:
 networks:
   beconnect:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
 
 ##############################################################################
 # Volumes
@@ -643,6 +660,7 @@ volumes:
   beconnect_redis_4:
   beconnect_redis_5:
   beconnect_redis_6:
+  beconnect_redis_standalone:
 
   # Serviços
   beconnect_meili_data:

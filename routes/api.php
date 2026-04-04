@@ -108,6 +108,7 @@ Route::post('payments/mpesa/callback', [PaymentController::class, 'mpesaCallback
 Route::post('stores/{storeToken}/stock/webhook', [StockImportController::class, 'webhook'])
     ->name('stock.webhook');
 
+
 // =============================================
 // ROTAS AUTENTICADAS
 // =============================================

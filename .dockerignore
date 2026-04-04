@@ -27,6 +27,9 @@ storage/framework/cache/
 storage/framework/sessions/
 storage/framework/views/
 
+# Symlinks que quebram o Docker build context
+public/storage
+
 # Testes e docs
 tests/
 README.md

@@ -18,6 +18,30 @@ class CartController extends Controller
     private const CART_ID_TTL   = 3600;  // 1 hora — cart_id por utilizador
     private const CART_ITEMS_TTL = 60;   // 60s — itens actuais do carrinho
 
+    /**
+     * Taxa de serviço Beconnect por produto (por unidade no carrinho).
+     * Oscila em função do preço do produto:
+     *   < 100 MT    → 0.50 MT
+     *   < 500 MT    → 1.00 MT
+     *   < 1 000 MT  → 5.00 MT
+     *   < 5 000 MT  → 50.00 MT
+     *   < 10 000 MT → 100.00 MT
+     *   < 20 000 MT → 200.00 MT
+     *   ≥ 20 000 MT → 500.00 MT
+     */
+    public static function calculateServiceFee(float $price): float
+    {
+        return match (true) {
+            $price < 100    => 0.50,
+            $price < 500    => 1.00,
+            $price < 1000   => 5.00,
+            $price < 5000   => 50.00,
+            $price < 10000  => 100.00,
+            $price < 20000  => 200.00,
+            default         => 500.00,
+        };
+    }
+
     // ─── Obter cart_id (Redis primeiro, DB como fallback) ─────────────────────
     private function getCartId(Request $request): int
     {
@@ -117,26 +141,27 @@ class CartController extends Controller
             return response()->json(['message' => 'Operação do carrinho concorrente em andamento. Tente novamente.'], 429);
         }
 
+        $serviceFee = self::calculateServiceFee($info['price']);
+
         try {
             // 4. Escrita atómica — INSERT ... ON DUPLICATE KEY UPDATE
-            //    Uma única query substitui: SELECT + (UPDATE ou INSERT)
             DB::statement("
-            INSERT INTO cart_items (cart_id, product_id, store_id, quantity, unit_price, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO cart_items (cart_id, product_id, store_id, quantity, unit_price, service_fee, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
-                quantity   = quantity + VALUES(quantity),
-                updated_at = VALUES(updated_at)
-        ", [$cartId, $productId, $info['store_id'], $qty, $info['price'], $now, $now]);
+                quantity    = quantity + VALUES(quantity),
+                service_fee = VALUES(service_fee),
+                updated_at  = VALUES(updated_at)
+        ", [$cartId, $productId, $info['store_id'], $qty, $info['price'], $serviceFee, $now, $now]);
         } finally {
             $cartProductLock->release();
         }
 
-        // Invalidar cache dos itens para a próxima leitura reflectir o estado real
         $this->invalidateCartCache($cartId);
-        // Invalidar cache de produtos da loja para reflectir disponibilidade actualizada
         Cache::forget("cart_product_{$productId}");
-        // Invalidar cache de produtos da loja
-        $storeSlug = \App\Models\Store::find($info['store_id'])->slug ?? null;
+        $storeSlug = Cache::remember("store_slug_{$info['store_id']}", 3600, fn() =>
+            \App\Models\Store::where('id', $info['store_id'])->value('slug')
+        );
         if ($storeSlug) {
             foreach (['featured', 'newest', 'price_asc', 'price_desc', 'rating'] as $sort) {
                 for ($pg = 1; $pg <= 5; $pg++) {
@@ -145,7 +170,10 @@ class CartController extends Controller
             }
         }
 
-        return response()->json(['message' => 'Produto adicionado ao carrinho.']);
+        return response()->json([
+            'message'     => 'Produto adicionado ao carrinho.',
+            'service_fee' => $serviceFee,
+        ]);
     }
 
     // ─── INDEX ────────────────────────────────────────────────────────────────
@@ -175,9 +203,10 @@ class CartController extends Controller
                         'in_stock'        => ($item->product->stock?->quantity ?? 0) > 0,
                         'available_stock' => $item->product->stock?->quantity ?? 0,
                     ],
-                    'quantity'   => $item->quantity,
-                    'unit_price' => $item->unit_price,
-                    'subtotal'   => $item->getSubtotal(),
+                    'quantity'    => $item->quantity,
+                    'unit_price'  => $item->unit_price,
+                    'service_fee' => $item->service_fee ?? self::calculateServiceFee($item->unit_price),
+                    'subtotal'    => $item->getSubtotal(),
                 ]),
                 'store_subtotal' => $items->sum(fn($i) => $i->getSubtotal()),
             ];
