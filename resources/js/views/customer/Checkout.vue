@@ -495,7 +495,7 @@ const estimate    = ref(null)
 const estimateLoading = ref(false)
 const nearbyDrivers = ref([])
 
-const addressMode = ref('auto') // 'auto' | 'manual'
+const addressMode = ref('manual') // 'auto' | 'manual' — manual por defeito (GPS requer Google Maps API)
 const gpsLoading  = ref(false)
 const gpsError    = ref('')
 const gpsLocation = ref(null)  // { lat, lng, address }
@@ -733,9 +733,17 @@ async function placeOrder() {
       delivery_longitude: form.delivery_longitude ?? gpsLocation.value?.lng,
       notes:              form.notes || undefined,
     }
-    const { data } = await axios.post('/orders/checkout', payload)
+
+    // Checkout é assíncrono (queue). Guardamos a idempotency key e fazemos polling.
+    const idempotencyKey = crypto.randomUUID()
+    const { data } = await axios.post('/orders/checkout', payload, {
+      headers: { 'Idempotency-Key': idempotencyKey },
+    })
+
+    // Polling até o job completar (máx. 30s)
+    const order = await pollCheckout(idempotencyKey)
     await cartStore.clearCart()
-    orderResult.value = data.order
+    orderResult.value = order
     showReceipt.value = true
   } catch (e) {
     error.value = e.response?.data?.errors
@@ -745,6 +753,23 @@ async function placeOrder() {
   } finally {
     submitting.value = false
   }
+}
+
+// Polling ao endpoint de status do checkout até 'succeeded' ou timeout (30s)
+async function pollCheckout(idempotencyKey, attempts = 15) {
+  for (let i = 0; i < attempts; i++) {
+    await new Promise(r => setTimeout(r, 2000))
+    try {
+      const { data } = await axios.get('/orders/checkout-status', {
+        params: { idempotency_key: idempotencyKey },
+      })
+      if (data.status === 'succeeded' && data.order) return data.order
+      if (data.status === 'failed') throw new Error(data.error || 'Falha ao processar pedido.')
+    } catch (e) {
+      if (e.response?.status !== 404) throw e
+    }
+  }
+  throw new Error('O pedido está a demorar mais do que o esperado. Verifica os teus pedidos em breve.')
 }
 
 // ─── Receipt ──────────────────────────────────────────────
@@ -772,6 +797,10 @@ onMounted(async () => {
     cartStore.fetchCart(),
   ])
   provinces.value = provRes.data
+
+  // Pré-seleccionar método de pagamento passado pelo Cart.vue via router state
+  const stateMethod = window.history.state?.paymentMethod
+  if (stateMethod) form.payment_method = stateMethod
 
   // Pré-carregar Google Maps se chave disponível
   if (mapsKeyAvailable.value) loadGoogleMaps().catch(() => {})

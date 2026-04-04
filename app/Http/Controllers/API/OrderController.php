@@ -88,6 +88,39 @@ class OrderController extends Controller
         }
     }
 
+    // Polling de status do checkout assíncrono
+    public function checkoutStatus(Request $request): JsonResponse
+    {
+        $request->validate(['idempotency_key' => 'required|string']);
+
+        $checkoutRequest = \App\Models\CheckoutRequest::where('idempotency_key', $request->idempotency_key)
+            ->where('user_id', $request->user()->id)
+            ->first();
+
+        if (!$checkoutRequest) {
+            return response()->json(['status' => 'pending'], 404);
+        }
+
+        if ($checkoutRequest->status === 'succeeded' && $checkoutRequest->order_id) {
+            $order = \App\Models\Order::find($checkoutRequest->order_id);
+            return response()->json([
+                'status' => 'succeeded',
+                'order'  => [
+                    'order_number'     => $order?->order_number,
+                    'delivery_address' => $order?->delivery_address,
+                    'payment_method'   => $order?->payment_method,
+                    'total'            => $order?->total,
+                ],
+            ]);
+        }
+
+        if ($checkoutRequest->status === 'failed') {
+            return response()->json(['status' => 'failed', 'error' => $checkoutRequest->error_message]);
+        }
+
+        return response()->json(['status' => $checkoutRequest->status]);
+    }
+
     // Listar pedidos do cliente
     public function myOrders(Request $request): JsonResponse
     {

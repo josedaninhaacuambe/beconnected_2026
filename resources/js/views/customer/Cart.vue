@@ -101,9 +101,9 @@
               <span class="text-xl">✅</span>
               <span class="font-medium">Pagamento confirmado</span>
             </div>
-            <RouterLink to="/conta/finalizar-compra" class="btn-gold text-xs px-4 py-2">
+            <button @click="goToCheckout" class="btn-gold text-xs px-4 py-2">
               🚚 Solicitar Entrega
-            </RouterLink>
+            </button>
           </div>
 
           <!-- Formulário de pagamento -->
@@ -193,9 +193,9 @@
 
         <!-- Solicitar entrega (só quando todas as lojas pagas) -->
         <div v-if="allPaid && paidCount > 0" class="mt-4">
-          <RouterLink to="/conta/finalizar-compra" class="btn-green w-full py-3 text-center block text-sm font-semibold">
+          <button @click="goToCheckout" class="btn-green w-full py-3 text-sm font-semibold">
             🚚 Solicitar Entrega para Todos
-          </RouterLink>
+          </button>
         </div>
         <div v-else class="mt-3 text-center text-bc-muted text-xs">
           Confirma o pagamento de cada loja para solicitar a entrega
@@ -214,24 +214,23 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useCartStore } from '../../stores/cart.js'
-import { useAuthStore } from '../../stores/auth.js'
-import axios from 'axios'
 
+const router     = useRouter()
 const cartStore  = useCartStore()
-const authStore  = useAuthStore()
 
 const COMMISSION_PER_ITEM = 0.50
 
-// Estado de pagamento por loja: { [storeId]: { method, confirming, paid } }
+// Método de pagamento seleccionado por loja: { [storeId]: 'mpesa'|'emola'|'cash_on_delivery' }
 const storePayment = reactive({})
-// IDs das lojas com pagamento confirmado
+// Lojas com intenção de pagamento confirmada (apenas estado local)
 const paidStores = ref(new Set())
 
 const paymentMethods = [
-  { id: 'mpesa',  icon: '📱', label: 'M-Pesa'  },
-  { id: 'emola',  icon: '📲', label: 'eMola'   },
-  { id: 'cash',   icon: '🏪', label: 'Na Loja' },
+  { id: 'mpesa',            icon: '📱', label: 'M-Pesa'     },
+  { id: 'emola',            icon: '📲', label: 'eMola'      },
+  { id: 'cash_on_delivery', icon: '🏪', label: 'Na Entrega' },
 ]
 
 function setMethod(storeId, method) {
@@ -266,25 +265,18 @@ function formatMZN(v) {
   return (v ?? 0).toLocaleString('pt-MZ', { style: 'currency', currency: 'MZN', minimumFractionDigits: 2 })
 }
 
-async function confirmPayment(group) {
+// Confirmar intenção de pagamento — apenas local, sem chamada API.
+// O pedido real é criado no Checkout.vue depois de o utilizador preencher a morada.
+function confirmPayment(group) {
   const payment = storePayment[group.store.id]
   if (!payment?.method) return
+  paidStores.value = new Set([...paidStores.value, group.store.id])
+}
 
-  payment.confirming = true
-  try {
-    // Criar pedido só para esta loja
-    await axios.post('/orders/checkout', {
-      payment_method: payment.method,
-      store_ids: [group.store.id],
-      address: authStore.user?.address || '',
-    })
-    paidStores.value = new Set([...paidStores.value, group.store.id])
-  } catch (e) {
-    // Se checkout global falhar, marcar localmente para não bloquear UX
-    paidStores.value = new Set([...paidStores.value, group.store.id])
-  } finally {
-    payment.confirming = false
-  }
+// Navegar para o checkout passando o método de pagamento da primeira loja
+function goToCheckout() {
+  const firstMethod = Object.values(storePayment).find(p => p?.method)?.method ?? 'mpesa'
+  router.push({ name: 'checkout', state: { paymentMethod: firstMethod } })
 }
 
 async function updateQty(item, qty) {

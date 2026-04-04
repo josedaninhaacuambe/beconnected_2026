@@ -34,10 +34,14 @@ export default defineConfig({
                 categories: ['shopping', 'lifestyle'],
             },
             workbox: {
-                globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+                skipWaiting: true,
+                clientsClaim: true,
+                // Não cachear HTML — sempre buscar do servidor para garantir assets actualizados
+                navigateFallback: null,
+                globPatterns: ['**/*.{js,css,ico,png,svg}'],
                 runtimeCaching: [
                     {
-                        urlPattern: /^https:\/\/beconnect\.test\/api\/.*/i,
+                        urlPattern: /^https?:\/\/localhost.*\/api\/.*/i,
                         handler: 'NetworkFirst',
                         options: {
                             cacheName: 'api-cache',

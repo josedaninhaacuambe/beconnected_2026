@@ -144,6 +144,7 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
     Route::prefix('orders')->group(function () {
         Route::get('/', [OrderController::class, 'myOrders']);
         Route::post('checkout', [OrderController::class, 'checkout'])->middleware('throttle:checkout');
+        Route::get('checkout-status', [OrderController::class, 'checkoutStatus']);
         Route::get('{order}', [OrderController::class, 'show']);
         Route::post('{order}/cancel', [OrderController::class, 'cancel']);
     });
