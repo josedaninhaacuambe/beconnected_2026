@@ -15,7 +15,6 @@ class BroadcastDriverLocation implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public string $queue = 'delivery';
     public int $tries = 2;
     public int $backoff = 5;
 
@@ -24,7 +23,9 @@ class BroadcastDriverLocation implements ShouldQueue
         private float  $latitude,
         private float  $longitude,
         private string $trackingCode,
-    ) {}
+    ) {
+        $this->onQueue('delivery');
+    }
 
     public function handle(): void
     {

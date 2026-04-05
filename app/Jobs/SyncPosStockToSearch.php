@@ -12,10 +12,11 @@ class SyncPosStockToSearch implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public string $queue = 'search_index';
     public int $tries = 2;
 
-    public function __construct(private array $productIds) {}
+    public function __construct(private array $productIds) {
+        $this->onQueue('search_index');
+    }
 
     public function handle(): void
     {

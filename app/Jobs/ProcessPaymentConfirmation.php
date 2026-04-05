@@ -15,7 +15,6 @@ class ProcessPaymentConfirmation implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public string $queue = 'payments';
     public int $tries = 5;
     public int $backoff = 30;
 
@@ -23,7 +22,9 @@ class ProcessPaymentConfirmation implements ShouldQueue
         private string $reference,
         private string $transactionId,
         private array  $gatewayResponse,
-    ) {}
+    ) {
+        $this->onQueue('payments');
+    }
 
     public function handle(CommissionService $commissionService): void
     {

@@ -15,14 +15,15 @@ class IndexProductInSearch implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public string $queue = 'search_index';
     public int $tries = 3;
     public int $backoff = 60;
 
     public function __construct(
         private int  $productId,
         private bool $delete = false,
-    ) {}
+    ) {
+        $this->onQueue('search_index');
+    }
 
     public function handle(): void
     {

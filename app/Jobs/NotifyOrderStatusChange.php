@@ -14,7 +14,6 @@ class NotifyOrderStatusChange implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public string $queue = 'notifications';
     public int $tries = 3;
     public int $backoff = 30;
 
@@ -32,7 +31,9 @@ class NotifyOrderStatusChange implements ShouldQueue
         private int    $orderId,
         private string $status,
         private string $context = 'order', // 'order' | 'payment' | 'delivery'
-    ) {}
+    ) {
+        $this->onQueue('notifications');
+    }
 
     public function handle(): void
     {
