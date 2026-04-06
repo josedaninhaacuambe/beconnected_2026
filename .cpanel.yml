@@ -1,0 +1,27 @@
+---
+deployment:
+  tasks:
+    # 1. Instalar dependências PHP (sem dev, optimizado)
+    - export DEPLOYPATH=/home/$USER/beconnected.escaleno.co.mz
+    - /usr/local/bin/composer install --no-dev --optimize-autoloader --no-interaction --working-dir=$DEPLOYPATH
+
+    # 2. Copiar .env de produção (deve existir no servidor, fora do repositório)
+    - cp $DEPLOYPATH/.env.production $DEPLOYPATH/.env
+
+    # 3. Gerar chave se não existir
+    - php $DEPLOYPATH/artisan key:generate --force --no-interaction
+
+    # 4. Limpar e optimizar caches
+    - php $DEPLOYPATH/artisan config:cache
+    - php $DEPLOYPATH/artisan route:cache
+    - php $DEPLOYPATH/artisan view:cache
+    - php $DEPLOYPATH/artisan event:cache
+
+    # 5. Executar migrações
+    - php $DEPLOYPATH/artisan migrate --force --no-interaction
+
+    # 6. Criar symlink para storage
+    - php $DEPLOYPATH/artisan storage:link --force
+
+    # 7. Optimizar autoloader
+    - php $DEPLOYPATH/artisan optimize
