@@ -1,0 +1,1 @@
+@media print{body>:not(#receipt-print){display:none!important}#receipt-print{display:block!important}}

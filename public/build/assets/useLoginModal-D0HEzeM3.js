@@ -1,0 +1,1 @@
+import{F as e}from"./vendor-FrstsrM9.js";var t=e({visible:!1,afterLogin:null});function n(){function e(e={}){t.afterLogin=e.afterLogin??null,t.visible=!0}function n(){t.visible=!1,t.afterLogin=null}function r(){let e=t.afterLogin;n(),e&&e()}return{state:t,open:e,close:n,onSuccess:r}}export{n as t};
