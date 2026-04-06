@@ -1,7 +1,7 @@
 <template>
   <div>
     <!-- ── Hero Banner ─────────────────────────────────────────────────── -->
-    <section class="relative w-full overflow-hidden" style="background-color:#1C2B3C; min-height: clamp(320px, 45vw, 620px);">
+    <section class="relative w-full overflow-hidden" style="background-color:#FFFFFF; min-height: clamp(320px, 45vw, 620px);">
 
       <!-- Imagem decorativa (cobre toda a secção) -->
       <picture v-if="!heroBroken">
@@ -16,18 +16,15 @@
         />
       </picture>
 
-      <!-- Gradiente para legibilidade do texto à esquerda -->
-      <div class="absolute inset-0" style="background: linear-gradient(to right, #1C2B3C 35%, #1C2B3Ccc 52%, transparent 70%);"></div>
-
       <!-- Conteúdo real (texto + botões funcionais) -->
       <div class="relative z-10 flex flex-col justify-center h-full px-6 sm:px-14 py-12 max-w-2xl"
            style="min-height: clamp(320px, 45vw, 620px);">
 
-        <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-white leading-tight mb-4">
+        <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-black leading-tight mb-4">
           COMPRA. VENDE.<br>
           <span style="color:#F07820;">CONECTA.</span>
         </h1>
-        <p class="text-white/70 text-base sm:text-xl mb-8 max-w-sm">
+        <p class="text-gray-700 text-base sm:text-xl mb-8 max-w-sm">
           O mercado digital de Moçambique
         </p>
 
@@ -37,7 +34,7 @@
             v-model="heroSearch"
             type="text"
             placeholder="Pesquisar produto, marca, loja..."
-            class="flex-1 rounded-xl px-4 py-3 text-sm font-medium outline-none border-2 border-white/20 focus:border-bc-gold bg-white/10 text-white placeholder-white/50 backdrop-blur-sm"
+            class="flex-1 rounded-xl px-4 py-3 text-sm font-medium outline-none border-2 border-gray-300 focus:border-bc-gold bg-white text-black placeholder-gray-500 backdrop-blur-sm"
           />
           <button
             type="submit"
@@ -69,7 +66,7 @@
         </div>
 
         <!-- Indicadores de confiança -->
-        <div class="flex flex-wrap gap-6 mt-10 text-sm sm:text-base text-white/70">
+        <div class="flex flex-wrap gap-6 mt-10 text-sm sm:text-base text-gray-700">
           <div class="flex items-center gap-2"><span style="color:#F07820;">🏪</span><span>+500 Lojas</span></div>
           <div class="flex items-center gap-2"><span style="color:#F07820;">📦</span><span>Entrega em todo o país</span></div>
           <div class="flex items-center gap-2"><span style="color:#F07820;">📱</span><span>eMola &amp; M-Pesa</span></div>
@@ -180,12 +177,12 @@
     </section>
 
     <!-- Banner Android -->
-    <section class="bg-gradient-to-r from-bc-gold to-bc-orange mx-4 rounded-2xl p-6 mb-12 flex flex-col sm:flex-row items-center justify-between gap-4">
+    <section class="bg-white mx-4 rounded-2xl p-6 mb-12 flex flex-col sm:flex-row items-center justify-between gap-4" style="border: 1px solid #e0e0e0;">
       <div>
-        <h3 class="text-bc-dark font-bold text-xl">Baixa a App Beconnect</h3>
-        <p class="text-bc-dark/80 text-sm">Disponível para Android. Compra ainda mais fácil no teu telemóvel.</p>
+        <h3 class="text-black font-bold text-xl">Baixa a App Beconnect</h3>
+        <p class="text-gray-700 text-sm">Disponível para Android. Compra ainda mais fácil no teu telemóvel.</p>
       </div>
-      <button @click="installPWA" class="bg-bc-dark text-bc-gold font-bold px-6 py-3 rounded-xl hover:bg-black transition whitespace-nowrap">
+      <button @click="installPWA" class="bg-bc-gold text-white font-bold px-6 py-3 rounded-xl hover:bg-orange-600 transition whitespace-nowrap">
         📱 Instalar App
       </button>
     </section>

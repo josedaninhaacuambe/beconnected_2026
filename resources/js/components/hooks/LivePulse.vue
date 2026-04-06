@@ -2,26 +2,26 @@
   <div class="live-pulse-bar overflow-hidden">
     <div class="pulse-inner flex items-center gap-4 px-3 py-2">
       <template v-if="isLoading">
-        <span class="text-sm text-white/70">Carregando atualizações ao vivo...</span>
+        <span class="text-sm text-gray-700">Carregando atualizações ao vivo...</span>
       </template>
       <template v-else-if="error">
-        <div class="w-full text-center text-red-200 text-sm flex items-center justify-between">
+        <div class="w-full text-center text-red-600 text-sm flex items-center justify-between">
           <span>{{ error }}</span>
           <button @click="retryLivePulse" class="ml-3 text-white bg-red-500 px-2 py-1 text-xs rounded">Tentar novamente</button>
         </div>
       </template>
       <template v-else-if="messages.length === 0">
-        <span class="text-sm text-white/70">Sem atualizações recentes</span>
+        <span class="text-sm text-gray-700">Sem atualizações recentes</span>
       </template>
       <template v-else>
         <!-- Live indicator -->
         <div class="live-dot-wrapper flex items-center gap-1.5 shrink-0">
           <span class="live-dot"></span>
-          <span class="text-red-400 font-black text-xs uppercase tracking-widest">AO VIVO</span>
+          <span class="text-red-500 font-black text-xs uppercase tracking-widest">AO VIVO</span>
         </div>
 
         <!-- Separator -->
-        <div class="h-4 w-px bg-bc-muted/30 shrink-0"></div>
+        <div class="h-4 w-px bg-gray-300 shrink-0"></div>
 
         <!-- Scrolling ticker -->
         <div class="ticker-overflow overflow-hidden flex-1">
@@ -29,7 +29,7 @@
             <span
               v-for="(msg, i) in duplicatedMessages"
               :key="i"
-              class="ticker-item text-bc-light text-xs whitespace-nowrap shrink-0"
+              class="ticker-item text-black text-xs whitespace-nowrap shrink-0"
               v-html="msg"
             ></span>
           </div>
@@ -146,9 +146,9 @@ onUnmounted(() => {
 
 <style scoped>
 .live-pulse-bar {
-  background: #0d0d0d;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  background: white;
+  border-bottom: 1px solid #e0e0e0;
+  border-top: 1px solid #f0f0f0;
 }
 
 .pulse-inner {
@@ -181,7 +181,7 @@ onUnmounted(() => {
 .ticker-item + .ticker-item::before {
   content: '·';
   margin-right: 12px;
-  color: rgba(255, 255, 255, 0.2);
+  color: rgba(0, 0, 0, 0.2);
 }
 
 @keyframes ticker-scroll {

@@ -6,13 +6,13 @@
         <div class="flex items-center gap-3">
           <span class="text-4xl animate-pulse">⚡</span>
           <div>
-            <h2 class="text-2xl font-black text-white tracking-tight">RELÂMPAGO</h2>
-            <p class="text-orange-200 text-sm font-medium">Ofertas que acabam em breve — não percas!</p>
+            <h2 class="text-2xl font-black text-black tracking-tight">RELÂMPAGO</h2>
+            <p class="text-orange-600 text-sm font-medium">Ofertas que acabam em breve — não percas!</p>
           </div>
         </div>
-        <div class="flex items-center gap-2 bg-black/30 rounded-xl px-4 py-2">
-          <span class="text-orange-300 text-sm font-semibold">Acabam Em:</span>
-          <span class="text-white font-black text-xl tabular-nums">{{ globalCountdown }}</span>
+        <div class="flex items-center gap-2 bg-gray-100 rounded-xl px-4 py-2">
+          <span class="text-orange-600 text-sm font-semibold">Acabam Em:</span>
+          <span class="text-black font-black text-xl tabular-nums">{{ globalCountdown }}</span>
         </div>
       </div>
 
@@ -188,24 +188,25 @@ onUnmounted(() => {
 
 <style scoped>
 .flash-deals-section {
-  background: linear-gradient(135deg, #1a0a00 0%, #0f0f0f 100%);
+  background: white;
 }
 
 .flash-header {
-  background: linear-gradient(135deg, #c0392b 0%, #e67e22 50%, #c0392b 100%);
-  box-shadow: 0 0 40px rgba(255, 80, 0, 0.4);
+  background: white;
+  border: 1px solid #e0e0e0;
+  box-shadow: none;
 }
 
 .flash-card {
-  background: #1a1a1a;
-  border: 1px solid rgba(255, 80, 0, 0.2);
-  box-shadow: 0 0 20px rgba(255, 80, 0, 0.15);
+  background: white;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .flash-card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 0 30px rgba(255, 80, 0, 0.35);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 .flash-card.flash-expired {

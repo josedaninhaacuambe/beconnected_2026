@@ -137,19 +137,19 @@ onMounted(fetchDiscounts)
 
 <style scoped>
 .price-drops-section {
-  background: linear-gradient(135deg, #130000 0%, #111111 100%);
+  background: white;
 }
 
 .drop-card {
-  background: #1a1010;
-  border: 1px solid rgba(220, 38, 38, 0.2);
+  background: white;
+  border: 1px solid #e0e0e0;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .drop-card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 8px 24px rgba(220, 38, 38, 0.2);
-  border-color: rgba(220, 38, 38, 0.45);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  border-color: #ccc;
 }
 
 .pct-badge {

@@ -5,7 +5,7 @@
       <div class="flex items-center gap-3 mb-6">
         <span class="text-4xl">🔥</span>
         <div>
-          <h2 class="text-2xl font-black text-white tracking-tight">EM CHAMAS</h2>
+          <h2 class="text-2xl font-black text-black tracking-tight">EM CHAMAS</h2>
           <p class="text-orange-300 text-sm">O Que Moçambique Está a Comprar</p>
         </div>
       </div>
@@ -13,13 +13,13 @@
       <!-- Grid -->
       <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-4">
         <template v-if="isLoading">
-          <div v-for="n in 8" :key="`trending-skel-${n}`" class="trending-card rounded-2xl overflow-hidden relative flex flex-col animate-pulse bg-slate-800">
-            <div class="h-36 bg-slate-700"></div>
+          <div v-for="n in 8" :key="`trending-skel-${n}`" class="trending-card rounded-2xl overflow-hidden relative flex flex-col animate-pulse bg-gray-200">
+            <div class="h-36 bg-gray-300"></div>
             <div class="p-3 flex flex-col flex-1 space-y-2">
-              <div class="h-3 bg-slate-700 rounded"></div>
-              <div class="h-3 bg-slate-700 rounded w-5/6"></div>
-              <div class="h-3 bg-slate-700 rounded w-2/3"></div>
-              <div class="mt-auto h-8 bg-slate-700 rounded"></div>
+              <div class="h-3 bg-gray-300 rounded"></div>
+              <div class="h-3 bg-gray-300 rounded w-5/6"></div>
+              <div class="h-3 bg-gray-300 rounded w-2/3"></div>
+              <div class="mt-auto h-8 bg-gray-300 rounded"></div>
             </div>
           </div>
         </template>
@@ -165,12 +165,12 @@ onUnmounted(() => {
 
 <style scoped>
 .trending-section {
-  background: linear-gradient(180deg, #0f0a00 0%, #111111 100%);
+  background: white;
 }
 
 .trending-card {
-  background: linear-gradient(160deg, #1e1200 0%, #161616 100%);
-  border: 1px solid rgba(230, 126, 34, 0.15);
+  background: white;
+  border: 1px solid #e0e0e0;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 

@@ -164,7 +164,7 @@ function fmt(val) {
 
 <style scoped>
 .daily-drop-section {
-  background: linear-gradient(135deg, #050d1a 0%, #111111 100%);
+  background: white;
 }
 
 .midnight-badge {
@@ -178,16 +178,16 @@ function fmt(val) {
 }
 
 .drop-card {
-  background: linear-gradient(160deg, #0d1320 0%, #161616 100%);
-  border: 1px solid rgba(245, 158, 11, 0.15);
+  background: white;
+  border: 1px solid #e0e0e0;
   animation: slideInUp 0.4s ease both;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .drop-card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 8px 20px rgba(245, 158, 11, 0.15);
-  border-color: rgba(245, 158, 11, 0.4);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  border-color: #ccc;
 }
 
 @keyframes slideInUp {
