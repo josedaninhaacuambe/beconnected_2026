@@ -544,11 +544,11 @@ services:
     container_name: beconnect_phpmyadmin
     restart: unless-stopped
     ports:
-      - "8083:80"
+      - "8084:80"
     environment:
       PMA_HOST:     proxysql
       PMA_PORT:     6033
-      PMA_USER:     root
+      PMA_USER:     beconnect
       PMA_PASSWORD: "${DB_PASSWORD:-beconnect_secret}"
       UPLOAD_LIMIT: 50M
     networks:
