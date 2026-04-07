@@ -28,11 +28,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
-    <!-- Força desregisto do Service Worker antigo ao detectar nova versão do build -->
+    <!-- Auto-reload quando o Service Worker actualiza (nova versão do build detectada) -->
     <script>
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                registrations.forEach(function(sw) { sw.unregister(); });
+            navigator.serviceWorker.addEventListener('controllerchange', function() {
+                window.location.reload();
             });
         }
     </script>
