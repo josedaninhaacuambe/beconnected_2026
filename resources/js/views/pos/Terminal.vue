@@ -211,6 +211,11 @@ function addToCart(product) {
 }
 
 function changeQty(item, delta) {
+  if (delta > 0) {
+    const product = allProducts.value.find(p => p.id === item.product_id)
+    const maxStock = product?.stock?.quantity ?? Infinity
+    if (item.quantity >= maxStock) return // não deixa ultrapassar stock
+  }
   item.quantity += delta
   if (item.quantity <= 0) { removeItem(item); return }
   item.subtotal = item.unit_price * item.quantity
@@ -268,6 +273,8 @@ async function finalizeSale() {
 
 function newSale() {
   receipt.value = null
+  // Recarregar produtos para reflectir stock actualizado
+  loadProducts()
   if (isOnline.value) trySyncNow()
 }
 

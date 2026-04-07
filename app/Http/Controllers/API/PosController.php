@@ -3,14 +3,18 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\PosSale;
 use App\Models\PosSaleItem;
 use App\Models\Product;
 use App\Models\ProductStock;
 use App\Models\StockMovement;
+use App\Models\StoreOrder;
 use App\Models\StoreEmployee;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class PosController extends Controller
@@ -75,7 +79,9 @@ class PosController extends Controller
         $created = 0;
         $skipped = 0;
 
-        DB::transaction(function () use ($request, $store, &$created, &$skipped) {
+        $productIdsToInvalidate = [];
+
+        DB::transaction(function () use ($request, $store, &$created, &$skipped, &$productIdsToInvalidate) {
             foreach ($request->sales as $saleData) {
                 // Evitar duplicados por local_id
                 if (PosSale::where('store_id', $store->id)->where('local_id', $saleData['local_id'])->exists()) {
@@ -109,7 +115,7 @@ class PosController extends Controller
                         'subtotal'     => $item['subtotal'],
                     ]);
 
-                    // Baixar stock automaticamente
+                    // Baixar stock automaticamente + sincronizar com loja online
                     if (!empty($item['product_id'])) {
                         $stock = ProductStock::where('product_id', $item['product_id'])->first();
                         if ($stock) {
@@ -124,12 +130,25 @@ class PosController extends Controller
                                 'reason'          => 'Venda POS #' . $sale->id,
                                 'user_id'         => $request->user()->id,
                             ]);
+                            // Sincronizar total_sold e marcar produto para invalidar cache
+                            Product::where('id', $item['product_id'])
+                                ->increment('total_sold', $item['quantity']);
+                            $productIdsToInvalidate[] = $item['product_id'];
                         }
                     }
                 }
                 $created++;
             }
         });
+
+        // Invalidar caches da loja online após transacção concluída
+        foreach (array_unique($productIdsToInvalidate) as $pid) {
+            Cache::forget("cart_product_{$pid}");
+        }
+        if (!empty($productIdsToInvalidate)) {
+            Cache::forget('products_flash');
+            Cache::forget('products_trending');
+        }
 
         return response()->json(['synced' => $created, 'skipped' => $skipped]);
     }
@@ -173,7 +192,7 @@ class PosController extends Controller
         return response()->json(['message' => 'Movimento registado.', 'stock' => $stock->fresh()]);
     }
 
-    // ─── Relatórios (só owner / manager) ──────────────────────────────────────
+    // ─── Relatórios unificados POS + Online ───────────────────────────────────
     public function reports(Request $request): JsonResponse
     {
         $store = $this->resolveStore($request);
@@ -181,46 +200,92 @@ class PosController extends Controller
         $from = $request->from ? now()->parse($request->from)->startOfDay() : now()->startOfMonth();
         $to   = $request->to   ? now()->parse($request->to)->endOfDay()     : now()->endOfDay();
 
-        $sales = PosSale::where('store_id', $store->id)
+        // ── Vendas POS ────────────────────────────────────────────────────────
+        $posSales = PosSale::where('store_id', $store->id)
             ->whereBetween('sale_at', [$from, $to])
             ->with(['items', 'user:id,name'])
             ->orderByDesc('sale_at')
             ->get();
 
-        $totalRevenue  = $sales->sum('total');
-        $totalSales    = $sales->count();
-        $avgTicket     = $totalSales > 0 ? $totalRevenue / $totalSales : 0;
-
-        // Por dia
-        $byDay = $sales->groupBy(fn($s) => $s->sale_at->format('Y-m-d'))
-            ->map(fn($g) => ['date' => $g->first()->sale_at->format('d/m'), 'total' => $g->sum('total'), 'count' => $g->count()])
-            ->values();
-
-        // Por método de pagamento
-        $byPayment = $sales->groupBy('payment_method')
-            ->map(fn($g) => ['method' => $g->first()->payment_method, 'total' => $g->sum('total'), 'count' => $g->count()])
-            ->values();
-
-        // Top produtos
-        $topProducts = PosSaleItem::whereIn('pos_sale_id', $sales->pluck('id'))
-            ->selectRaw('product_name, SUM(quantity) as qty, SUM(subtotal) as revenue')
-            ->groupBy('product_name')
-            ->orderByDesc('revenue')
-            ->limit(10)
+        // ── Vendas Online (store_orders desta loja) ────────────────────────────
+        $onlineOrders = StoreOrder::where('store_id', $store->id)
+            ->whereNotIn('status', ['cancelled'])
+            ->whereBetween('created_at', [$from, $to])
+            ->with(['items.product:id,name', 'order:id,payment_method,created_at'])
             ->get();
 
-        // Por vendedor
-        $bySeller = $sales->groupBy('user_id')
+        // ── Totais unificados ─────────────────────────────────────────────────
+        $posRevenue    = $posSales->sum('total');
+        $onlineRevenue = $onlineOrders->sum('subtotal');
+        $totalRevenue  = $posRevenue + $onlineRevenue;
+        $totalSales    = $posSales->count() + $onlineOrders->count();
+        $avgTicket     = $totalSales > 0 ? $totalRevenue / $totalSales : 0;
+
+        // ── Por dia (POS + Online juntos) ──────────────────────────────────────
+        $dayMap = [];
+        foreach ($posSales as $s) {
+            $d = $s->sale_at->format('Y-m-d');
+            $dayMap[$d] = ($dayMap[$d] ?? ['date' => $s->sale_at->format('d/m'), 'total' => 0, 'count' => 0, 'pos' => 0, 'online' => 0]);
+            $dayMap[$d]['total'] += $s->total;
+            $dayMap[$d]['pos']   += $s->total;
+            $dayMap[$d]['count']++;
+        }
+        foreach ($onlineOrders as $o) {
+            $d = $o->created_at->format('Y-m-d');
+            $dayMap[$d] = ($dayMap[$d] ?? ['date' => $o->created_at->format('d/m'), 'total' => 0, 'count' => 0, 'pos' => 0, 'online' => 0]);
+            $dayMap[$d]['total']  += $o->subtotal;
+            $dayMap[$d]['online'] += $o->subtotal;
+            $dayMap[$d]['count']++;
+        }
+        ksort($dayMap);
+        $byDay = array_values($dayMap);
+
+        // ── Por método de pagamento ────────────────────────────────────────────
+        $payMap = [];
+        foreach ($posSales as $s) {
+            $m = $s->payment_method;
+            $payMap[$m] = ($payMap[$m] ?? ['method' => $m, 'total' => 0, 'count' => 0]);
+            $payMap[$m]['total'] += $s->total; $payMap[$m]['count']++;
+        }
+        foreach ($onlineOrders as $o) {
+            $m = $o->order?->payment_method ?? 'online';
+            $payMap[$m] = ($payMap[$m] ?? ['method' => $m, 'total' => 0, 'count' => 0]);
+            $payMap[$m]['total'] += $o->subtotal; $payMap[$m]['count']++;
+        }
+        $byPayment = array_values($payMap);
+
+        // ── Top produtos (POS + Online) ────────────────────────────────────────
+        $prodMap = [];
+        $posItems = PosSaleItem::whereIn('pos_sale_id', $posSales->pluck('id'))
+            ->selectRaw('product_name, SUM(quantity) as qty, SUM(subtotal) as revenue')
+            ->groupBy('product_name')->get();
+        foreach ($posItems as $p) {
+            $prodMap[$p->product_name] = ['product_name' => $p->product_name, 'qty' => $p->qty, 'revenue' => $p->revenue];
+        }
+        foreach ($onlineOrders as $o) {
+            foreach ($o->items as $item) {
+                $name = $item->product?->name ?? $item->product_name ?? 'Produto';
+                $prodMap[$name] = ($prodMap[$name] ?? ['product_name' => $name, 'qty' => 0, 'revenue' => 0]);
+                $prodMap[$name]['qty']     += $item->quantity;
+                $prodMap[$name]['revenue'] += $item->subtotal;
+            }
+        }
+        usort($prodMap, fn($a, $b) => $b['revenue'] <=> $a['revenue']);
+        $topProducts = array_slice($prodMap, 0, 10);
+
+        // ── Por vendedor (POS) ─────────────────────────────────────────────────
+        $bySeller = $posSales->groupBy('user_id')
             ->map(fn($g) => ['name' => $g->first()->user?->name ?? 'Desconhecido', 'total' => $g->sum('total'), 'count' => $g->count()])
             ->values();
 
         return response()->json([
-            'summary'      => compact('totalRevenue', 'totalSales', 'avgTicket'),
+            'summary'      => compact('totalRevenue', 'totalSales', 'avgTicket', 'posRevenue', 'onlineRevenue'),
             'by_day'       => $byDay,
             'by_payment'   => $byPayment,
             'top_products' => $topProducts,
             'by_seller'    => $bySeller,
-            'sales'        => $sales->take(50),
+            'pos_sales'    => $posSales->take(50),
+            'online_orders'=> $onlineOrders->take(50),
         ]);
     }
 
