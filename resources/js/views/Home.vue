@@ -24,8 +24,8 @@
            style="min-height: clamp(320px, 45vw, 620px);">
 
         <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-black leading-tight mb-4">
-          COMPRRA. VENNDE.<br>
-          <span style="color:#F07820;">CONNECTA.</span>
+          COMPRA. VENDE.<br>
+          <span style="color:#F07820;">CONECTA.</span>
         </h1>
         <p class="text-gray-700 text-base sm:text-xl mb-8 max-w-sm">
           O mercado digital de Moçambique
@@ -82,6 +82,36 @@
     <section class="bg-bc-surface py-8 px-4 border-y border-bc-gold/10">
       <div class="container mx-auto">
         <h2 class="text-center text-bc-gold font-semibold mb-4">Pesquisar por Localização</h2>
+
+        <!-- Botão perto de mim -->
+        <div class="flex justify-center mb-4 gap-3 flex-wrap">
+          <button
+            @click="goNearby('stores')"
+            :disabled="gpsLoading"
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border-2 font-semibold text-sm transition active:scale-95"
+            :class="gpsLoading ? 'border-bc-gold/30 text-bc-muted' : 'border-bc-gold text-bc-gold hover:bg-bc-gold hover:text-bc-dark'"
+          >
+            <span>{{ gpsLoading ? '⏳' : '📍' }}</span>
+            {{ gpsLoading ? 'A localizar...' : 'Lojas perto de mim' }}
+          </button>
+          <button
+            @click="goNearby('products')"
+            :disabled="gpsLoading"
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border-2 font-semibold text-sm transition active:scale-95"
+            :class="gpsLoading ? 'border-bc-gold/30 text-bc-muted' : 'border-bc-gold text-bc-gold hover:bg-bc-gold hover:text-bc-dark'"
+          >
+            <span>{{ gpsLoading ? '⏳' : '🛍️' }}</span>
+            {{ gpsLoading ? 'A localizar...' : 'Produtos perto de mim' }}
+          </button>
+        </div>
+        <p v-if="gpsError" class="text-center text-red-400 text-xs mb-3">{{ gpsError }}</p>
+
+        <div class="flex items-center gap-3 max-w-2xl mx-auto mb-4">
+          <div class="flex-1 border-t border-bc-gold/20"></div>
+          <span class="text-bc-muted text-xs">ou pesquisa por região</span>
+          <div class="flex-1 border-t border-bc-gold/20"></div>
+        </div>
+
         <div class="flex flex-col sm:flex-row gap-3 max-w-2xl mx-auto">
           <select v-model="selectedProvince" @change="loadCities" class="select-african flex-1">
             <option value="">Todas as Províncias</option>
@@ -246,6 +276,37 @@ async function loadCities() {
 
 function searchByLocation() {
   router.push({ name: 'stores', query: { province_id: selectedProvince.value, city_id: selectedCity.value } })
+}
+
+// GPS — perto de mim
+const gpsLoading = ref(false)
+const gpsError   = ref('')
+
+function goNearby(dest) {
+  gpsError.value = ''
+  if (!navigator.geolocation) {
+    gpsError.value = 'O teu browser não suporta geolocalização.'
+    return
+  }
+  gpsLoading.value = true
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      gpsLoading.value = false
+      const { latitude: lat, longitude: lng } = pos.coords
+      if (dest === 'stores') {
+        router.push({ name: 'stores', query: { lat, lng, radius: 10, nearMe: 1 } })
+      } else {
+        router.push({ name: 'products', query: { lat, lng, radius: 10, nearMe: 1 } })
+      }
+    },
+    (err) => {
+      gpsLoading.value = false
+      gpsError.value = err.code === 1
+        ? 'Permissão de localização negada. Activa nas definições do browser.'
+        : 'Não foi possível obter a localização. Tenta novamente.'
+    },
+    { timeout: 10000, maximumAge: 60000 }
+  )
 }
 
 onMounted(async () => {

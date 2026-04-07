@@ -34,6 +34,8 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('auth')->middleware('throttle:auth-strict')->group(function () {
     Route::post('register', [AuthController::class, 'register']);
     Route::post('login', [AuthController::class, 'login']);
+    Route::post('verify-otp', [AuthController::class, 'verifyOtp']);
+    Route::post('resend-otp', [AuthController::class, 'resendOtp']);
 
     // Google OAuth
     Route::get('google/redirect-url', [GoogleAuthController::class, 'redirectUrl']);

@@ -20,18 +20,21 @@ class User extends Authenticatable
         'name', 'email', 'phone', 'password', 'role', 'avatar',
         'province_id', 'city_id', 'neighborhood_id', 'address', 'is_active',
         'admin_role', 'permissions',
+        'otp', 'otp_expires_at', 'email_verified',
     ];
 
-    protected $hidden = ['password', 'remember_token'];
+    protected $hidden = ['password', 'remember_token', 'otp'];
 
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
+            'otp_expires_at'    => 'datetime',
             'phone_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'is_active' => 'boolean',
-            'permissions' => 'array',
+            'password'          => 'hashed',
+            'is_active'         => 'boolean',
+            'email_verified'    => 'boolean',
+            'permissions'       => 'array',
         ];
     }
 

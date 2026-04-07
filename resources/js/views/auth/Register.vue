@@ -11,13 +11,63 @@
         <p class="text-bc-muted text-sm">Mercado Virtual de Moçambique</p>
       </div>
 
-      <!-- Passo 1: Escolha o tipo de conta -->
-      <div v-if="!accountType" class="grid grid-cols-2 gap-4">
-        <!-- Cliente -->
-        <button
-          @click="accountType = 'customer'"
-          class="card-african p-6 text-center hover:border-bc-gold/60 transition group flex flex-col items-center gap-3"
-        >
+      <!-- ─── PASSO OTP: Verificação de email ──────────────────── -->
+      <div v-if="otpStep" class="card-african p-6">
+        <div class="text-center mb-6">
+          <span class="text-5xl">📧</span>
+          <h2 class="text-bc-light font-bold text-lg mt-3">Verifica o teu email</h2>
+          <p class="text-bc-muted text-sm mt-1">
+            Enviámos um código de 6 dígitos para<br>
+            <strong class="text-bc-gold">{{ pendingEmail }}</strong>
+          </p>
+        </div>
+
+        <form @submit.prevent="submitOtp" class="space-y-4">
+          <!-- Input OTP com 6 caixas -->
+          <div class="flex justify-center gap-2">
+            <input
+              v-for="(_, i) in otpDigits"
+              :key="i"
+              :ref="el => otpRefs[i] = el"
+              v-model="otpDigits[i]"
+              @input="onOtpInput(i)"
+              @keydown.backspace="onOtpBackspace(i)"
+              @paste.prevent="onOtpPaste($event)"
+              type="text"
+              inputmode="numeric"
+              maxlength="1"
+              class="w-11 h-12 text-center text-xl font-black rounded-xl border-2 border-bc-gold/30 bg-bc-surface text-bc-light focus:outline-none focus:border-bc-gold transition"
+            />
+          </div>
+
+          <p v-if="otpError" class="text-red-400 text-sm text-center bg-red-900/20 rounded-lg p-2">{{ otpError }}</p>
+
+          <button type="submit" :disabled="otpLoading || otpCode.length < 6" class="btn-gold w-full py-3 text-sm">
+            {{ otpLoading ? 'A verificar...' : '✓ Verificar Código' }}
+          </button>
+        </form>
+
+        <!-- Reenviar -->
+        <div class="text-center mt-4">
+          <p class="text-bc-muted text-xs mb-2">Não recebeste o código?</p>
+          <button
+            @click="resendOtp"
+            :disabled="resendCooldown > 0"
+            class="text-bc-gold text-sm hover:underline disabled:opacity-40"
+          >
+            {{ resendCooldown > 0 ? `Reenviar em ${resendCooldown}s` : 'Reenviar código' }}
+          </button>
+        </div>
+
+        <button @click="otpStep = false" class="text-bc-muted text-xs hover:text-bc-gold mt-4 flex items-center gap-1">
+          ← Voltar ao registo
+        </button>
+      </div>
+
+      <!-- ─── PASSO 1: Escolha tipo de conta ───────────────────── -->
+      <div v-else-if="!accountType" class="grid grid-cols-2 gap-4">
+        <button @click="accountType = 'customer'"
+          class="card-african p-6 text-center hover:border-bc-gold/60 transition group flex flex-col items-center gap-3">
           <span class="text-5xl">🛍️</span>
           <div>
             <p class="text-bc-light font-bold text-lg">Sou Cliente</p>
@@ -25,12 +75,8 @@
           </div>
           <span class="text-bc-gold text-sm group-hover:underline">Criar conta →</span>
         </button>
-
-        <!-- Loja -->
-        <button
-          @click="accountType = 'store'"
-          class="card-african p-6 text-center hover:border-bc-gold/60 transition group flex flex-col items-center gap-3"
-        >
+        <button @click="accountType = 'store'"
+          class="card-african p-6 text-center hover:border-bc-gold/60 transition group flex flex-col items-center gap-3">
           <span class="text-5xl">🏪</span>
           <div>
             <p class="text-bc-light font-bold text-lg">Tenho uma Loja</p>
@@ -40,19 +86,13 @@
         </button>
       </div>
 
-      <!-- ─── FLUXO CLIENTE ─────────────────────────────────── -->
+      <!-- ─── FLUXO CLIENTE ─────────────────────────────────────── -->
       <div v-else-if="accountType === 'customer'" class="card-african p-6">
-        <button @click="accountType = null" class="text-bc-muted text-xs hover:text-bc-gold mb-4 flex items-center gap-1">
-          ← Voltar
-        </button>
+        <button @click="accountType = null" class="text-bc-muted text-xs hover:text-bc-gold mb-4 flex items-center gap-1">← Voltar</button>
         <h2 class="text-bc-light font-semibold text-lg mb-5 text-center">Criar conta de cliente</h2>
 
-        <!-- Google (recomendado) -->
-        <button
-          @click="registerWithGoogle('customer')"
-          :disabled="googleLoading"
-          class="w-full flex items-center justify-center gap-3 bg-white text-gray-700 font-semibold py-3 px-4 rounded-xl hover:bg-gray-100 transition mb-4 border border-gray-200"
-        >
+        <button @click="registerWithGoogle('customer')" :disabled="googleLoading"
+          class="w-full flex items-center justify-center gap-3 bg-white text-gray-700 font-semibold py-3 px-4 rounded-xl hover:bg-gray-100 transition mb-4 border border-gray-200">
           <GoogleIcon />
           {{ googleLoading ? 'A redirecionar...' : 'Continuar com Google (Recomendado)' }}
         </button>
@@ -79,44 +119,26 @@
         </p>
       </div>
 
-      <!-- ─── FLUXO LOJA ─────────────────────────────────────── -->
+      <!-- ─── FLUXO LOJA ─────────────────────────────────────────── -->
       <div v-else-if="accountType === 'store'" class="card-african p-6">
-        <button @click="accountType = null" class="text-bc-muted text-xs hover:text-bc-gold mb-4 flex items-center gap-1">
-          ← Voltar
-        </button>
+        <button @click="accountType = null" class="text-bc-muted text-xs hover:text-bc-gold mb-4 flex items-center gap-1">← Voltar</button>
         <h2 class="text-bc-light font-semibold text-lg mb-1 text-center">Registar a minha loja</h2>
         <p class="text-bc-muted text-xs text-center mb-5">Após o registo, a tua loja será avaliada pela equipa Beconnect.</p>
 
-        <!-- Escolha do método de login -->
         <div class="mb-5">
           <p class="text-bc-muted text-xs mb-2 text-center">Como preferes entrar na tua loja?</p>
           <div class="grid grid-cols-2 gap-2">
-            <button
-              @click="storeLoginMethod = 'email'"
-              :class="[
-                'py-2 px-3 rounded-xl text-sm font-medium border transition',
-                storeLoginMethod === 'email'
-                  ? 'bg-bc-gold text-bc-dark border-bc-gold'
-                  : 'border-bc-gold/30 text-bc-muted hover:border-bc-gold hover:text-bc-light'
-              ]"
-            >
+            <button @click="storeLoginMethod = 'email'"
+              :class="['py-2 px-3 rounded-xl text-sm font-medium border transition', storeLoginMethod === 'email' ? 'bg-bc-gold text-bc-dark border-bc-gold' : 'border-bc-gold/30 text-bc-muted hover:border-bc-gold hover:text-bc-light']">
               ✉️ Utilizador e Senha
             </button>
-            <button
-              @click="storeLoginMethod = 'google'"
-              :class="[
-                'py-2 px-3 rounded-xl text-sm font-medium border transition',
-                storeLoginMethod === 'google'
-                  ? 'bg-bc-gold text-bc-dark border-bc-gold'
-                  : 'border-bc-gold/30 text-bc-muted hover:border-bc-gold hover:text-bc-light'
-              ]"
-            >
+            <button @click="storeLoginMethod = 'google'"
+              :class="['py-2 px-3 rounded-xl text-sm font-medium border transition', storeLoginMethod === 'google' ? 'bg-bc-gold text-bc-dark border-bc-gold' : 'border-bc-gold/30 text-bc-muted hover:border-bc-gold hover:text-bc-light']">
               🔵 Usar Google
             </button>
           </div>
         </div>
 
-        <!-- Método: Email/Senha -->
         <div v-if="storeLoginMethod === 'email'">
           <form @submit.prevent="submitRegister('store_owner')" class="space-y-3">
             <input v-model="form.name" type="text" placeholder="Teu nome completo" class="input-african" required />
@@ -130,27 +152,20 @@
           </form>
         </div>
 
-        <!-- Método: Google -->
         <div v-else-if="storeLoginMethod === 'google'">
           <div class="bg-bc-gold/5 border border-bc-gold/20 rounded-xl p-3 mb-4 text-xs text-bc-muted">
             <p class="text-bc-light font-medium mb-1">✅ Mais seguro e rápido</p>
-            <p>A tua conta Google será usada para aceder ao painel da loja. Sem senha para memorizar.</p>
+            <p>A tua conta Google será usada para aceder ao painel da loja.</p>
           </div>
-          <button
-            @click="registerWithGoogle('store_owner')"
-            :disabled="googleLoading"
-            class="w-full flex items-center justify-center gap-3 bg-white text-gray-700 font-semibold py-3 px-4 rounded-xl hover:bg-gray-100 transition border border-gray-200"
-          >
+          <button @click="registerWithGoogle('store_owner')" :disabled="googleLoading"
+            class="w-full flex items-center justify-center gap-3 bg-white text-gray-700 font-semibold py-3 px-4 rounded-xl hover:bg-gray-100 transition border border-gray-200">
             <GoogleIcon />
             {{ googleLoading ? 'A redirecionar...' : 'Registar Loja com Google' }}
           </button>
           <p v-if="error" class="text-red-400 text-sm text-center bg-red-900/20 rounded-lg p-2 mt-3">{{ error }}</p>
         </div>
 
-        <!-- Nenhum método seleccionado ainda -->
-        <div v-else class="text-center py-4 text-bc-muted text-sm">
-          Selecciona como preferes entrar na tua loja ↑
-        </div>
+        <div v-else class="text-center py-4 text-bc-muted text-sm">Selecciona como preferes entrar na tua loja ↑</div>
 
         <p class="text-center text-bc-muted text-sm mt-4">
           Já tens conta? <RouterLink to="/login" class="text-bc-gold hover:underline">Entrar</RouterLink>
@@ -162,28 +177,133 @@
 </template>
 
 <script setup>
-import { ref, reactive, defineComponent, h } from 'vue'
+import { ref, reactive, computed, defineComponent, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth.js'
 import axios from 'axios'
 
-const router = useRouter()
+const router    = useRouter()
 const authStore = useAuthStore()
 
-const accountType = ref(null)       // null | 'customer' | 'store'
-const storeLoginMethod = ref(null)  // null | 'email' | 'google'
-const loading = ref(false)
-const googleLoading = ref(false)
-const error = ref('')
+const accountType      = ref(null)
+const storeLoginMethod = ref(null)
+const loading          = ref(false)
+const googleLoading    = ref(false)
+const error            = ref('')
 
-const form = reactive({
-  name: '',
-  email: '',
-  password: '',
-  password_confirmation: '',
-})
+// OTP state
+const otpStep      = ref(false)
+const pendingEmail = ref('')
+const pendingRole  = ref('')
+const otpDigits    = ref(['', '', '', '', '', ''])
+const otpRefs      = ref([])
+const otpLoading   = ref(false)
+const otpError     = ref('')
+const resendCooldown = ref(0)
+let cooldownTimer = null
 
-// ─── Componente inline: ícone Google ────────────────────────
+const otpCode = computed(() => otpDigits.value.join(''))
+
+const form = reactive({ name: '', email: '', password: '', password_confirmation: '' })
+
+// ─── OTP input handlers ──────────────────────────────────────
+function onOtpInput(i) {
+  const val = otpDigits.value[i]
+  if (val && i < 5) otpRefs.value[i + 1]?.focus()
+}
+function onOtpBackspace(i) {
+  if (!otpDigits.value[i] && i > 0) {
+    otpDigits.value[i - 1] = ''
+    otpRefs.value[i - 1]?.focus()
+  }
+}
+function onOtpPaste(e) {
+  const text = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
+  for (let i = 0; i < 6; i++) otpDigits.value[i] = text[i] ?? ''
+  otpRefs.value[Math.min(text.length, 5)]?.focus()
+}
+
+function startCooldown() {
+  resendCooldown.value = 60
+  clearInterval(cooldownTimer)
+  cooldownTimer = setInterval(() => {
+    resendCooldown.value--
+    if (resendCooldown.value <= 0) clearInterval(cooldownTimer)
+  }, 1000)
+}
+
+// ─── Verificar OTP ───────────────────────────────────────────
+async function submitOtp() {
+  if (otpCode.value.length < 6) return
+  otpLoading.value = true
+  otpError.value = ''
+  try {
+    const { data } = await axios.post('/auth/verify-otp', { email: pendingEmail.value, otp: otpCode.value })
+    localStorage.setItem('bc_token', data.token)
+    authStore.user  = data.user
+    authStore.token = data.token
+    axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`
+    if (data.user.role === 'store_owner') router.push('/loja')
+    else router.push('/')
+  } catch (e) {
+    otpError.value = e.response?.data?.message || 'Código inválido. Tenta novamente.'
+    otpDigits.value = ['', '', '', '', '', '']
+    otpRefs.value[0]?.focus()
+  } finally {
+    otpLoading.value = false
+  }
+}
+
+// ─── Reenviar OTP ────────────────────────────────────────────
+async function resendOtp() {
+  try {
+    await axios.post('/auth/resend-otp', { email: pendingEmail.value })
+    otpError.value = ''
+    startCooldown()
+  } catch (e) {
+    otpError.value = e.response?.data?.message || 'Erro ao reenviar.'
+  }
+}
+
+// ─── Registo com email ───────────────────────────────────────
+async function submitRegister(role) {
+  loading.value = true
+  error.value = ''
+  try {
+    const { data } = await axios.post('/auth/register', {
+      name: form.name, email: form.email,
+      password: form.password, password_confirmation: form.password_confirmation,
+      role,
+    })
+    if (data.requires_otp) {
+      pendingEmail.value = data.email
+      pendingRole.value  = role
+      otpStep.value      = true
+      startCooldown()
+    }
+  } catch (e) {
+    const errs = e.response?.data?.errors
+    error.value = errs ? Object.values(errs).flat().join(' ') : (e.response?.data?.message || 'Erro ao criar conta.')
+  } finally {
+    loading.value = false
+  }
+}
+
+// ─── Registo com Google ──────────────────────────────────────
+async function registerWithGoogle(role) {
+  googleLoading.value = true
+  error.value = ''
+  try {
+    localStorage.setItem('bc_pending_role', role)
+    const { data } = await axios.get('/auth/google/redirect-url')
+    window.location.href = data.url
+  } catch {
+    error.value = 'Erro ao conectar com Google. Tente novamente.'
+    googleLoading.value = false
+  }
+}
+
+// ─── Componentes inline ──────────────────────────────────────
 const GoogleIcon = defineComponent({
   render: () => h('svg', { class: 'w-5 h-5 flex-shrink-0', viewBox: '0 0 24 24' }, [
     h('path', { fill: '#4285F4', d: 'M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z' }),
@@ -193,76 +313,15 @@ const GoogleIcon = defineComponent({
   ])
 })
 
-// ─── Componente inline: campo de senha com toggle ───────────
 const PasswordField = defineComponent({
   props: { modelValue: String, placeholder: String },
   emits: ['update:modelValue'],
   setup(props, { emit }) {
     const show = ref(false)
     return () => h('div', { class: 'relative' }, [
-      h('input', {
-        type: show.value ? 'text' : 'password',
-        value: props.modelValue,
-        placeholder: props.placeholder,
-        class: 'input-african pr-10',
-        required: true,
-        onInput: (e) => emit('update:modelValue', e.target.value),
-      }),
-      h('button', {
-        type: 'button',
-        class: 'absolute right-3 top-1/2 -translate-y-1/2 text-bc-muted hover:text-bc-gold',
-        onClick: () => { show.value = !show.value },
-      }, show.value ? '🙈' : '👁️'),
+      h('input', { type: show.value ? 'text' : 'password', value: props.modelValue, placeholder: props.placeholder, class: 'input-african pr-10', required: true, onInput: (e) => emit('update:modelValue', e.target.value) }),
+      h('button', { type: 'button', class: 'absolute right-3 top-1/2 -translate-y-1/2 text-bc-muted hover:text-bc-gold', onClick: () => { show.value = !show.value } }, show.value ? '🙈' : '👁️'),
     ])
   }
 })
-
-// ─── Registo com email/senha ─────────────────────────────────
-async function submitRegister(role) {
-  loading.value = true
-  error.value = ''
-  try {
-    const { data } = await axios.post('/auth/register', {
-      name: form.name,
-      email: form.email,
-      password: form.password,
-      password_confirmation: form.password_confirmation,
-      role,
-    })
-    localStorage.setItem('bc_token', data.token)
-    authStore.user = data.user
-    authStore.token = data.token
-    axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`
-
-    if (role === 'store_owner') {
-      router.push('/loja')
-    } else {
-      router.push('/')
-    }
-  } catch (e) {
-    const errs = e.response?.data?.errors
-    if (errs) {
-      error.value = Object.values(errs).flat().join(' ')
-    } else {
-      error.value = e.response?.data?.message || 'Erro ao criar conta. Tente novamente.'
-    }
-  } finally {
-    loading.value = false
-  }
-}
-
-// ─── Registo / login com Google ──────────────────────────────
-async function registerWithGoogle(role) {
-  googleLoading.value = true
-  error.value = ''
-  try {
-    // Guardar intenção de role para usar após o callback do Google
-    localStorage.setItem('bc_pending_role', role)
-    const { data } = await axios.get('/auth/google/redirect-url')
-    window.location.href = data.url
-  } catch {
-    error.value = 'Erro ao conectar com Google. Tente novamente.'
-    googleLoading.value = false
-  }
-}
 </script>

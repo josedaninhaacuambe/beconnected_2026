@@ -10,7 +10,36 @@
         <p class="text-bc-muted text-sm">Mercado Virtual de Moçambique</p>
       </div>
 
-      <div class="card-african p-6">
+      <!-- OTP Step (email não verificado) -->
+      <div v-if="otpStep" class="card-african p-6">
+        <div class="text-center mb-6">
+          <span class="text-5xl">📧</span>
+          <h2 class="text-bc-light font-bold text-lg mt-3">Verifica o teu email</h2>
+          <p class="text-bc-muted text-sm mt-1">
+            Código enviado para <strong class="text-bc-gold">{{ pendingEmail }}</strong>
+          </p>
+        </div>
+        <form @submit.prevent="submitOtp" class="space-y-4">
+          <div class="flex justify-center gap-2">
+            <input v-for="(_, i) in otpDigits" :key="i" :ref="el => otpRefs[i] = el"
+              v-model="otpDigits[i]" @input="onOtpInput(i)" @keydown.backspace="onOtpBackspace(i)" @paste.prevent="onOtpPaste($event)"
+              type="text" inputmode="numeric" maxlength="1"
+              class="w-11 h-12 text-center text-xl font-black rounded-xl border-2 border-bc-gold/30 bg-bc-surface text-bc-light focus:outline-none focus:border-bc-gold transition" />
+          </div>
+          <p v-if="otpError" class="text-red-400 text-sm text-center bg-red-900/20 rounded-lg p-2">{{ otpError }}</p>
+          <button type="submit" :disabled="otpLoading || otpCode.length < 6" class="btn-gold w-full py-3 text-sm">
+            {{ otpLoading ? 'A verificar...' : '✓ Verificar Código' }}
+          </button>
+        </form>
+        <div class="text-center mt-4">
+          <button @click="resendOtp" :disabled="resendCooldown > 0" class="text-bc-gold text-sm hover:underline disabled:opacity-40">
+            {{ resendCooldown > 0 ? `Reenviar em ${resendCooldown}s` : 'Reenviar código' }}
+          </button>
+        </div>
+        <button @click="otpStep = false" class="text-bc-muted text-xs hover:text-bc-gold mt-4 flex items-center gap-1">← Voltar</button>
+      </div>
+
+      <div v-else class="card-african p-6">
         <h2 class="text-bc-light font-semibold text-lg mb-5 text-center">Entrar na conta</h2>
 
         <!-- Botão Google (principal) -->
@@ -59,7 +88,7 @@
 
         <p class="text-center text-bc-muted text-sm mt-4">
           Não tens conta?
-          <RouterLink to="/registar" class="text-bc-gold hover:underline">Criar conta com Google</RouterLink>
+          <RouterLink to="/registar" class="text-bc-gold hover:underline">Criar conta</RouterLink>
         </p>
       </div>
 
@@ -72,20 +101,64 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth.js'
 import axios from 'axios'
 
-const router = useRouter()
-const route = useRoute()
+const router    = useRouter()
+const route     = useRoute()
 const authStore = useAuthStore()
 
-const loading = ref(false)
+const loading       = ref(false)
 const googleLoading = ref(false)
-const error = ref('')
-const showPassword = ref(false)
-const form = reactive({ email: '', password: '' })
+const error         = ref('')
+const showPassword  = ref(false)
+const form          = reactive({ email: '', password: '' })
+
+// OTP state
+const otpStep        = ref(false)
+const pendingEmail   = ref('')
+const otpDigits      = ref(['', '', '', '', '', ''])
+const otpRefs        = ref([])
+const otpLoading     = ref(false)
+const otpError       = ref('')
+const resendCooldown = ref(0)
+let cooldownTimer = null
+
+const otpCode = computed(() => otpDigits.value.join(''))
+
+function onOtpInput(i) { if (otpDigits.value[i] && i < 5) otpRefs.value[i + 1]?.focus() }
+function onOtpBackspace(i) { if (!otpDigits.value[i] && i > 0) { otpDigits.value[i - 1] = ''; otpRefs.value[i - 1]?.focus() } }
+function onOtpPaste(e) {
+  const text = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
+  for (let i = 0; i < 6; i++) otpDigits.value[i] = text[i] ?? ''
+  otpRefs.value[Math.min(text.length, 5)]?.focus()
+}
+function startCooldown() {
+  resendCooldown.value = 60
+  clearInterval(cooldownTimer)
+  cooldownTimer = setInterval(() => { resendCooldown.value--; if (resendCooldown.value <= 0) clearInterval(cooldownTimer) }, 1000)
+}
+async function submitOtp() {
+  otpLoading.value = true; otpError.value = ''
+  try {
+    const { data } = await axios.post('/auth/verify-otp', { email: pendingEmail.value, otp: otpCode.value })
+    localStorage.setItem('bc_token', data.token)
+    authStore.user = data.user; authStore.token = data.token
+    axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`
+    if (data.user.role === 'store_owner') router.push('/loja')
+    else if (data.user.role === 'admin') router.push('/admin')
+    else router.push(route.query.redirect || '/')
+  } catch (e) {
+    otpError.value = e.response?.data?.message || 'Código inválido.'
+    otpDigits.value = ['', '', '', '', '', '']; otpRefs.value[0]?.focus()
+  } finally { otpLoading.value = false }
+}
+async function resendOtp() {
+  try { await axios.post('/auth/resend-otp', { email: pendingEmail.value }); startCooldown() }
+  catch (e) { otpError.value = e.response?.data?.message || 'Erro ao reenviar.' }
+}
 
 // Apanhar token do Google OAuth callback
 onMounted(async () => {
@@ -140,16 +213,19 @@ async function handleLogin() {
   loading.value = true
   error.value = ''
   try {
-    await authStore.login(form.email, form.password)
-    if (route.query.redirect) {
-      router.push(route.query.redirect)
-    } else if (authStore.user?.role === 'admin') {
-      router.push('/admin')
-    } else if (authStore.user?.role === 'store_owner') {
-      router.push('/loja')
-    } else {
-      router.push('/')
+    const { data } = await axios.post('/auth/login', form)
+    if (data.requires_otp) {
+      pendingEmail.value = data.email
+      otpStep.value = true
+      startCooldown()
+      return
     }
+    localStorage.setItem('bc_token', data.token)
+    authStore.user = data.user; authStore.token = data.token
+    axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`
+    if (data.user.role === 'admin') router.push('/admin')
+    else if (data.user.role === 'store_owner') router.push('/loja')
+    else router.push(route.query.redirect || '/')
   } catch (e) {
     error.value = e.response?.data?.message || 'Credenciais inválidas.'
   } finally {

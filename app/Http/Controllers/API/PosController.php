@@ -3,8 +3,6 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
-use App\Models\Order;
-use App\Models\OrderItem;
 use App\Models\PosSale;
 use App\Models\PosSaleItem;
 use App\Models\Product;
@@ -52,7 +50,15 @@ class PosController extends Controller
                    ->orWhere('barcode', 'like', '%' . $request->search . '%');
             }))
             ->orderBy('name')
-            ->get(['id', 'name', 'price', 'sku', 'barcode', 'image']);
+            ->get(['id', 'name', 'price', 'sku', 'barcode', 'images'])
+            ->map(function ($p) {
+                // Normalizar imagem: usar primeira imagem do array images
+                $images = $p->images ?? [];
+                if (is_string($images)) $images = json_decode($images, true) ?? [];
+                $p->image = count($images) > 0 ? $images[0] : null;
+                unset($p->images);
+                return $p;
+            });
 
         return response()->json($products);
     }
