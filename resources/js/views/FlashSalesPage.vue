@@ -2,13 +2,18 @@
   <div class="pb-mobile">
     <!-- Hero Banner -->
     <div class="w-full">
-      <img
-        :src="'/images/Queima_Stock.png'"
-        alt="Grande Queima de Stock"
-        class="w-full object-cover"
-        style="max-height: 340px; object-position: center;"
-        fetchpriority="high"
-      />
+      <picture>
+        <!-- Mobile: imagem vertical -->
+        <source media="(max-width: 767px)" :srcset="'/images/Queima-Mobile.png'" />
+        <!-- Desktop: imagem horizontal -->
+        <source media="(min-width: 768px)" :srcset="'/images/Queima-stock01.png'" />
+        <img
+          :src="'/images/Queima-stock01.png'"
+          alt="Grande Queima de Stock"
+          class="w-full h-auto block"
+          fetchpriority="high"
+        />
+      </picture>
     </div>
 
     <!-- Contador de ofertas activas -->
