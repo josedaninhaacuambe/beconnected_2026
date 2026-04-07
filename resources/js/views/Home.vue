@@ -5,7 +5,10 @@
 
       <!-- Imagem decorativa (cobre toda a secção) -->
       <picture v-if="!heroBroken">
-        <source :srcset="'/images/Hero-Banner2.webp'" type="image/webp" />
+        <!-- Mobile: imagem vertical optimizada -->
+        <source media="(max-width: 767px)" :srcset="'/images/Hero-Mobile.png'" />
+        <!-- Desktop: webp -->
+        <source media="(min-width: 768px)" :srcset="'/images/Hero-Banner2.webp'" type="image/webp" />
         <img
           :src="heroBannerUrl"
           alt=""
@@ -21,8 +24,8 @@
            style="min-height: clamp(320px, 45vw, 620px);">
 
         <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-black leading-tight mb-4">
-          COMPRA. VENDE.<br>
-          <span style="color:#F07820;">CONECTA.</span>
+          COMPRRA. VENNDE.<br>
+          <span style="color:#F07820;">CONNECTA.</span>
         </h1>
         <p class="text-gray-700 text-base sm:text-xl mb-8 max-w-sm">
           O mercado digital de Moçambique

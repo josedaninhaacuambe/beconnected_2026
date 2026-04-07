@@ -1,31 +1,30 @@
 <template>
   <div class="pb-mobile">
-    <!-- Hero -->
-    <div class="relative overflow-hidden bg-gradient-to-br from-red-950 via-bc-dark to-bc-surface py-12 px-4 text-center border-b border-red-500/20">
-      <div class="african-bg-pattern absolute inset-0 opacity-5"></div>
-      <div class="relative z-10">
-        <div class="flex items-center justify-center gap-3 mb-3">
-          <span class="text-5xl animate-bounce">⚡</span>
-          <h1 class="text-4xl font-black text-white">QUEIMA DE STOCK</h1>
-          <span class="text-5xl animate-bounce" style="animation-delay:0.2s">⚡</span>
-        </div>
-        <p class="text-red-300 text-lg mb-2">Promoções relâmpago das lojas de Moçambique</p>
-        <p class="text-bc-muted text-sm">Ofertas com tempo limitado — aproveita antes que acabe!</p>
+    <!-- Hero Banner -->
+    <div class="w-full">
+      <img
+        :src="'/images/Queima_Stock.png'"
+        alt="Grande Queima de Stock"
+        class="w-full object-cover"
+        style="max-height: 340px; object-position: center;"
+        fetchpriority="high"
+      />
+    </div>
 
-        <!-- Contador de ofertas activas -->
-        <div class="mt-6 flex justify-center gap-6 flex-wrap">
-          <div class="bg-red-500/20 border border-red-500/40 rounded-xl px-5 py-3">
-            <p class="text-3xl font-black text-white">{{ products.length }}</p>
-            <p class="text-red-300 text-xs uppercase tracking-wide">Ofertas Activas</p>
-          </div>
-          <div class="bg-bc-gold/10 border border-bc-gold/30 rounded-xl px-5 py-3">
-            <p class="text-3xl font-black text-bc-gold">{{ uniqueStores }}</p>
-            <p class="text-bc-muted text-xs uppercase tracking-wide">Lojas a Participar</p>
-          </div>
-          <div v-if="bestDiscount > 0" class="bg-green-500/10 border border-green-500/30 rounded-xl px-5 py-3">
-            <p class="text-3xl font-black text-green-400">−{{ bestDiscount }}%</p>
-            <p class="text-bc-muted text-xs uppercase tracking-wide">Melhor Desconto</p>
-          </div>
+    <!-- Contador de ofertas activas -->
+    <div class="bg-bc-dark border-b border-red-500/20 px-4 py-5">
+      <div class="flex justify-center gap-6 flex-wrap">
+        <div class="bg-red-500/20 border border-red-500/40 rounded-xl px-5 py-3 text-center">
+          <p class="text-3xl font-black text-white">{{ products.length }}</p>
+          <p class="text-red-300 text-xs uppercase tracking-wide">Ofertas Activas</p>
+        </div>
+        <div class="bg-bc-gold/10 border border-bc-gold/30 rounded-xl px-5 py-3 text-center">
+          <p class="text-3xl font-black text-bc-gold">{{ uniqueStores }}</p>
+          <p class="text-bc-muted text-xs uppercase tracking-wide">Lojas a Participar</p>
+        </div>
+        <div v-if="bestDiscount > 0" class="bg-green-500/10 border border-green-500/30 rounded-xl px-5 py-3 text-center">
+          <p class="text-3xl font-black text-green-400">−{{ bestDiscount }}%</p>
+          <p class="text-bc-muted text-xs uppercase tracking-wide">Melhor Desconto</p>
         </div>
       </div>
     </div>
