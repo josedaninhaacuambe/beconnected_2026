@@ -48,23 +48,21 @@
           </button>
         </form>
 
-        <!-- Botões grandes e funcionais -->
-        <div class="flex flex-nowrap gap-3">
+        <!-- Botões — compactos no mobile, maiores no desktop -->
+        <div class="flex flex-wrap gap-2 sm:gap-3">
           <RouterLink
             to="/lojas"
-            class="inline-flex items-center gap-3 font-black uppercase tracking-wider rounded-xl text-white transition hover:opacity-90 active:scale-95"
-            style="background-color:#F07820; padding: 0.875rem 2rem; font-size: 1rem;"
+            class="inline-flex items-center gap-1.5 sm:gap-2 font-black uppercase tracking-wide rounded-xl text-white transition hover:opacity-90 active:scale-95 text-xs sm:text-sm px-3 py-2 sm:px-6 sm:py-3.5"
+            style="background-color:#F07820;"
           >
-            🏪 Visitar Lojas
-            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+            🏪 <span class="hidden xs:inline">Visitar </span>Lojas
           </RouterLink>
           <RouterLink
             to="/produtos"
-            class="inline-flex items-center gap-3 font-black uppercase tracking-wider rounded-xl text-white transition hover:opacity-90 active:scale-95"
-            style="background-color:#F07820; padding: 0.875rem 2rem; font-size: 1rem;"
+            class="inline-flex items-center gap-1.5 sm:gap-2 font-black uppercase tracking-wide rounded-xl text-white transition hover:opacity-90 active:scale-95 text-xs sm:text-sm px-3 py-2 sm:px-6 sm:py-3.5"
+            style="background-color:#F07820;"
           >
-            🛍 Todos os Produtos
-            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+            🛍 Produtos
           </RouterLink>
         </div>
 

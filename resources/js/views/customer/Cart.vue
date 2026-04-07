@@ -25,49 +25,53 @@
         :class="storePaid(group.store.id) ? 'border-green-500/40' : ''"
       >
         <!-- Cabeçalho da loja -->
-        <div class="flex items-center gap-3 px-4 py-3 bg-bc-surface-2 border-b border-bc-gold/10">
-          <div class="w-9 h-9 rounded-lg bg-bc-surface overflow-hidden flex items-center justify-center flex-shrink-0">
+        <div class="flex items-center gap-2 px-3 py-3 sm:px-4 bg-bc-surface-2 border-b border-bc-gold/10">
+          <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-bc-surface overflow-hidden flex items-center justify-center flex-shrink-0">
             <AppImg v-if="group.store.logo" :src="`/storage/${group.store.logo}`" class="w-full h-full object-cover" />
             <span v-else class="text-bc-gold font-bold text-sm">{{ group.store.name.charAt(0) }}</span>
           </div>
-          <div class="flex-1">
-            <p class="text-bc-light font-semibold text-sm">🏪 {{ group.store.name }}</p>
+          <div class="flex-1 min-w-0">
+            <p class="text-bc-light font-semibold text-sm truncate">🏪 {{ group.store.name }}</p>
             <p v-if="group.store.estimated_delivery_minutes" class="text-bc-muted text-xs">
-              🚚 Entrega estimada ~{{ group.store.estimated_delivery_minutes }}min
+              🚚 ~{{ group.store.estimated_delivery_minutes }}min
             </p>
           </div>
-          <!-- Badge pago -->
-          <span v-if="storePaid(group.store.id)" class="text-green-400 text-xs font-bold flex items-center gap-1">
-            ✓ Pago
+          <span v-if="storePaid(group.store.id)" class="text-green-400 text-xs font-bold flex items-center gap-1 flex-shrink-0">
+            ✅ Pago
           </span>
-          <span v-else class="text-bc-gold font-bold text-sm">{{ formatMZN(group.store_subtotal) }}</span>
+          <span v-else class="text-bc-gold font-bold text-sm flex-shrink-0">{{ formatMZN(group.store_subtotal) }}</span>
         </div>
 
         <!-- Itens (escondidos se pago) -->
         <div v-if="!storePaid(group.store.id)" class="divide-y divide-bc-gold/5">
-          <div v-for="item in group.items" :key="item.id" class="flex items-center gap-3 px-4 py-3">
-            <div class="w-14 h-14 rounded-lg overflow-hidden bg-bc-surface-2 flex-shrink-0 flex items-center justify-center">
+          <div v-for="item in group.items" :key="item.id" class="flex items-start gap-3 px-3 py-3 sm:px-4">
+            <!-- Imagem -->
+            <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-lg overflow-hidden bg-bc-surface-2 flex-shrink-0 flex items-center justify-center">
               <AppImg
                 v-if="item.product.images?.[0]"
                 :src="item.product.images[0].startsWith('http') ? item.product.images[0] : `/storage/${item.product.images[0]}`"
                 class="w-full h-full object-cover"
               />
             </div>
+            <!-- Nome + preço + controles num bloco vertical -->
             <div class="flex-1 min-w-0">
-              <p class="text-bc-light text-sm font-medium line-clamp-1">{{ item.product.name }}</p>
-              <p class="text-bc-gold text-xs font-semibold">{{ formatMZN(item.unit_price) }} / unid.</p>
-            </div>
-            <div class="flex items-center gap-2 flex-shrink-0">
-              <button @click="updateQty(item, item.quantity - 1)"
-                class="w-7 h-7 rounded-full border border-bc-gold/30 text-bc-gold text-sm flex items-center justify-center hover:bg-bc-gold/10">−</button>
-              <span class="text-bc-light text-sm font-bold w-6 text-center">{{ item.quantity }}</span>
-              <button @click="updateQty(item, item.quantity + 1)"
-                :disabled="item.quantity >= item.product.available_stock"
-                class="w-7 h-7 rounded-full border border-bc-gold/30 text-bc-gold text-sm flex items-center justify-center hover:bg-bc-gold/10 disabled:opacity-40">+</button>
-            </div>
-            <div class="text-right flex-shrink-0 ml-2">
-              <p class="text-bc-light text-sm font-semibold">{{ formatMZN(item.subtotal) }}</p>
-              <button @click="cartStore.removeItem(item.id)" class="text-red-400 hover:text-red-300 text-xs mt-0.5">remover</button>
+              <p class="text-bc-light text-sm font-medium line-clamp-2 leading-snug mb-1">{{ item.product.name }}</p>
+              <p class="text-bc-gold text-xs font-semibold mb-2">{{ formatMZN(item.unit_price) }} / unid.</p>
+              <!-- Qty + subtotal + remover na mesma linha -->
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-1.5">
+                  <button @click="updateQty(item, item.quantity - 1)"
+                    class="w-7 h-7 rounded-full border border-bc-gold/30 text-bc-gold text-sm flex items-center justify-center hover:bg-bc-gold/10 active:scale-95">−</button>
+                  <span class="text-bc-light text-sm font-bold w-5 text-center">{{ item.quantity }}</span>
+                  <button @click="updateQty(item, item.quantity + 1)"
+                    :disabled="item.quantity >= item.product.available_stock"
+                    class="w-7 h-7 rounded-full border border-bc-gold/30 text-bc-gold text-sm flex items-center justify-center hover:bg-bc-gold/10 active:scale-95 disabled:opacity-40">+</button>
+                </div>
+                <div class="flex items-center gap-3">
+                  <p class="text-bc-light text-sm font-semibold">{{ formatMZN(item.subtotal) }}</p>
+                  <button @click="cartStore.removeItem(item.id)" class="text-red-400 hover:text-red-300 text-xs">✕</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -110,19 +114,19 @@
           <div v-else>
             <!-- Método de pagamento -->
             <p class="text-bc-muted text-xs mb-2 font-medium">Como vais pagar esta loja?</p>
-            <div class="grid grid-cols-3 gap-2 mb-3">
+            <div class="flex gap-2 mb-3 flex-wrap">
               <button
                 v-for="method in paymentMethods"
                 :key="method.id"
                 @click="setMethod(group.store.id, method.id)"
                 :class="[
-                  'py-2 px-2 rounded-xl text-xs font-medium border transition text-center',
+                  'flex-1 min-w-[80px] py-2.5 px-2 rounded-xl text-xs font-bold border transition text-center',
                   storePayment[group.store.id]?.method === method.id
                     ? 'bg-bc-gold text-bc-dark border-bc-gold'
                     : 'border-bc-gold/30 text-bc-muted hover:border-bc-gold hover:text-bc-light'
                 ]"
               >
-                <div>{{ method.icon }}</div>
+                <div class="text-base mb-0.5">{{ method.icon }}</div>
                 <div>{{ method.label }}</div>
               </button>
             </div>
