@@ -274,6 +274,7 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
         Route::post('stock/movement', [PosController::class, 'stockMovement']);
         Route::get('stock/history',   [PosController::class, 'stockHistory']);
         Route::get('reports',         [PosController::class, 'reports']);
+        Route::post('sync-products',  [PosController::class, 'syncProducts']);
         Route::get('employees',       [PosController::class, 'employees']);
         Route::post('employees',      [PosController::class, 'addEmployee']);
         Route::delete('employees/{employee}', [PosController::class, 'removeEmployee']);

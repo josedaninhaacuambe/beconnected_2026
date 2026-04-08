@@ -17,7 +17,7 @@ class Product extends Model
         'store_id', 'product_category_id', 'store_section_id', 'brand_id', 'name', 'slug',
         'description', 'price', 'cost_price', 'compare_price', 'flash_price', 'flash_until',
         'sku', 'barcode', 'model', 'images', 'attributes', 'is_active', 'is_featured',
-        'total_sold',
+        'total_sold', 'is_weighable', 'weight_unit',
     ];
 
     protected function casts(): array
@@ -25,6 +25,7 @@ class Product extends Model
         return [
             'price' => 'float',
             'cost_price' => 'float',
+            'is_weighable' => 'boolean',
             'compare_price' => 'float',
             'flash_price' => 'float',
             'flash_until' => 'datetime',

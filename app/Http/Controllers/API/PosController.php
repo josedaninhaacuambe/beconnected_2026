@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class PosController extends Controller
 {
@@ -50,7 +51,7 @@ class PosController extends Controller
                    ->orWhere('barcode', 'like', '%' . $request->search . '%');
             }))
             ->orderBy('name')
-            ->get(['id', 'name', 'price', 'cost_price', 'sku', 'barcode', 'images'])
+            ->get(['id', 'name', 'price', 'cost_price', 'sku', 'barcode', 'images', 'is_weighable', 'weight_unit'])
             ->map(function ($p) {
                 $images = $p->images ?? [];
                 if (is_string($images)) $images = json_decode($images, true) ?? [];
@@ -82,6 +83,8 @@ class PosController extends Controller
             'sales.*.items.*.unit_price'     => 'required|numeric|min:0',
             'sales.*.items.*.cost_price'     => 'nullable|numeric|min:0',
             'sales.*.items.*.quantity'       => 'required|integer|min:1',
+            'sales.*.items.*.weight_amount'  => 'nullable|numeric|min:0',
+            'sales.*.items.*.weight_unit'    => 'nullable|string|max:5',
             'sales.*.items.*.subtotal'       => 'required|numeric|min:0',
         ]);
 
@@ -119,12 +122,14 @@ class PosController extends Controller
                 foreach ($saleData['items'] as $item) {
                     PosSaleItem::create([
                         'pos_sale_id'  => $sale->id,
-                        'product_id'   => $item['product_id']   ?? null,
+                        'product_id'   => $item['product_id']    ?? null,
                         'product_name' => $item['product_name'],
-                        'product_sku'  => $item['product_sku']  ?? null,
+                        'product_sku'  => $item['product_sku']   ?? null,
                         'unit_price'   => $item['unit_price'],
-                        'cost_price'   => $item['cost_price']   ?? 0,
+                        'cost_price'   => $item['cost_price']    ?? 0,
                         'quantity'     => $item['quantity'],
+                        'weight_amount'=> $item['weight_amount'] ?? null,
+                        'weight_unit'  => $item['weight_unit']   ?? null,
                         'subtotal'     => $item['subtotal'],
                     ]);
 
@@ -419,25 +424,101 @@ class PosController extends Controller
         abort_if(!$store, 403);
 
         $validated = $request->validate([
-            'email' => 'required|email|exists:users,email',
-            'role'  => 'required|in:manager,cashier,stock_keeper,viewer',
+            'email'       => 'required|email|exists:users,email',
+            'role'        => 'required|in:manager,cashier,stock_keeper,viewer',
+            'permissions' => 'nullable|array',
+            'permissions.*' => 'in:fazer_vendas,gerir_stock,ver_relatorios,gerir_equipa,adicionar_produtos',
         ]);
 
         $employee = \App\Models\User::where('email', $validated['email'])->first();
+        abort_if($employee->id === $user->id, 422, 'Não pode adicionar-se a si próprio.');
 
-        $emp = StoreEmployee::firstOrCreate(
+        // Permissões: usar as definidas manualmente ou as do role por defeito
+        $permissions = !empty($validated['permissions'])
+            ? $validated['permissions']
+            : StoreEmployee::defaultPermissions($validated['role']);
+
+        // Relatorios e equipa são reservados ao dono — remover se não for o dono a conceder
+        // (o dono pode conceder ver_relatorios a qualquer funcionário, mas gerir_equipa não)
+        $permissions = array_values(array_diff($permissions, ['gerir_equipa']));
+
+        $emp = StoreEmployee::updateOrCreate(
             ['store_id' => $store->id, 'user_id' => $employee->id],
             [
                 'role'        => $validated['role'],
-                'permissions' => StoreEmployee::defaultPermissions($validated['role']),
+                'permissions' => $permissions,
                 'is_active'   => true,
                 'added_by'    => $user->id,
             ]
         );
 
-        $emp->update(['role' => $validated['role'], 'is_active' => true]);
+        // Invalidar cache do utilizador adicionado
+        Cache::forget("user_me_{$employee->id}");
 
         return response()->json(['message' => 'Funcionário adicionado.', 'employee' => $emp->load('user:id,name,email')]);
+    }
+
+    // ─── Sincronizar produtos criados offline ──────────────────────────────────
+    public function syncProducts(Request $request): JsonResponse
+    {
+        $store = $this->resolveStore($request);
+
+        $request->validate([
+            'products'              => 'required|array|min:1',
+            'products.*.local_id'   => 'required|string',
+            'products.*.name'       => 'required|string|max:255',
+            'products.*.price'      => 'required|numeric|min:0',
+            'products.*.cost_price' => 'nullable|numeric|min:0',
+            'products.*.sku'        => 'nullable|string|max:100',
+            'products.*.is_weighable'=> 'nullable|boolean',
+            'products.*.weight_unit'=> 'nullable|in:g,kg,l,ml,un',
+            'products.*.initial_stock'=> 'nullable|integer|min:0',
+        ]);
+
+        $created = 0;
+        $map     = []; // local_id → server product_id
+
+        DB::transaction(function () use ($request, $store, &$created, &$map) {
+            foreach ($request->products as $pd) {
+                // Evitar duplicados pelo nome + loja
+                $product = $store->products()->where('name', $pd['name'])->first()
+                    ?? Product::create([
+                        'store_id'    => $store->id,
+                        'name'        => $pd['name'],
+                        'slug'        => \Illuminate\Support\Str::slug($pd['name']) . '-' . uniqid(),
+                        'price'       => $pd['price'],
+                        'cost_price'  => $pd['cost_price'] ?? 0,
+                        'sku'         => $pd['sku'] ?? null,
+                        'is_weighable'=> $pd['is_weighable'] ?? false,
+                        'weight_unit' => $pd['weight_unit'] ?? 'un',
+                        'is_active'   => true,
+                        'role'        => 'store_owner',
+                    ]);
+
+                // Criar stock inicial
+                $stock = \App\Models\ProductStock::firstOrCreate(
+                    ['product_id' => $product->id],
+                    ['quantity' => 0, 'minimum_stock' => 5, 'unit' => $pd['weight_unit'] ?? 'un']
+                );
+                if (!empty($pd['initial_stock']) && $pd['initial_stock'] > 0) {
+                    $stock->increment('quantity', $pd['initial_stock']);
+                    \App\Models\StockMovement::create([
+                        'product_id'      => $product->id,
+                        'type'            => 'in',
+                        'quantity'        => $pd['initial_stock'],
+                        'quantity_before' => 0,
+                        'quantity_after'  => $pd['initial_stock'],
+                        'reason'          => 'Stock inicial (criado no POS offline)',
+                        'user_id'         => $request->user()->id,
+                    ]);
+                }
+
+                $map[$pd['local_id']] = $product->id;
+                $created++;
+            }
+        });
+
+        return response()->json(['created' => $created, 'id_map' => $map]);
     }
 
     public function removeEmployee(Request $request, StoreEmployee $employee): JsonResponse

@@ -104,25 +104,20 @@ const { isOnline, pendingCount, syncing, syncMessage, trySyncNow } = useOfflineP
 const storeName = computed(() => auth.user?.store?.name ?? auth.user?.name ?? 'Loja')
 const initial   = computed(() => (auth.user?.name ?? 'U')[0].toUpperCase())
 
-// Papel do utilizador no POS
-const posRole = computed(() => {
-  if (auth.user?.role === 'store_owner') return 'owner'
-  return auth.user?.pos_role ?? 'cashier'
-})
-
 const roleLabel = computed(() => ({
   owner: 'Proprietário', manager: 'Gerente',
   cashier: 'Caixa', stock_keeper: 'Gestor de Stock', viewer: 'Visualizador'
-}[posRole.value] ?? 'Funcionário'))
+}[auth.posRole] ?? 'Funcionário'))
 
+// Tabs visíveis com base nas permissões POS do utilizador
 const allTabs = [
-  { to: '/pos/terminal',   icon: '🛒', label: 'Venda',    roles: ['owner','manager','cashier'] },
-  { to: '/pos/stock',      icon: '📦', label: 'Stock',    roles: ['owner','manager','stock_keeper'] },
-  { to: '/pos/reports',    icon: '📊', label: 'Relatórios', roles: ['owner','manager'] },
-  { to: '/pos/employees',  icon: '👥', label: 'Equipa',   roles: ['owner'] },
+  { to: '/pos/terminal',   icon: '🛒', label: 'Venda',       perm: 'fazer_vendas'   },
+  { to: '/pos/stock',      icon: '📦', label: 'Stock',       perm: 'gerir_stock'    },
+  { to: '/pos/reports',    icon: '📊', label: 'Relatórios',  perm: 'ver_relatorios' },
+  { to: '/pos/employees',  icon: '👥', label: 'Equipa',      perm: 'gerir_equipa'   },
 ]
 
-const visibleTabs = computed(() => allTabs.filter(t => t.roles.includes(posRole.value)))
+const visibleTabs = computed(() => allTabs.filter(t => auth.hasPosPermission(t.perm)))
 
 function isActive(path) {
   return route.path.startsWith(path)

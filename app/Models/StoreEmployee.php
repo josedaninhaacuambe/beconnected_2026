@@ -17,15 +17,24 @@ class StoreEmployee extends Model
         ];
     }
 
-    // Permissões disponíveis por role
+    // Permissões disponíveis no sistema POS
+    // fazer_vendas   → acesso ao Terminal de Vendas
+    // gerir_stock    → acesso à gestão de Stock
+    // ver_relatorios → acesso aos Relatórios (reservado ao dono + quem ele autorizar)
+    // gerir_equipa   → acesso à Equipa/Funcionários (reservado ao dono)
+    // adicionar_produtos → criar produtos no POS (offline ou online)
+    public const ALL_PERMISSIONS = [
+        'fazer_vendas', 'gerir_stock', 'ver_relatorios', 'gerir_equipa', 'adicionar_produtos',
+    ];
+
     public static function defaultPermissions(string $role): array
     {
         return match ($role) {
-            'manager' => ['gerir_stock', 'ver_pedidos', 'editar_produtos', 'ver_relatorios', 'gerir_funcionarios'],
-            'cashier' => ['ver_pedidos', 'processar_vendas'],
-            'stock_keeper' => ['gerir_stock', 'editar_produtos'],
-            'viewer' => ['ver_pedidos', 'ver_relatorios'],
-            default => [],
+            'manager'     => ['fazer_vendas', 'gerir_stock', 'adicionar_produtos'],
+            'cashier'     => ['fazer_vendas'],
+            'stock_keeper'=> ['gerir_stock', 'adicionar_produtos'],
+            'viewer'      => ['ver_relatorios'],
+            default       => [],
         };
     }
 

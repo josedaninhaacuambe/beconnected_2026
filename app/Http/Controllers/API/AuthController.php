@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Mail\OtpMail;
+use App\Models\StoreEmployee;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -169,8 +170,20 @@ class AuthController extends Controller
     {
         $user = $request->user();
         $data = Cache::remember("user_me_{$user->id}", 60, fn() =>
-            $user->load(['province', 'city', 'neighborhood'])->toArray()
+            $user->load(['province', 'city', 'neighborhood', 'store'])->toArray()
         );
+
+        // Incluir permissões POS do funcionário (se não for dono/admin)
+        if (!in_array($user->role, ['store_owner', 'admin'])) {
+            $emp = StoreEmployee::where('user_id', $user->id)
+                ->where('is_active', true)
+                ->select(['id', 'store_id', 'role', 'permissions'])
+                ->first();
+            $data['pos_employee'] = $emp?->toArray();
+        } else {
+            $data['pos_employee'] = null;
+        }
+
         return response()->json($data);
     }
 
