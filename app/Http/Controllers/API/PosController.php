@@ -50,9 +50,8 @@ class PosController extends Controller
                    ->orWhere('barcode', 'like', '%' . $request->search . '%');
             }))
             ->orderBy('name')
-            ->get(['id', 'name', 'price', 'sku', 'barcode', 'images'])
+            ->get(['id', 'name', 'price', 'cost_price', 'sku', 'barcode', 'images'])
             ->map(function ($p) {
-                // Normalizar imagem: usar primeira imagem do array images
                 $images = $p->images ?? [];
                 if (is_string($images)) $images = json_decode($images, true) ?? [];
                 $p->image = count($images) > 0 ? $images[0] : null;
@@ -69,17 +68,21 @@ class PosController extends Controller
         $store = $this->resolveStore($request);
 
         $request->validate([
-            'sales'                     => 'required|array|min:1',
-            'sales.*.local_id'          => 'required|string',
-            'sales.*.total'             => 'required|numeric|min:0',
-            'sales.*.payment_method'    => 'required|in:cash,mpesa,emola,credit',
-            'sales.*.sale_at'           => 'required|date',
-            'sales.*.items'             => 'required|array|min:1',
-            'sales.*.items.*.product_id'   => 'nullable|integer',
-            'sales.*.items.*.product_name' => 'required|string',
-            'sales.*.items.*.unit_price'   => 'required|numeric|min:0',
-            'sales.*.items.*.quantity'     => 'required|integer|min:1',
-            'sales.*.items.*.subtotal'     => 'required|numeric|min:0',
+            'sales'                          => 'required|array|min:1',
+            'sales.*.local_id'               => 'required|string',
+            'sales.*.total'                  => 'required|numeric|min:0',
+            'sales.*.payment_method'         => 'required|in:cash,mpesa,emola,credit',
+            'sales.*.sale_at'                => 'required|date',
+            'sales.*.apply_vat'              => 'nullable|boolean',
+            'sales.*.vat_rate'               => 'nullable|numeric|min:0|max:100',
+            'sales.*.vat_amount'             => 'nullable|numeric|min:0',
+            'sales.*.items'                  => 'required|array|min:1',
+            'sales.*.items.*.product_id'     => 'nullable|integer',
+            'sales.*.items.*.product_name'   => 'required|string',
+            'sales.*.items.*.unit_price'     => 'required|numeric|min:0',
+            'sales.*.items.*.cost_price'     => 'nullable|numeric|min:0',
+            'sales.*.items.*.quantity'       => 'required|integer|min:1',
+            'sales.*.items.*.subtotal'       => 'required|numeric|min:0',
         ]);
 
         $created = 0;
@@ -99,13 +102,16 @@ class PosController extends Controller
                     'store_id'       => $store->id,
                     'user_id'        => $request->user()->id,
                     'local_id'       => $saleData['local_id'],
-                    'subtotal'       => $saleData['subtotal']        ?? $saleData['total'],
-                    'discount'       => $saleData['discount']        ?? 0,
+                    'subtotal'       => $saleData['subtotal']     ?? $saleData['total'],
+                    'discount'       => $saleData['discount']     ?? 0,
+                    'apply_vat'      => $saleData['apply_vat']    ?? false,
+                    'vat_rate'       => $saleData['vat_rate']     ?? 17.00,
+                    'vat_amount'     => $saleData['vat_amount']   ?? 0,
                     'total'          => $saleData['total'],
                     'payment_method' => $saleData['payment_method'],
-                    'customer_name'  => $saleData['customer_name']   ?? null,
-                    'customer_phone' => $saleData['customer_phone']  ?? null,
-                    'notes'          => $saleData['notes']           ?? null,
+                    'customer_name'  => $saleData['customer_name']  ?? null,
+                    'customer_phone' => $saleData['customer_phone'] ?? null,
+                    'notes'          => $saleData['notes']          ?? null,
                     'synced'         => true,
                     'sale_at'        => $saleData['sale_at'],
                 ]);
@@ -117,6 +123,7 @@ class PosController extends Controller
                         'product_name' => $item['product_name'],
                         'product_sku'  => $item['product_sku']  ?? null,
                         'unit_price'   => $item['unit_price'],
+                        'cost_price'   => $item['cost_price']   ?? 0,
                         'quantity'     => $item['quantity'],
                         'subtotal'     => $item['subtotal'],
                     ]);
@@ -206,39 +213,97 @@ class PosController extends Controller
         $from = $request->from ? now()->parse($request->from)->startOfDay() : now()->startOfMonth();
         $to   = $request->to   ? now()->parse($request->to)->endOfDay()     : now()->endOfDay();
 
-        // ── Vendas POS ────────────────────────────────────────────────────────
+        // ── Vendas POS no período seleccionado ────────────────────────────────
         $posSales = PosSale::where('store_id', $store->id)
             ->whereBetween('sale_at', [$from, $to])
             ->with(['items', 'user:id,name'])
             ->orderByDesc('sale_at')
             ->get();
 
-        // ── Vendas Online (store_orders desta loja) ────────────────────────────
+        // ── Vendas Online no período seleccionado ─────────────────────────────
         $onlineOrders = StoreOrder::where('store_id', $store->id)
             ->whereNotIn('status', ['cancelled'])
             ->whereBetween('created_at', [$from, $to])
-            ->with(['items.product:id,name', 'order:id,payment_method,created_at'])
+            ->with(['items.product:id,name,cost_price', 'order:id,payment_method,created_at'])
             ->get();
 
-        // ── Totais unificados ─────────────────────────────────────────────────
-        $posRevenue    = $posSales->sum('total');
-        $onlineRevenue = $onlineOrders->sum('subtotal');
-        $totalRevenue  = $posRevenue + $onlineRevenue;
-        $totalSales    = $posSales->count() + $onlineOrders->count();
-        $avgTicket     = $totalSales > 0 ? $totalRevenue / $totalSales : 0;
+        // ── Helper: calcular sumário de um conjunto de POS + Online ───────────
+        $buildSummary = function ($sales, $orders) {
+            $posRev    = $sales->sum('total');
+            $onlineRev = $orders->sum('subtotal');
+            $total     = $posRev + $onlineRev;
+            $count     = $sales->count() + $orders->count();
 
-        // ── Por dia (POS + Online juntos) ──────────────────────────────────────
+            // Lucro bruto POS: revenue - custo
+            $posCost = 0;
+            foreach ($sales as $s) {
+                foreach ($s->items as $item) {
+                    $posCost += ($item->cost_price ?? 0) * $item->quantity;
+                }
+            }
+            // Lucro bruto Online
+            $onlineCost = 0;
+            foreach ($orders as $o) {
+                foreach ($o->items as $item) {
+                    $onlineCost += ($item->product?->cost_price ?? 0) * $item->quantity;
+                }
+            }
+            $totalCost   = $posCost + $onlineCost;
+            $grossProfit = $total - $totalCost;
+
+            // IVA cobrado (POS com IVA activo)
+            $vatCollected = $sales->where('apply_vat', true)->sum('vat_amount');
+
+            return [
+                'totalRevenue'  => $total,
+                'totalSales'    => $count,
+                'avgTicket'     => $count > 0 ? $total / $count : 0,
+                'posRevenue'    => $posRev,
+                'onlineRevenue' => $onlineRev,
+                'totalCost'     => $totalCost,
+                'grossProfit'   => $grossProfit,
+                'vatCollected'  => $vatCollected,
+            ];
+        };
+
+        // ── Sumários por período ───────────────────────────────────────────────
+        $periodSummary = function (string $start, string $end) use ($store, $buildSummary) {
+            $f = now()->parse($start)->startOfDay();
+            $t = now()->parse($end)->endOfDay();
+            $sales  = PosSale::where('store_id', $store->id)->whereBetween('sale_at', [$f, $t])->with('items')->get();
+            $orders = StoreOrder::where('store_id', $store->id)->whereNotIn('status', ['cancelled'])
+                ->whereBetween('created_at', [$f, $t])->with('items.product:id,cost_price')->get();
+            return $buildSummary($sales, $orders);
+        };
+
+        $today     = now()->toDateString();
+        $weekStart = now()->startOfWeek()->toDateString();
+        $monthStart= now()->startOfMonth()->toDateString();
+        $yearStart = now()->startOfYear()->toDateString();
+
+        $periods = [
+            'today'  => $periodSummary($today,      $today),
+            'week'   => $periodSummary($weekStart,   $today),
+            'month'  => $periodSummary($monthStart,  $today),
+            'year'   => $periodSummary($yearStart,   $today),
+            'custom' => $buildSummary($posSales, $onlineOrders),
+        ];
+
+        // ── Por dia (POS + Online) ─────────────────────────────────────────────
         $dayMap = [];
         foreach ($posSales as $s) {
             $d = $s->sale_at->format('Y-m-d');
-            $dayMap[$d] = ($dayMap[$d] ?? ['date' => $s->sale_at->format('d/m'), 'total' => 0, 'count' => 0, 'pos' => 0, 'online' => 0]);
+            $dayMap[$d] = ($dayMap[$d] ?? ['date' => $s->sale_at->format('d/m'), 'total' => 0, 'count' => 0, 'pos' => 0, 'online' => 0, 'profit' => 0]);
             $dayMap[$d]['total'] += $s->total;
             $dayMap[$d]['pos']   += $s->total;
             $dayMap[$d]['count']++;
+            foreach ($s->items as $item) {
+                $dayMap[$d]['profit'] += ($s->total - ($item->cost_price ?? 0) * $item->quantity);
+            }
         }
         foreach ($onlineOrders as $o) {
             $d = $o->created_at->format('Y-m-d');
-            $dayMap[$d] = ($dayMap[$d] ?? ['date' => $o->created_at->format('d/m'), 'total' => 0, 'count' => 0, 'pos' => 0, 'online' => 0]);
+            $dayMap[$d] = ($dayMap[$d] ?? ['date' => $o->created_at->format('d/m'), 'total' => 0, 'count' => 0, 'pos' => 0, 'online' => 0, 'profit' => 0]);
             $dayMap[$d]['total']  += $o->subtotal;
             $dayMap[$d]['online'] += $o->subtotal;
             $dayMap[$d]['count']++;
@@ -261,19 +326,26 @@ class PosController extends Controller
         $byPayment = array_values($payMap);
 
         // ── Top produtos (POS + Online) ────────────────────────────────────────
-        $prodMap = [];
+        $prodMap  = [];
         $posItems = PosSaleItem::whereIn('pos_sale_id', $posSales->pluck('id'))
-            ->selectRaw('product_name, SUM(quantity) as qty, SUM(subtotal) as revenue')
+            ->selectRaw('product_name, SUM(quantity) as qty, SUM(subtotal) as revenue, SUM(cost_price * quantity) as cost')
             ->groupBy('product_name')->get();
         foreach ($posItems as $p) {
-            $prodMap[$p->product_name] = ['product_name' => $p->product_name, 'qty' => $p->qty, 'revenue' => $p->revenue];
+            $prodMap[$p->product_name] = [
+                'product_name' => $p->product_name, 'qty' => $p->qty,
+                'revenue' => $p->revenue, 'cost' => $p->cost,
+                'profit' => $p->revenue - $p->cost,
+            ];
         }
         foreach ($onlineOrders as $o) {
             foreach ($o->items as $item) {
                 $name = $item->product?->name ?? $item->product_name ?? 'Produto';
-                $prodMap[$name] = ($prodMap[$name] ?? ['product_name' => $name, 'qty' => 0, 'revenue' => 0]);
+                $cost = ($item->product?->cost_price ?? 0) * $item->quantity;
+                $prodMap[$name] = ($prodMap[$name] ?? ['product_name' => $name, 'qty' => 0, 'revenue' => 0, 'cost' => 0, 'profit' => 0]);
                 $prodMap[$name]['qty']     += $item->quantity;
                 $prodMap[$name]['revenue'] += $item->subtotal;
+                $prodMap[$name]['cost']    += $cost;
+                $prodMap[$name]['profit']  += $item->subtotal - $cost;
             }
         }
         usort($prodMap, fn($a, $b) => $b['revenue'] <=> $a['revenue']);
@@ -281,17 +353,21 @@ class PosController extends Controller
 
         // ── Por vendedor (POS) ─────────────────────────────────────────────────
         $bySeller = $posSales->groupBy('user_id')
-            ->map(fn($g) => ['name' => $g->first()->user?->name ?? 'Desconhecido', 'total' => $g->sum('total'), 'count' => $g->count()])
-            ->values();
+            ->map(fn($g) => [
+                'name'  => $g->first()->user?->name ?? 'Desconhecido',
+                'total' => $g->sum('total'),
+                'count' => $g->count(),
+            ])->values();
 
         return response()->json([
-            'summary'      => compact('totalRevenue', 'totalSales', 'avgTicket', 'posRevenue', 'onlineRevenue'),
-            'by_day'       => $byDay,
-            'by_payment'   => $byPayment,
-            'top_products' => $topProducts,
-            'by_seller'    => $bySeller,
-            'pos_sales'    => $posSales->take(50),
-            'online_orders'=> $onlineOrders->take(50),
+            'summary'       => $periods['custom'],  // retrocompat
+            'periods'       => $periods,
+            'by_day'        => $byDay,
+            'by_payment'    => $byPayment,
+            'top_products'  => $topProducts,
+            'by_seller'     => $bySeller,
+            'pos_sales'     => $posSales->take(50),
+            'online_orders' => $onlineOrders->take(50),
         ]);
     }
 

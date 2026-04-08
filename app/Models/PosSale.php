@@ -9,13 +9,20 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class PosSale extends Model
 {
     protected $fillable = [
-        'store_id', 'user_id', 'local_id', 'subtotal', 'discount', 'total',
-        'payment_method', 'customer_name', 'customer_phone', 'notes', 'synced', 'sale_at',
+        'store_id', 'user_id', 'local_id', 'subtotal', 'discount', 'apply_vat', 'vat_rate',
+        'vat_amount', 'total', 'payment_method', 'customer_name', 'customer_phone', 'notes',
+        'synced', 'sale_at',
     ];
 
     protected function casts(): array
     {
-        return ['synced' => 'boolean', 'sale_at' => 'datetime'];
+        return [
+            'synced'    => 'boolean',
+            'apply_vat' => 'boolean',
+            'vat_rate'  => 'float',
+            'vat_amount'=> 'float',
+            'sale_at'   => 'datetime',
+        ];
     }
 
     public function store(): BelongsTo  { return $this->belongsTo(Store::class); }

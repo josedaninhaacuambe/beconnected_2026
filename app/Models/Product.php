@@ -15,7 +15,7 @@ class Product extends Model
 
     protected $fillable = [
         'store_id', 'product_category_id', 'store_section_id', 'brand_id', 'name', 'slug',
-        'description', 'price', 'compare_price', 'flash_price', 'flash_until',
+        'description', 'price', 'cost_price', 'compare_price', 'flash_price', 'flash_until',
         'sku', 'barcode', 'model', 'images', 'attributes', 'is_active', 'is_featured',
         'total_sold',
     ];
@@ -24,6 +24,7 @@ class Product extends Model
     {
         return [
             'price' => 'float',
+            'cost_price' => 'float',
             'compare_price' => 'float',
             'flash_price' => 'float',
             'flash_until' => 'datetime',

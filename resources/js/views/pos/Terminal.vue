@@ -34,14 +34,12 @@
             :class="(p.stock?.quantity ?? 0) <= 0 ? 'opacity-40 cursor-not-allowed' : ''"
             :disabled="(p.stock?.quantity ?? 0) <= 0"
           >
-            <!-- Imagem ou placeholder -->
             <div class="w-full h-16 rounded-lg overflow-hidden bg-gray-100 mb-2 flex items-center justify-center">
               <AppImg v-if="p.image" :src="p.image.startsWith('http') ? p.image : '/storage/' + p.image" class="w-full h-full object-cover" />
               <span v-else class="text-2xl">🛍️</span>
             </div>
             <p class="text-xs font-semibold text-gray-800 line-clamp-2 leading-tight mb-1">{{ p.name }}</p>
             <p class="text-sm font-black" style="color:#F07820;">{{ fmt(p.price) }}</p>
-            <!-- Stock baixo -->
             <span v-if="p.stock && p.stock.quantity <= 5 && p.stock.quantity > 0"
               class="absolute top-1 right-1 text-[9px] bg-yellow-100 text-yellow-700 font-bold px-1 py-0.5 rounded">
               {{ p.stock.quantity }} restam
@@ -60,7 +58,21 @@
       <!-- Cabeçalho carrinho -->
       <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
         <p class="font-bold text-gray-800">🛒 Carrinho</p>
-        <button v-if="cart.length" @click="clearCart" class="text-xs text-red-400 hover:text-red-600">Limpar</button>
+        <div class="flex items-center gap-2">
+          <!-- Toggle IVA -->
+          <button
+            @click="applyVat = !applyVat"
+            class="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg border-2 transition"
+            :class="applyVat
+              ? 'border-green-500 text-green-600 bg-green-50'
+              : 'border-gray-200 text-gray-400 hover:border-gray-300'"
+          >
+            <span>IVA {{ vatRate }}%</span>
+            <span class="w-3 h-3 rounded-full border-2 transition"
+              :class="applyVat ? 'bg-green-500 border-green-500' : 'border-gray-300'"></span>
+          </button>
+          <button v-if="cart.length" @click="clearCart" class="text-xs text-red-400 hover:text-red-600">Limpar</button>
+        </div>
       </div>
 
       <!-- Items -->
@@ -97,10 +109,17 @@
           <input v-model.number="discount" type="number" min="0"
             class="w-20 text-right border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-bc-gold" />
         </div>
-        <div class="flex justify-between font-black text-base">
+        <!-- IVA breakdown (só quando activo) -->
+        <div v-if="applyVat" class="flex justify-between text-sm text-green-600 font-semibold">
+          <span>IVA ({{ vatRate }}%)</span><span>+ {{ fmt(vatAmount) }}</span>
+        </div>
+        <div class="flex justify-between font-black text-base border-t border-gray-100 pt-2">
           <span>TOTAL</span>
           <span style="color:#F07820;">{{ fmt(total) }}</span>
         </div>
+        <p v-if="applyVat" class="text-[10px] text-gray-400 text-right -mt-1">
+          IVA incluído: {{ fmt(vatAmount) }} · Base: {{ fmt(total - vatAmount) }}
+        </p>
 
         <!-- Método de pagamento -->
         <div class="grid grid-cols-3 gap-1.5 pt-1">
@@ -137,7 +156,12 @@
             {{ isOnline ? 'Sincronizada com o servidor.' : '⚠️ Guardada localmente. Será sincronizada quando online.' }}
           </p>
           <div class="bg-gray-50 rounded-xl p-3 text-left text-sm space-y-1 mb-4">
-            <div class="flex justify-between"><span class="text-gray-500">Total</span><span class="font-bold" style="color:#F07820;">{{ fmt(receipt.total) }}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">Subtotal</span><span>{{ fmt(receipt.subtotal) }}</span></div>
+            <div v-if="receipt.discount > 0" class="flex justify-between"><span class="text-gray-500">Desconto</span><span class="text-red-500">- {{ fmt(receipt.discount) }}</span></div>
+            <div v-if="receipt.apply_vat" class="flex justify-between text-green-600"><span>IVA {{ receipt.vat_rate }}%</span><span>+ {{ fmt(receipt.vat_amount) }}</span></div>
+            <div class="flex justify-between font-bold border-t border-gray-200 pt-1 mt-1">
+              <span>TOTAL</span><span style="color:#F07820;">{{ fmt(receipt.total) }}</span>
+            </div>
             <div class="flex justify-between"><span class="text-gray-500">Pagamento</span><span class="font-semibold">{{ receipt.payment_method }}</span></div>
             <div v-if="receipt.customer_name" class="flex justify-between"><span class="text-gray-500">Cliente</span><span>{{ receipt.customer_name }}</span></div>
             <div class="flex justify-between"><span class="text-gray-500">Hora</span><span>{{ formatTime(receipt.sale_at) }}</span></div>
@@ -159,15 +183,17 @@ import { useOfflinePos, cacheProducts, getCachedProducts, savePendingSale } from
 
 const { isOnline, pendingCount, trySyncNow } = useOfflinePos()
 
-const allProducts = ref([])
-const filtered    = ref([])
-const search      = ref('')
-const cart        = ref([])
-const discount    = ref(0)
-const payMethod   = ref('cash')
+const allProducts  = ref([])
+const filtered     = ref([])
+const search       = ref('')
+const cart         = ref([])
+const discount     = ref(0)
+const applyVat     = ref(false)
+const vatRate      = ref(17) // IVA Moçambique 17%
+const payMethod    = ref('cash')
 const customerName = ref('')
-const processing  = ref(false)
-const receipt     = ref(null)
+const processing   = ref(false)
+const receipt      = ref(null)
 const loadingProducts = ref(true)
 
 const payMethods = [
@@ -176,8 +202,15 @@ const payMethods = [
   { value: 'emola', icon: '📲', label: 'eMola' },
 ]
 
-const subtotal = computed(() => cart.value.reduce((s, i) => s + i.subtotal, 0))
-const total    = computed(() => Math.max(0, subtotal.value - (discount.value || 0)))
+const subtotal  = computed(() => cart.value.reduce((s, i) => s + i.subtotal, 0))
+const afterDisc = computed(() => Math.max(0, subtotal.value - (discount.value || 0)))
+// IVA calculado sobre o valor após desconto: valor_com_iva = base * (1 + vat%) → iva = valor / (1 + vat%) * vat%
+// Aqui consideramos que o preço do produto já inclui IVA quando activo (IVA incluído no preço)
+const vatAmount = computed(() => applyVat.value
+  ? parseFloat((afterDisc.value - afterDisc.value / (1 + vatRate.value / 100)).toFixed(2))
+  : 0
+)
+const total = computed(() => afterDisc.value)
 
 function fmt(v) {
   return new Intl.NumberFormat('pt-MZ', { style: 'currency', currency: 'MZN' }).format(v ?? 0)
@@ -204,6 +237,7 @@ function addToCart(product) {
       product_name: product.name,
       product_sku:  product.sku,
       unit_price:   parseFloat(product.price),
+      cost_price:   parseFloat(product.cost_price ?? 0),
       quantity:     1,
       subtotal:     parseFloat(product.price),
     })
@@ -214,7 +248,7 @@ function changeQty(item, delta) {
   if (delta > 0) {
     const product = allProducts.value.find(p => p.id === item.product_id)
     const maxStock = product?.stock?.quantity ?? Infinity
-    if (item.quantity >= maxStock) return // não deixa ultrapassar stock
+    if (item.quantity >= maxStock) return
   }
   item.quantity += delta
   if (item.quantity <= 0) { removeItem(item); return }
@@ -241,9 +275,12 @@ async function finalizeSale() {
 
   const sale = {
     local_id:       generateLocalId(),
-    total:          total.value,
     subtotal:       subtotal.value,
     discount:       discount.value || 0,
+    apply_vat:      applyVat.value,
+    vat_rate:       vatRate.value,
+    vat_amount:     vatAmount.value,
+    total:          total.value,
     payment_method: payMethod.value,
     customer_name:  customerName.value || null,
     sale_at:        new Date().toISOString(),
@@ -262,7 +299,6 @@ async function finalizeSale() {
     search.value = ''
     filterProducts()
   } catch (e) {
-    // Se falhar online, guardar offline
     await savePendingSale(sale)
     receipt.value = sale
     clearCart()
@@ -273,7 +309,6 @@ async function finalizeSale() {
 
 function newSale() {
   receipt.value = null
-  // Recarregar produtos para reflectir stock actualizado
   loadProducts()
   if (isOnline.value) trySyncNow()
 }

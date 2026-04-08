@@ -1,6 +1,28 @@
 <template>
   <div class="overflow-y-auto h-full p-4 space-y-4">
-    <!-- Filtros de data + toggle canal -->
+
+    <!-- ── Cards de período fixo (sempre visíveis) ────────────────────────── -->
+    <div v-if="loadingPeriods" class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div v-for="i in 4" :key="i" class="skeleton h-32 rounded-xl"></div>
+    </div>
+
+    <div v-else class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div v-for="p in periodCards" :key="p.key"
+        class="bg-white rounded-xl border border-gray-100 p-4 space-y-1">
+        <p class="text-xs font-bold text-gray-400 uppercase tracking-wide">{{ p.label }}</p>
+        <p class="text-xl font-black" style="color:#F07820;">{{ fmt(periods[p.key]?.totalRevenue) }}</p>
+        <p class="text-xs text-gray-500">{{ periods[p.key]?.totalSales ?? 0 }} vendas</p>
+        <div class="border-t border-gray-100 pt-2 mt-1 flex items-center justify-between">
+          <span class="text-xs text-gray-400">Lucro</span>
+          <span class="text-xs font-bold"
+            :class="(periods[p.key]?.grossProfit ?? 0) >= 0 ? 'text-green-600' : 'text-red-500'">
+            {{ fmt(periods[p.key]?.grossProfit) }}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Filtros de data + toggle canal ────────────────────────────────── -->
     <div class="bg-white rounded-xl border border-gray-100 p-4 flex flex-wrap items-end gap-3">
       <div>
         <label class="text-xs font-semibold text-gray-500">De</label>
@@ -13,10 +35,11 @@
       <button @click="load" class="px-5 py-2 rounded-xl text-white font-bold text-sm transition hover:opacity-90" style="background:#F07820;">
         📊 Ver Relatório
       </button>
-      <div class="flex gap-2">
-        <button @click="quickRange('today')" class="px-3 py-2 rounded-xl border text-xs font-semibold text-gray-600 hover:border-bc-gold hover:text-bc-gold transition">Hoje</button>
-        <button @click="quickRange('week')"  class="px-3 py-2 rounded-xl border text-xs font-semibold text-gray-600 hover:border-bc-gold hover:text-bc-gold transition">Esta semana</button>
-        <button @click="quickRange('month')" class="px-3 py-2 rounded-xl border text-xs font-semibold text-gray-600 hover:border-bc-gold hover:text-bc-gold transition">Este mês</button>
+      <div class="flex gap-2 flex-wrap">
+        <button @click="quickRange('today')"  class="px-3 py-2 rounded-xl border text-xs font-semibold text-gray-600 hover:border-bc-gold hover:text-bc-gold transition">Hoje</button>
+        <button @click="quickRange('week')"   class="px-3 py-2 rounded-xl border text-xs font-semibold text-gray-600 hover:border-bc-gold hover:text-bc-gold transition">Esta semana</button>
+        <button @click="quickRange('month')"  class="px-3 py-2 rounded-xl border text-xs font-semibold text-gray-600 hover:border-bc-gold hover:text-bc-gold transition">Este mês</button>
+        <button @click="quickRange('year')"   class="px-3 py-2 rounded-xl border text-xs font-semibold text-gray-600 hover:border-bc-gold hover:text-bc-gold transition">Este ano</button>
       </div>
       <!-- Toggle canal -->
       <div class="ml-auto flex rounded-xl border border-gray-200 overflow-hidden text-xs font-bold">
@@ -31,33 +54,72 @@
     </div>
 
     <template v-else-if="data">
-      <!-- Cards de resumo -->
+      <!-- Cards de resumo do período personalizado -->
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <!-- Receita -->
         <div class="bg-white rounded-xl border border-gray-100 p-4">
           <p class="text-xs text-gray-400 mb-1">Receita Total</p>
           <p class="text-xl font-black" style="color:#F07820;">{{ fmt(summary.totalRevenue) }}</p>
+          <p class="text-xs text-gray-400 mt-1">{{ summary.totalSales }} vendas</p>
         </div>
+        <!-- Lucro Bruto -->
         <div class="bg-white rounded-xl border border-gray-100 p-4">
-          <p class="text-xs text-gray-400 mb-1">Nº de Vendas</p>
-          <p class="text-xl font-black text-gray-800">{{ summary.totalSales }}</p>
+          <p class="text-xs text-gray-400 mb-1">Lucro Bruto</p>
+          <p class="text-xl font-black" :class="summary.grossProfit >= 0 ? 'text-green-600' : 'text-red-500'">
+            {{ fmt(summary.grossProfit) }}
+          </p>
+          <p class="text-xs text-gray-400 mt-1">Margem {{ margin }}%</p>
         </div>
+        <!-- Ticket Médio -->
         <div class="bg-white rounded-xl border border-gray-100 p-4">
           <p class="text-xs text-gray-400 mb-1">Ticket Médio</p>
           <p class="text-xl font-black text-gray-800">{{ fmt(summary.avgTicket) }}</p>
         </div>
-        <!-- Comparação POS vs Online -->
+        <!-- IVA + POS vs Online -->
         <div class="bg-white rounded-xl border border-gray-100 p-4">
-          <p class="text-xs text-gray-400 mb-2">POS vs Online</p>
-          <div class="flex gap-2 text-xs">
+          <p class="text-xs text-gray-400 mb-2">IVA Cobrado (POS)</p>
+          <p class="text-base font-black text-green-600 mb-1">{{ fmt(summary.vatCollected) }}</p>
+          <div class="flex gap-2 text-[11px] border-t border-gray-100 pt-2">
             <div class="flex-1 text-center">
-              <p class="font-black text-gray-800">{{ fmt(data.summary.posRevenue) }}</p>
+              <p class="font-bold text-gray-700">{{ fmt(summary.posRevenue) }}</p>
               <p class="text-gray-400">🖥️ POS</p>
             </div>
             <div class="w-px bg-gray-100"></div>
             <div class="flex-1 text-center">
-              <p class="font-black text-gray-800">{{ fmt(data.summary.onlineRevenue) }}</p>
+              <p class="font-bold text-gray-700">{{ fmt(summary.onlineRevenue) }}</p>
               <p class="text-gray-400">🌐 Online</p>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Segunda linha: Custo + Lucro breakdown -->
+      <div class="bg-white rounded-xl border border-gray-100 p-4">
+        <h3 class="font-bold text-sm text-gray-700 mb-3">💰 Análise de Rentabilidade</h3>
+        <div class="grid grid-cols-3 gap-4">
+          <div class="text-center p-3 bg-gray-50 rounded-xl">
+            <p class="text-xs text-gray-400 mb-1">Receita</p>
+            <p class="text-lg font-black" style="color:#F07820;">{{ fmt(summary.totalRevenue) }}</p>
+          </div>
+          <div class="text-center p-3 bg-red-50 rounded-xl">
+            <p class="text-xs text-gray-400 mb-1">Custo dos Produtos</p>
+            <p class="text-lg font-black text-red-500">{{ fmt(summary.totalCost) }}</p>
+          </div>
+          <div class="text-center p-3 rounded-xl" :class="summary.grossProfit >= 0 ? 'bg-green-50' : 'bg-red-50'">
+            <p class="text-xs text-gray-400 mb-1">Lucro Bruto</p>
+            <p class="text-lg font-black" :class="summary.grossProfit >= 0 ? 'text-green-600' : 'text-red-600'">
+              {{ fmt(summary.grossProfit) }}
+            </p>
+          </div>
+        </div>
+        <!-- Barra de margem -->
+        <div class="mt-3">
+          <div class="flex justify-between text-xs text-gray-400 mb-1">
+            <span>Margem de Lucro</span><span class="font-bold text-gray-700">{{ margin }}%</span>
+          </div>
+          <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div class="h-full rounded-full transition-all"
+              :style="{ width: Math.min(100, Math.max(0, parseFloat(margin))) + '%', background: parseFloat(margin) >= 20 ? '#22c55e' : parseFloat(margin) >= 10 ? '#F07820' : '#ef4444' }"></div>
           </div>
         </div>
       </div>
@@ -76,15 +138,16 @@
                 </div>
                 <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                   <div class="h-full rounded-full transition-all" style="background:#F07820;"
-                    :style="{ width: (data.summary.totalRevenue > 0 ? m.total / data.summary.totalRevenue * 100 : 0).toFixed(0) + '%' }"></div>
+                    :style="{ width: (summary.totalRevenue > 0 ? m.total / summary.totalRevenue * 100 : 0).toFixed(0) + '%' }"></div>
                 </div>
               </div>
               <span class="text-xs text-gray-400">{{ m.count }} vendas</span>
             </div>
+            <p v-if="!data.by_payment.length" class="text-center text-gray-400 text-sm py-4">Sem vendas no período.</p>
           </div>
         </div>
 
-        <!-- Top produtos -->
+        <!-- Top produtos com lucro -->
         <div class="bg-white rounded-xl border border-gray-100 p-4">
           <h3 class="font-bold text-sm text-gray-700 mb-3">🏆 Top Produtos</h3>
           <div class="space-y-2">
@@ -93,7 +156,12 @@
                 :style="{ background: i === 0 ? '#F07820' : i === 1 ? '#94A3B8' : '#CBD5E1' }">{{ i + 1 }}</span>
               <p class="flex-1 text-sm text-gray-700 truncate">{{ p.product_name }}</p>
               <span class="text-xs text-gray-400">{{ p.qty }} un.</span>
-              <span class="text-xs font-bold" style="color:#F07820;">{{ fmt(p.revenue) }}</span>
+              <div class="text-right">
+                <p class="text-xs font-bold" style="color:#F07820;">{{ fmt(p.revenue) }}</p>
+                <p class="text-[10px]" :class="p.profit >= 0 ? 'text-green-600' : 'text-red-500'">
+                  lucro: {{ fmt(p.profit) }}
+                </p>
+              </div>
             </div>
             <p v-if="!data.top_products.length" class="text-center text-gray-400 text-sm py-4">Sem vendas no período.</p>
           </div>
@@ -121,8 +189,8 @@
         <div class="bg-white rounded-xl border border-gray-100 p-4">
           <h3 class="font-bold text-sm text-gray-700 mb-3">📅 Vendas por Dia</h3>
           <div class="space-y-2">
-            <div v-for="d in filteredByDay.slice(-10)" :key="d.date" class="flex items-center gap-2">
-              <span class="text-xs text-gray-400 w-12">{{ d.date }}</span>
+            <div v-for="d in filteredByDay.slice(-14)" :key="d.date" class="flex items-center gap-2">
+              <span class="text-xs text-gray-400 w-12 flex-shrink-0">{{ d.date }}</span>
               <div class="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden flex">
                 <div v-if="d.pos > 0" class="h-full transition-all" style="background:#F07820;"
                   :style="{ width: Math.max(2, d.pos / maxDayTotal * 100).toFixed(0) + '%' }"
@@ -137,6 +205,7 @@
               <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm inline-block" style="background:#F07820;"></span>POS</span>
               <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm inline-block" style="background:#1C2B3C;"></span>Online</span>
             </div>
+            <p v-if="!filteredByDay.length" class="text-center text-gray-400 text-sm py-4">Sem dados no período.</p>
           </div>
         </div>
       </div>
@@ -159,6 +228,7 @@
                 <th class="pb-2">Cliente</th>
                 <th class="pb-2">Itens</th>
                 <th class="pb-2">Pagamento</th>
+                <th class="pb-2">IVA</th>
                 <th class="pb-2 text-right">Total</th>
               </tr>
             </thead>
@@ -174,10 +244,14 @@
                 <td class="py-2 text-xs text-gray-700">{{ row.customer ?? '—' }}</td>
                 <td class="py-2 text-xs text-gray-500">{{ row.items }} item(s)</td>
                 <td class="py-2 text-xs">{{ methodIcon(row.payment) }} {{ row.payment }}</td>
+                <td class="py-2 text-xs">
+                  <span v-if="row.vat_amount > 0" class="text-green-600 font-semibold">{{ fmt(row.vat_amount) }}</span>
+                  <span v-else class="text-gray-300">—</span>
+                </td>
                 <td class="py-2 text-xs font-bold text-right" style="color:#F07820;">{{ fmt(row.total) }}</td>
               </tr>
               <tr v-if="!unifiedSales.length">
-                <td colspan="6" class="text-center py-8 text-gray-400 text-sm">Sem vendas no período.</td>
+                <td colspan="7" class="text-center py-8 text-gray-400 text-sm">Sem vendas no período.</td>
               </tr>
             </tbody>
           </table>
@@ -185,7 +259,7 @@
       </div>
     </template>
 
-    <div v-else class="flex flex-col items-center justify-center py-24 text-gray-400">
+    <div v-else-if="!loadingPeriods" class="flex flex-col items-center justify-center py-16 text-gray-400">
       <span class="text-4xl mb-3">📊</span>
       <p>Selecciona um período e clica em "Ver Relatório"</p>
     </div>
@@ -193,36 +267,60 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 
 const from   = ref(new Date(new Date().setDate(1)).toISOString().slice(0, 10))
 const to     = ref(new Date().toISOString().slice(0, 10))
 const data   = ref(null)
 const loading = ref(false)
-const canal   = ref('all') // 'all' | 'pos' | 'online'
+const loadingPeriods = ref(true)
+const canal   = ref('all')
+const periods = ref({}) // today, week, month, year, custom
+
+const periodCards = [
+  { key: 'today', label: 'Hoje' },
+  { key: 'week',  label: 'Esta semana' },
+  { key: 'month', label: 'Este mês' },
+  { key: 'year',  label: 'Este ano' },
+]
 
 // Resumo filtrado por canal
 const summary = computed(() => {
   if (!data.value) return {}
+  const custom = periods.value.custom ?? data.value.summary ?? {}
   if (canal.value === 'pos') {
     const sales = data.value.pos_sales ?? []
     const total = sales.reduce((s, x) => s + parseFloat(x.total), 0)
-    return { totalRevenue: total, totalSales: sales.length, avgTicket: sales.length ? total / sales.length : 0 }
+    const cost  = sales.reduce((s, x) => s + (x.items ?? []).reduce((ss, i) => ss + (i.cost_price ?? 0) * i.quantity, 0), 0)
+    const vat   = sales.filter(x => x.apply_vat).reduce((s, x) => s + parseFloat(x.vat_amount ?? 0), 0)
+    return {
+      totalRevenue: total, totalSales: sales.length, avgTicket: sales.length ? total / sales.length : 0,
+      posRevenue: total, onlineRevenue: 0, totalCost: cost, grossProfit: total - cost, vatCollected: vat,
+    }
   }
   if (canal.value === 'online') {
     const orders = data.value.online_orders ?? []
     const total  = orders.reduce((s, x) => s + parseFloat(x.subtotal), 0)
-    return { totalRevenue: total, totalSales: orders.length, avgTicket: orders.length ? total / orders.length : 0 }
+    return {
+      totalRevenue: total, totalSales: orders.length, avgTicket: orders.length ? total / orders.length : 0,
+      posRevenue: 0, onlineRevenue: total, totalCost: 0, grossProfit: total, vatCollected: 0,
+    }
   }
-  return data.value.summary
+  return custom
+})
+
+const margin = computed(() => {
+  const r = summary.value?.totalRevenue ?? 0
+  const p = summary.value?.grossProfit  ?? 0
+  return r > 0 ? ((p / r) * 100).toFixed(1) : '0.0'
 })
 
 const filteredByDay = computed(() => {
   if (!data.value) return []
   return data.value.by_day.map(d => ({
     ...d,
-    total:  canal.value === 'pos' ? d.pos : canal.value === 'online' ? d.online : d.total,
+    total: canal.value === 'pos' ? d.pos : canal.value === 'online' ? d.online : d.total,
   }))
 })
 
@@ -233,12 +331,20 @@ const unifiedSales = computed(() => {
   const rows = []
   if (canal.value !== 'online') {
     for (const s of data.value.pos_sales ?? []) {
-      rows.push({ id: 'pos_' + s.id, canal: 'POS', date: s.sale_at, customer: s.customer_name, items: s.items?.length ?? 0, payment: s.payment_method, total: s.total })
+      rows.push({
+        id: 'pos_' + s.id, canal: 'POS', date: s.sale_at,
+        customer: s.customer_name, items: s.items?.length ?? 0,
+        payment: s.payment_method, vat_amount: s.vat_amount ?? 0, total: s.total,
+      })
     }
   }
   if (canal.value !== 'pos') {
     for (const o of data.value.online_orders ?? []) {
-      rows.push({ id: 'online_' + o.id, canal: 'Online', date: o.created_at, customer: null, items: o.items?.length ?? 0, payment: o.order?.payment_method ?? 'online', total: o.subtotal })
+      rows.push({
+        id: 'online_' + o.id, canal: 'Online', date: o.created_at,
+        customer: null, items: o.items?.length ?? 0,
+        payment: o.order?.payment_method ?? 'online', vat_amount: 0, total: o.subtotal,
+      })
     }
   }
   return rows.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 50)
@@ -259,10 +365,12 @@ function quickRange(range) {
     from.value = to.value = now.toISOString().slice(0, 10)
   } else if (range === 'week') {
     const d = new Date(now); d.setDate(d.getDate() - 6)
-    from.value = d.toISOString().slice(0, 10)
-    to.value   = now.toISOString().slice(0, 10)
-  } else {
+    from.value = d.toISOString().slice(0, 10); to.value = now.toISOString().slice(0, 10)
+  } else if (range === 'month') {
     from.value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
+    to.value   = now.toISOString().slice(0, 10)
+  } else if (range === 'year') {
+    from.value = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10)
     to.value   = now.toISOString().slice(0, 10)
   }
   load()
@@ -272,9 +380,32 @@ async function load() {
   loading.value = true
   try {
     const { data: d } = await axios.get('/api/pos/reports', { params: { from: from.value, to: to.value } })
-    data.value = d
+    data.value    = d
+    periods.value = d.periods ?? {}
   } finally {
     loading.value = false
   }
 }
+
+// Carregar apenas os sumários de período ao montar (sem detalhe)
+async function loadPeriods() {
+  loadingPeriods.value = true
+  try {
+    // Usa o endpoint de relatório com range do ano completo para obter os periods
+    const today = new Date().toISOString().slice(0, 10)
+    const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10)
+    const { data: d } = await axios.get('/api/pos/reports', { params: { from: yearStart, to: today } })
+    periods.value = d.periods ?? {}
+    // Também carrega o relatório do mês corrente por defeito
+    data.value = d
+    from.value = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10)
+    to.value   = today
+  } catch {
+    // silencioso
+  } finally {
+    loadingPeriods.value = false
+  }
+}
+
+onMounted(loadPeriods)
 </script>
