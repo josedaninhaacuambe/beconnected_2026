@@ -140,9 +140,20 @@ export async function updateCachedProduct(product) {
 
 // ── Cache de produtos ──────────────────────────────────────────────────────
 export async function cacheProducts(products) {
-  await openDB()
-  const store = txStore('products_cache', 'readwrite')
-  products.forEach(p => store.put(p))
+  const db = await openDB()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('products_cache', 'readwrite')
+    const store = tx.objectStore('products_cache')
+
+    products.forEach(p => {
+      const serializedProduct = JSON.parse(JSON.stringify(p))
+      store.put(serializedProduct)
+    })
+
+    tx.oncomplete = () => resolve()
+    tx.onerror = (event) => reject(event.target.error)
+    tx.onabort = (event) => reject(event.target.error)
+  })
 }
 
 export async function getCachedProducts() {

@@ -356,7 +356,7 @@ async function addEmployee() {
     form.permissions = []
     await loadEmployees()
   } catch (e) {
-    addError.value = e.response?.data?.message ?? 'Erro ao adicionar funcionário.'
+    addError.value = e.response?.data?.errors?.email?.[0] ?? e.response?.data?.message ?? 'Erro ao adicionar funcionário.'
   } finally {
     addLoading.value = false
   }

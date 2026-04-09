@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Schema;
 
 class Product extends Model
 {
@@ -20,23 +21,33 @@ class Product extends Model
         'total_sold', 'is_weighable', 'weight_unit', 'pos_only',
     ];
 
-    protected function casts(): array
+    protected $casts = [
+        'price' => 'float',
+        'cost_price' => 'float',
+        'is_weighable' => 'boolean',
+        'compare_price' => 'float',
+        'flash_price' => 'float',
+        'flash_until' => 'datetime',
+        'images' => 'array',
+        'attributes' => 'array',
+        'is_active' => 'boolean',
+        'is_featured' => 'boolean',
+        'pos_only' => 'boolean',
+        'rating' => 'float',
+        'total_sold' => 'integer',
+    ];
+
+    protected static ?bool $hasPosOnlyColumn = null;
+
+    public static function hasPosOnlyColumn(): bool
     {
-        return [
-            'price' => 'float',
-            'cost_price' => 'float',
-            'is_weighable' => 'boolean',
-            'compare_price' => 'float',
-            'flash_price' => 'float',
-            'flash_until' => 'datetime',
-            'images' => 'array',
-            'attributes' => 'array',
-            'is_active' => 'boolean',
-            'is_featured' => 'boolean',
-            'pos_only' => 'boolean',
-            'rating' => 'float',
-            'total_sold' => 'integer',
-        ];
+        // Remover cache estático para garantir que a migração seja detectada
+        return Schema::hasColumn((new self)->getTable(), 'pos_only');
+    }
+
+    public function scopeExcludePosOnly($query)
+    {
+        return $query->where(fn($q) => $q->where('pos_only', false)->orWhereNull('pos_only'));
     }
 
     public function store(): BelongsTo

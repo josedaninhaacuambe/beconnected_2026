@@ -4,7 +4,6 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Mail\OtpMail;
-use App\Models\StoreEmployee;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -121,6 +120,29 @@ class AuthController extends Controller
     }
 
     // ─── Login ────────────────────────────────────────────────────────────────
+    private function buildUserPayload(User $user): array
+    {
+        $user->load(['province', 'city', 'neighborhood', 'store', 'activePosEmployee.store']);
+        $userData = $user->toArray();
+        unset($userData['active_pos_employee']);
+
+        $userData['pos_employee'] = null;
+        if ($posEmployee = $user->activePosEmployee) {
+            $employeeData = $posEmployee->toArray();
+            $employeeData['store'] = $posEmployee->store ? [
+                'id'      => $posEmployee->store->id,
+                'name'    => $posEmployee->store->name,
+                'slug'    => $posEmployee->store->slug,
+                'status'  => $posEmployee->store->status,
+                'address' => $posEmployee->store->address,
+            ] : null;
+            $employeeData['pos_access_options'] = ['customer', 'pos'];
+            $userData['pos_employee'] = $employeeData;
+        }
+
+        return $userData;
+    }
+
     public function login(Request $request): JsonResponse
     {
         $request->validate([
@@ -134,6 +156,7 @@ class AuthController extends Controller
             ]);
         }
 
+        /** @var User $user */
         $user = Auth::user();
 
         if (!$user->is_active) {
@@ -142,19 +165,7 @@ class AuthController extends Controller
         }
 
         $token = $user->createToken('beconnect-app')->plainTextToken;
-
-        $userData = $user->load(['province', 'city'])->toArray();
-
-        // Incluir permissões POS para funcionários de loja
-        if (!in_array($user->role, ['store_owner', 'admin'])) {
-            $emp = StoreEmployee::where('user_id', $user->id)
-                ->where('is_active', true)
-                ->select(['id', 'store_id', 'role', 'permissions'])
-                ->first();
-            $userData['pos_employee'] = $emp?->toArray();
-        } else {
-            $userData['pos_employee'] = null;
-        }
+        $userData = $this->buildUserPayload($user);
 
         return response()->json([
             'user'  => $userData,
@@ -172,19 +183,8 @@ class AuthController extends Controller
     {
         $user = $request->user();
         $data = Cache::remember("user_me_{$user->id}", 60, fn() =>
-            $user->load(['province', 'city', 'neighborhood', 'store'])->toArray()
+            $this->buildUserPayload($user)
         );
-
-        // Incluir permissões POS do funcionário (se não for dono/admin)
-        if (!in_array($user->role, ['store_owner', 'admin'])) {
-            $emp = StoreEmployee::where('user_id', $user->id)
-                ->where('is_active', true)
-                ->select(['id', 'store_id', 'role', 'permissions'])
-                ->first();
-            $data['pos_employee'] = $emp?->toArray();
-        } else {
-            $data['pos_employee'] = null;
-        }
 
         return response()->json($data);
     }

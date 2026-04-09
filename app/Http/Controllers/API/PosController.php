@@ -61,12 +61,17 @@ class PosController extends Controller
 
         // Cache por 5 minutos — invalidado ao registar venda/movimento de stock
         $products = Cache::remember("pos_products_{$store->id}", 300, function () use ($store) {
+            $fields = ['id', 'name', 'price', 'cost_price', 'sku', 'barcode', 'images', 'is_weighable', 'weight_unit'];
+            if (Product::hasPosOnlyColumn()) {
+                $fields[] = 'pos_only';
+            }
+
             return $store->products()
                 ->with('stock')
                 ->where('is_active', true)
                 // POS mostra TODOS os produtos activos (incluindo os pos_only)
                 ->orderBy('name')
-                ->get(['id', 'name', 'price', 'cost_price', 'sku', 'barcode', 'images', 'is_weighable', 'weight_unit', 'pos_only'])
+                ->get($fields)
                 ->map(function ($p) {
                     $images = $p->images ?? [];
                     if (is_string($images)) $images = json_decode($images, true) ?? [];
@@ -507,19 +512,23 @@ class PosController extends Controller
         DB::transaction(function () use ($request, $store, &$created, &$map) {
             foreach ($request->products as $pd) {
                 // Evitar duplicados pelo nome + loja
+                $productData = [
+                    'store_id'    => $store->id,
+                    'name'        => $pd['name'],
+                    'slug'        => Str::slug($pd['name']) . '-' . uniqid(),
+                    'price'       => $pd['price'],
+                    'cost_price'  => $pd['cost_price'] ?? 0,
+                    'sku'         => $pd['sku'] ?? null,
+                    'is_weighable'=> $pd['is_weighable'] ?? false,
+                    'weight_unit' => $pd['weight_unit'] ?? 'un',
+                    'is_active'   => true,
+                ];
+                if (Product::hasPosOnlyColumn()) {
+                    $productData['pos_only'] = $pd['pos_only'] ?? false;
+                }
+
                 $product = $store->products()->where('name', $pd['name'])->first()
-                    ?? Product::create([
-                        'store_id'    => $store->id,
-                        'name'        => $pd['name'],
-                        'slug'        => \Illuminate\Support\Str::slug($pd['name']) . '-' . uniqid(),
-                        'price'       => $pd['price'],
-                        'cost_price'  => $pd['cost_price'] ?? 0,
-                        'sku'         => $pd['sku'] ?? null,
-                        'is_weighable'=> $pd['is_weighable'] ?? false,
-                        'weight_unit' => $pd['weight_unit'] ?? 'un',
-                        'is_active'   => true,
-                        'pos_only'    => $pd['pos_only'] ?? false,
-                    ]);
+                    ?? Product::create($productData);
 
                 // Criar stock inicial
                 $stock = \App\Models\ProductStock::firstOrCreate(

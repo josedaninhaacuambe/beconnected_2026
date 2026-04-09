@@ -4,29 +4,48 @@
     <!-- ── ESQUERDA: Produtos ─────────────────────────────────────────────── -->
     <div class="flex-1 flex flex-col overflow-hidden border-r border-gray-200">
       <!-- Barra de pesquisa / scan -->
-      <div class="p-3 border-b border-gray-200 bg-white flex gap-2">
-        <input
-          ref="searchInput"
-          v-model="search"
-          @input="filterProducts"
-          @keydown.enter="onSearchEnter"
-          type="text"
-          :placeholder="scanMode ? '📷 Aguardando leitura do scanner...' : '🔍 Pesquisar produto, SKU ou código de barras...'"
-          class="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-bc-gold"
-        />
-        <!-- Botão adicionar produto offline -->
-        <button v-if="canAddProducts" @click="showAddProduct = true"
-          class="px-3 py-2 rounded-xl border-2 border-dashed border-gray-300 text-gray-400 hover:border-bc-gold hover:text-bc-gold transition text-xs font-bold flex-shrink-0"
-          title="Adicionar produto">
-          ➕
-        </button>
-        <!-- Toggle scan mode -->
-        <button @click="toggleScanMode"
-          class="px-3 py-2 rounded-xl text-xs font-bold border-2 transition flex-shrink-0"
-          :class="scanMode ? 'border-green-500 text-green-600 bg-green-50' : 'border-gray-200 text-gray-400 hover:border-gray-300'"
-          title="Modo scanner">
-          {{ scanMode ? '📷 SCAN ON' : '📷' }}
-        </button>
+      <div class="p-3 border-b border-gray-200 bg-white space-y-3">
+        <div class="flex gap-2 items-start">
+          <input
+            ref="searchInput"
+            v-model="search"
+            @input="filterProducts"
+            @keydown.enter="onSearchEnter"
+            type="text"
+            :placeholder="scanMode ? '📷 Aguardando leitura do scanner...' : '🔍 Pesquisar produto, SKU ou código de barras...'"
+            class="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-bc-gold"
+          />
+          <!-- Botão adicionar produto offline -->
+          <button v-if="canAddProducts" @click="showAddProduct = true"
+            class="px-3 py-2 rounded-xl border-2 border-dashed border-gray-300 text-gray-400 hover:border-bc-gold hover:text-bc-gold transition text-xs font-bold flex-shrink-0"
+            title="Adicionar produto">
+            ➕
+          </button>
+          <!-- Toggle scan mode -->
+          <button @click="toggleScanMode"
+            class="px-3 py-2 rounded-xl text-xs font-bold border-2 transition flex-shrink-0"
+            :class="scanMode ? 'border-green-500 text-green-600 bg-green-50' : 'border-gray-200 text-gray-400 hover:border-gray-300'"
+            title="Modo scanner">
+            {{ scanMode ? '📷 SCAN ON' : '📷' }}
+          </button>
+        </div>
+
+        <div class="flex flex-wrap gap-2 items-center text-xs">
+          <span :class="isOnline ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'" class="px-2 py-1 rounded-full font-semibold">
+            {{ isOnline ? 'Online' : 'Offline' }}
+          </span>
+          <span v-if="pendingProductCount > 0" class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-semibold">
+            {{ pendingProductCount }} produto(s) pendente(s)
+          </span>
+          <button v-if="isOnline && pendingCount > 0"
+            @click="trySyncNow"
+            :disabled="syncing"
+            class="px-2 py-1 rounded-full text-xs font-semibold transition"
+            :class="syncing ? 'bg-gray-200 text-gray-600 cursor-not-allowed' : 'bg-bc-gold text-white hover:bg-orange-500'">
+            {{ syncing ? 'A sincronizar...' : 'Sincronizar agora' }}
+          </button>
+        </div>
+        <div v-if="syncMessage" class="text-[11px] text-gray-600">{{ syncMessage }}</div>
       </div>
 
       <!-- Grid de produtos -->
@@ -439,7 +458,7 @@ import {
 } from '@/composables/useOfflinePos'
 
 const auth = useAuthStore()
-const { isOnline, pendingCount, trySyncNow, refreshPendingCount } = useOfflinePos()
+const { isOnline, pendingCount, pendingProductCount, syncing, syncMessage, trySyncNow, refreshPendingCount } = useOfflinePos()
 
 const canAddProducts = computed(() => auth.hasPosPermission('adicionar_produtos'))
 

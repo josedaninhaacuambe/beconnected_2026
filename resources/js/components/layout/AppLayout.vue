@@ -66,6 +66,7 @@
               <div class="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
                 <RouterLink to="/conta" class="block px-4 py-2 text-sm text-bc-light hover:text-bc-gold hover:bg-orange-50 rounded-t-xl">Minha Conta</RouterLink>
                 <RouterLink to="/conta/pedidos" class="block px-4 py-2 text-sm text-bc-light hover:text-bc-gold hover:bg-orange-50">Pedidos</RouterLink>
+                <RouterLink v-if="authStore.isPosEmployee || authStore.isStoreOwner" to="/pos" class="block px-4 py-2 text-sm text-bc-gold font-semibold hover:bg-orange-50">Acessar POS</RouterLink>
                 <RouterLink v-if="authStore.isStoreOwner" to="/loja" class="block px-4 py-2 text-sm text-bc-gold font-semibold hover:bg-orange-50">Gerir Loja</RouterLink>
                 <button @click="authStore.logout()" class="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 rounded-b-xl">Sair</button>
               </div>

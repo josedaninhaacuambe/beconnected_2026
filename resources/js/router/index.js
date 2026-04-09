@@ -23,6 +23,7 @@ const routes = [
     { path: '/entrar', name: 'login', component: () => import('../views/auth/Login.vue') },
     { path: '/registar', name: 'register', component: () => import('../views/auth/Register.vue') },
     { path: '/auth/google/success', name: 'google-success', component: () => import('../views/auth/Login.vue') },
+    { path: '/escolher-acesso', name: 'pos-access-choice', component: () => import('../views/auth/PosAccessChoice.vue'), meta: { requiresAuth: true } },
 
     // Redireccionamentos de URLs antigas
     { path: '/login', redirect: '/entrar' },

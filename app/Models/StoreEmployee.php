@@ -9,13 +9,10 @@ class StoreEmployee extends Model
 {
     protected $fillable = ['store_id', 'user_id', 'role', 'permissions', 'is_active', 'added_by'];
 
-    protected function casts(): array
-    {
-        return [
-            'permissions' => 'array',
-            'is_active' => 'boolean',
-        ];
-    }
+    protected $casts = [
+        'permissions' => 'array',
+        'is_active' => 'boolean',
+    ];
 
     // Permissões disponíveis no sistema POS
     // fazer_vendas   → acesso ao Terminal de Vendas

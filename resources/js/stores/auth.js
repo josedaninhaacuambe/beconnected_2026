@@ -12,6 +12,7 @@ export const useAuthStore = defineStore('auth', () => {
     const isStoreOwner    = computed(() => user.value?.role === 'store_owner')
     const isAdmin         = computed(() => user.value?.role === 'admin')
     const isFullAdmin     = computed(() => user.value?.role === 'admin' && !user.value?.admin_role)
+    const isPosEmployee   = computed(() => !!user.value?.pos_employee)
     const hasPermission   = (perm) => {
         if (isFullAdmin.value) return true
         return (user.value?.permissions ?? []).includes(perm)
@@ -34,6 +35,8 @@ export const useAuthStore = defineStore('auth', () => {
 
     const hasPosPermission = (perm) => posPermissions.value.includes(perm)
 
+    const posAccessOptions = computed(() => user.value?.pos_access_options ?? [])
+
     // initAuth() é chamado em background — NÃO bloqueia o mount da app
     // Usa dados em cache do localStorage para render imediato,
     // depois actualiza silenciosamente a partir da API
@@ -54,8 +57,7 @@ export const useAuthStore = defineStore('auth', () => {
         const role = userData?.role
         if (role === 'store_owner') return '/loja'
         if (role === 'admin')       return '/admin'
-        // Funcionário de loja → vai para o POS
-        if (userData?.pos_employee) return '/pos'
+        if (userData?.pos_employee) return '/escolher-acesso'
         return '/'
     }
 
@@ -93,8 +95,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     return {
-        user, token, isAuthenticated, isStoreOwner, isAdmin, isFullAdmin,
-        hasPermission, posRole, posPermissions, hasPosPermission,
+        user, token, isAuthenticated, isStoreOwner, isAdmin, isFullAdmin, isPosEmployee,
+        hasPermission, posRole, posPermissions, hasPosPermission, posAccessOptions,
         postLoginRedirect, initAuth, login, register, logout, updateProfile,
     }
 })

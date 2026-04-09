@@ -69,8 +69,10 @@ class ProductSearchService
         }
         // Mostrar apenas produtos com stock > 0 por omissão
         $filters[] = 'stock_quantity > 0';
-        // Excluir produtos apenas disponíveis no POS
-        $filters[] = 'pos_only = false';
+        // Excluir produtos apenas disponíveis no POS, se o campo existir no schema
+        if (Product::hasPosOnlyColumn()) {
+            $filters[] = 'pos_only = false';
+        }
 
         $payload = [
             'q'                 => $q,
@@ -106,7 +108,7 @@ class ProductSearchService
     {
         $query = Product::with(['store.province', 'store.city', 'brand', 'category', 'stock'])
             ->where('is_active', true)
-            ->where(fn($q) => $q->where('pos_only', false)->orWhereNull('pos_only'))
+            ->excludePosOnly()
             ->whereHas('store', fn($q) => $q->where('status', 'active'))
             ->whereHas('store', fn($q) => $q->whereHas('visibilityPurchases', fn($vp) => $vp->where('expires_at', '>', now())));
 
