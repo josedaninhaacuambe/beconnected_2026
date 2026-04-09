@@ -68,6 +68,11 @@ class User extends Authenticatable
         return $this->belongsTo(Neighborhood::class);
     }
 
+    public function store(): HasOne
+    {
+        return $this->hasOne(Store::class);
+    }
+
     public function stores(): HasMany
     {
         return $this->hasMany(Store::class);

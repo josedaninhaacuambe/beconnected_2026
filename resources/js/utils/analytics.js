@@ -7,8 +7,8 @@ export function trackEvent(eventName, payload = {}) {
     }
 
     window.dispatchEvent(new CustomEvent('analytics', { detail }))
-    if (window.console && window.console.info) {
-      window.console.info('[Analytics]', eventName, payload)
+    if (window.console && window.console.debug) {
+      window.console.debug('[Analytics]', eventName, payload)
     }
   }
 }

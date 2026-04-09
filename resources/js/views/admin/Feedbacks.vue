@@ -114,7 +114,7 @@ const typeLabels = {
 async function load() {
   loading.value = true
   try {
-    const { data } = await axios.get('/api/admin/feedbacks', {
+    const { data } = await axios.get('/admin/feedbacks', {
       params: { status: filterStatus.value || undefined, type: filterType.value || undefined }
     })
     feedbacks.value = data.data

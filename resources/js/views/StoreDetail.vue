@@ -139,13 +139,6 @@
       <div class="h-full bg-gradient-to-r from-bc-gold to-bc-orange rounded-full" style="animation: loading-bar 1.5s ease-in-out infinite;"></div>
     </div>
 
-    <style scoped>
-      @keyframes loading-bar {
-        0%   { width: 0%; margin-left: 0%; }
-        50%  { width: 60%; margin-left: 20%; }
-        100% { width: 0%; margin-left: 100%; }
-      }
-    </style>
   </div>
 </template>
 
@@ -208,3 +201,11 @@ onMounted(async () => {
   loading.value = false
 })
 </script>
+
+<style scoped>
+@keyframes loading-bar {
+  0%   { width: 0%; margin-left: 0%; }
+  50%  { width: 60%; margin-left: 20%; }
+  100% { width: 0%; margin-left: 100%; }
+}
+</style>

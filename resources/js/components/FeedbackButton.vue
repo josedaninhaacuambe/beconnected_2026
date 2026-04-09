@@ -128,7 +128,7 @@ async function submit() {
   loading.value = true
   error.value = ''
   try {
-    await axios.post('/api/feedback', form.value)
+    await axios.post('/feedback', form.value)
     sent.value = true
     setTimeout(() => close(), 3000)
   } catch (e) {

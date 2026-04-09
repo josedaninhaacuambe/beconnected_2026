@@ -214,6 +214,16 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import axios from 'axios'
+import { useAuthStore } from '@/stores/auth'
+
+const auth = useAuthStore()
+
+// Para admin: passa store_id como query param (usa a loja que está a gerir)
+// Para store_owner: o backend resolve automaticamente pela sua conta
+function storeParam() {
+  if (auth.isAdmin && auth.user?.store?.id) return { store_id: auth.user.store.id }
+  return {}
+}
 
 const activeTab = ref('file')
 const tabs = [
@@ -302,6 +312,7 @@ async function previewFile() {
   if (!selectedFile.value) return
   const formData = new FormData()
   formData.append('file', selectedFile.value)
+  Object.entries(storeParam()).forEach(([k, v]) => formData.append(k, v))
   const { data } = await axios.post('/store/stock/preview', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   })
@@ -317,6 +328,7 @@ async function importFile() {
     const { data } = await axios.post('/store/stock/import-file', {
       file_path: tempFilePath.value,
       column_mapping: columnMapping,
+      ...storeParam(),
     })
     importResult.value = data.import
     loadHistory()
@@ -333,7 +345,7 @@ async function testApi() {
   const headers = {}
   apiHeaders.value.forEach(h => { if (h.key) headers[h.key] = h.value })
   const { data } = await axios.post('/store/stock/external-apis/test', {
-    ...apiConfig, headers,
+    ...apiConfig, headers, ...storeParam(),
   })
   testResult.value = data
   testingApi.value = false
@@ -342,24 +354,24 @@ async function testApi() {
 async function saveApi() {
   const headers = {}
   apiHeaders.value.forEach(h => { if (h.key) headers[h.key] = h.value })
-  await axios.post('/store/stock/external-apis', { ...apiConfig, headers })
+  await axios.post('/store/stock/external-apis', { ...apiConfig, headers, ...storeParam() })
   alert('API guardada com sucesso!')
   loadSavedApis()
 }
 
 async function syncApi(api) {
-  await axios.post(`/store/stock/external-apis/${api.id}/sync`)
+  await axios.post(`/store/stock/external-apis/${api.id}/sync`, storeParam())
   alert('Sincronização concluída!')
   loadHistory()
 }
 
 async function loadSavedApis() {
-  const { data } = await axios.get('/store/stock/external-apis')
+  const { data } = await axios.get('/store/stock/external-apis', { params: storeParam() })
   savedApis.value = data
 }
 
 async function loadHistory() {
-  const { data } = await axios.get('/store/stock/history')
+  const { data } = await axios.get('/store/stock/history', { params: storeParam() })
   importHistory.value = data.data
 }
 

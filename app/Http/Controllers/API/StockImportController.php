@@ -19,6 +19,27 @@ class StockImportController extends Controller
     public function __construct(private StockImportService $importService) {}
 
     /**
+     * Resolve a loja do utilizador actual.
+     * - store_owner: usa a sua própria loja
+     * - admin: pode passar ?store_id=X ou usa a primeira loja disponível
+     */
+    private function resolveStore(Request $request): Store
+    {
+        $user = $request->user();
+
+        if ($user->role === 'admin') {
+            $storeId = $request->store_id ?? $request->query('store_id');
+            if ($storeId) {
+                return Store::findOrFail($storeId);
+            }
+            // Admin sem store_id — usa a primeira loja activa como fallback
+            return Store::where('status', 'active')->firstOrFail();
+        }
+
+        return Store::where('user_id', $user->id)->firstOrFail();
+    }
+
+    /**
      * Pré-visualizar ficheiro antes de importar (mostra colunas e sugestões)
      */
     public function preview(Request $request): JsonResponse
@@ -43,7 +64,7 @@ class StockImportController extends Controller
      */
     public function importFile(Request $request): JsonResponse
     {
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveStore($request);
 
         $request->validate([
             'file' => 'required_without:file_path|file|mimes:xlsx,xls,csv|max:10240',
@@ -78,7 +99,7 @@ class StockImportController extends Controller
      */
     public function importJson(Request $request): JsonResponse
     {
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveStore($request);
 
         $request->validate([
             'products' => 'required|array|min:1',
@@ -103,7 +124,7 @@ class StockImportController extends Controller
      */
     public function configureExternalApi(Request $request): JsonResponse
     {
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveStore($request);
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -189,7 +210,7 @@ class StockImportController extends Controller
      */
     public function syncNow(Request $request, ExternalStockApi $api): JsonResponse
     {
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveStore($request);
 
         if ($api->store_id !== $store->id) {
             return response()->json(['message' => 'Não autorizado.'], 403);
@@ -241,7 +262,7 @@ class StockImportController extends Controller
      */
     public function listExternalApis(Request $request): JsonResponse
     {
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveStore($request);
         return response()->json(ExternalStockApi::where('store_id', $store->id)->get());
     }
 
@@ -250,7 +271,7 @@ class StockImportController extends Controller
      */
     public function importHistory(Request $request): JsonResponse
     {
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveStore($request);
 
         $imports = StockImport::where('store_id', $store->id)
             ->latest()
@@ -264,7 +285,7 @@ class StockImportController extends Controller
      */
     public function addEmployee(Request $request): JsonResponse
     {
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveStore($request);
 
         $validated = $request->validate([
             'name'  => 'required|string|max:100',
@@ -317,7 +338,7 @@ class StockImportController extends Controller
 
     public function listEmployees(Request $request): JsonResponse
     {
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveStore($request);
 
         return response()->json(
             \App\Models\StoreEmployee::with('user')
@@ -329,7 +350,7 @@ class StockImportController extends Controller
 
     public function removeEmployee(Request $request, \App\Models\StoreEmployee $employee): JsonResponse
     {
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveStore($request);
 
         if ($employee->store_id !== $store->id) {
             return response()->json(['message' => 'Não autorizado.'], 403);

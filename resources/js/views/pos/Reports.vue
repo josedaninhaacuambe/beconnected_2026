@@ -379,7 +379,7 @@ function quickRange(range) {
 async function load() {
   loading.value = true
   try {
-    const { data: d } = await axios.get('/api/pos/reports', { params: { from: from.value, to: to.value } })
+    const { data: d } = await axios.get('/pos/reports', { params: { from: from.value, to: to.value } })
     data.value    = d
     periods.value = d.periods ?? {}
   } finally {
@@ -394,7 +394,7 @@ async function loadPeriods() {
     // Usa o endpoint de relatório com range do ano completo para obter os periods
     const today = new Date().toISOString().slice(0, 10)
     const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10)
-    const { data: d } = await axios.get('/api/pos/reports', { params: { from: yearStart, to: today } })
+    const { data: d } = await axios.get('/pos/reports', { params: { from: yearStart, to: today } })
     periods.value = d.periods ?? {}
     // Também carrega o relatório do mês corrente por defeito
     data.value = d

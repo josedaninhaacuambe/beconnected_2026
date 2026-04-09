@@ -255,89 +255,60 @@
       </div>
 
       <!-- ══════════════════════════════════════════
-           3. RESUMO POR LOJA
+           3. RESUMO COMPACTO + PAGAMENTO
       ══════════════════════════════════════════ -->
       <div class="card-african p-5">
-        <h2 class="text-bc-gold font-semibold mb-4 flex items-center gap-2">🧾 Resumo do Pedido</h2>
+        <h2 class="text-bc-gold font-semibold mb-4 flex items-center gap-2">🧾 Resumo &amp; Pagamento</h2>
 
-        <div class="space-y-4">
-          <!-- Por loja -->
-          <div v-for="group in cartStore.itemsByStore" :key="group.store.id">
-            <p class="text-bc-light text-xs font-semibold mb-2 flex items-center gap-1">
-              🏪 {{ group.store.name }}
-            </p>
-            <div class="bg-bc-surface-2 rounded-xl p-3 space-y-1.5 text-xs">
-              <div v-for="item in group.items" :key="item.id" class="flex justify-between text-bc-muted">
-                <span class="line-clamp-1 flex-1 mr-2">{{ item.product.name }} × {{ item.quantity }}</span>
-                <span>{{ formatMZN(item.subtotal) }}</span>
-              </div>
-              <div class="border-t border-bc-gold/10 pt-1.5 flex justify-between text-bc-muted">
-                <span>Subtotal loja</span>
-                <span>{{ formatMZN(group.store_subtotal) }}</span>
-              </div>
-              <div class="flex justify-between text-orange-400">
-                <span>Comissão plataforma ({{ storeTotalQty(group) }} × 0,50)</span>
-                <span>− {{ formatMZN(storeTotalQty(group) * 0.50) }}</span>
-              </div>
-              <div class="flex justify-between text-green-400 font-semibold">
-                <span>Loja recebe</span>
-                <span>{{ formatMZN(group.store_subtotal - storeTotalQty(group) * 0.50) }}</span>
-              </div>
-            </div>
+        <!-- Lojas e totais compactos -->
+        <div class="space-y-1.5 text-sm mb-4">
+          <div v-for="group in cartStore.itemsByStore" :key="group.store.id"
+            class="flex justify-between text-bc-muted">
+            <span class="flex items-center gap-1">🏪 {{ group.store.name }} <span class="text-xs">({{ storeTotalQty(group) }} item{{ storeTotalQty(group) !== 1 ? 's' : '' }})</span></span>
+            <span>{{ formatMZN(group.store_subtotal) }}</span>
           </div>
-
-          <!-- Totais -->
-          <div class="border-t border-bc-gold/20 pt-3 space-y-2 text-sm">
-            <div class="flex justify-between text-bc-muted">
-              <span>Subtotal produtos</span>
-              <span>{{ formatMZN(cartStore.subtotal) }}</span>
-            </div>
-            <div class="flex justify-between text-bc-muted">
-              <span>Entrega</span>
-              <span :class="estimate ? 'text-bc-light' : 'text-bc-muted italic text-xs'">
-                {{ estimate ? formatMZN(estimate.fee) : 'A calcular' }}
-              </span>
-            </div>
-            <div class="flex justify-between font-bold text-base border-t border-bc-gold/20 pt-2">
-              <span class="text-bc-light">Total a pagar</span>
-              <span class="text-bc-gold">{{ formatMZN(cartStore.subtotal + (estimate?.fee ?? 0)) }}</span>
-            </div>
+          <div class="flex justify-between text-bc-muted pt-1 border-t border-bc-gold/10">
+            <span>Entrega</span>
+            <span :class="estimate ? 'text-bc-light' : 'italic text-xs'">
+              {{ estimate ? formatMZN(estimate.fee) : 'A calcular acima' }}
+            </span>
+          </div>
+          <div class="flex justify-between font-bold text-base border-t border-bc-gold/20 pt-2">
+            <span class="text-bc-light">Total a pagar</span>
+            <span class="text-bc-gold">{{ formatMZN(cartStore.subtotal + (estimate?.fee ?? 0)) }}</span>
           </div>
         </div>
-      </div>
 
-      <!-- ══════════════════════════════════════════
-           4. MÉTODO DE PAGAMENTO
-      ══════════════════════════════════════════ -->
-      <div class="card-african p-5">
-        <h2 class="text-bc-gold font-semibold mb-4 flex items-center gap-2">💳 Pagamento</h2>
-        <div class="space-y-3">
-
-          <label v-for="method in paymentMethods" :key="method.value"
-            class="flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition"
-            :class="form.payment_method === method.value ? 'border-bc-gold bg-bc-gold/10' : 'border-bc-gold/20 hover:border-bc-gold/40'"
+        <!-- Método de pagamento -->
+        <p class="text-bc-muted text-xs mb-2 font-medium">💳 Método de pagamento</p>
+        <div class="flex gap-2 mb-3 flex-wrap">
+          <button
+            v-for="method in paymentMethods" :key="method.value"
+            type="button"
+            @click="form.payment_method = method.value"
+            :class="[
+              'flex-1 min-w-[90px] py-2.5 px-2 rounded-xl text-xs font-bold border transition text-center',
+              form.payment_method === method.value
+                ? 'bg-bc-gold text-bc-dark border-bc-gold'
+                : 'border-bc-gold/30 text-bc-muted hover:border-bc-gold hover:text-bc-light'
+            ]"
           >
-            <input type="radio" v-model="form.payment_method" :value="method.value" class="hidden" />
-            <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 text-white font-bold text-sm" :class="method.color">
-              {{ method.icon }}
-            </div>
-            <div class="flex-1">
-              <p class="text-bc-light font-medium text-sm">{{ method.label }}</p>
-              <p class="text-bc-muted text-xs">{{ method.desc }}</p>
-            </div>
-            <div v-if="form.payment_method === method.value" class="w-4 h-4 rounded-full bg-bc-gold flex-shrink-0"></div>
-          </label>
+            <div class="text-base mb-0.5">{{ method.icon }}</div>
+            <div>{{ method.label }}</div>
+          </button>
+        </div>
 
-          <div v-if="form.payment_method === 'emola' || form.payment_method === 'mpesa'">
-            <label class="text-bc-muted text-xs mb-1 block">Número {{ form.payment_method === 'emola' ? 'eMola (Movitel)' : 'M-Pesa (Vodacom)' }} *</label>
-            <input
-              v-model="form.payment_phone"
-              type="tel"
-              placeholder="84/86 XXX XXXX ou 87/82 XXX XXXX"
-              class="input-african"
-              required
-            />
-          </div>
+        <div v-if="form.payment_method === 'emola' || form.payment_method === 'mpesa'">
+          <label class="text-bc-muted text-xs mb-1 block">
+            Número {{ form.payment_method === 'emola' ? 'eMola (Movitel)' : 'M-Pesa (Vodacom)' }} *
+          </label>
+          <input
+            v-model="form.payment_phone"
+            type="tel"
+            placeholder="84/86 XXX XXXX ou 87/82 XXX XXXX"
+            class="input-african"
+            required
+          />
         </div>
       </div>
 
@@ -521,9 +492,9 @@ const form = reactive({
 })
 
 const paymentMethods = [
-  { value: 'mpesa',            label: 'M-Pesa',            desc: 'Vodacom — pagamento imediato',   icon: 'M', color: 'bg-red-700' },
-  { value: 'emola',            label: 'eMola',             desc: 'Movitel — pagamento imediato',   icon: 'E', color: 'bg-red-600' },
-  { value: 'cash_on_delivery', label: 'Pagamento na entrega', desc: 'Paga em dinheiro ao estafeta', icon: '💵', color: 'bg-green-700' },
+  { value: 'mpesa',            label: 'M-Pesa',      icon: '📱' },
+  { value: 'emola',            label: 'eMola',       icon: '📲' },
+  { value: 'cash_on_delivery', label: 'Na Entrega',  icon: '💵' },
 ]
 
 const canSubmit = computed(() => {

@@ -25,8 +25,6 @@ axios.interceptors.request.use((config) => {
     if (token) {
         config.headers.Authorization = `Bearer ${token}`
     }
-    // Track request start for diagnostics
-    trackEvent('axios_request', { method: config.method, url: config.url })
     return config
 })
 

@@ -138,7 +138,7 @@ export async function syncPendingProducts() {
   const pending = await getPendingProducts()
   if (!pending.length) return { created: 0 }
 
-  const { data } = await axios.post('/api/pos/sync-products', { products: pending })
+  const { data } = await axios.post('/pos/sync-products', { products: pending })
 
   // Actualizar a cache local com os IDs do servidor
   if (data.id_map) {
@@ -168,7 +168,7 @@ export async function syncPendingSales() {
   const pending = await getPendingSales()
   if (!pending.length) return { synced: 0 }
 
-  const { data } = await axios.post('/api/pos/sync', { sales: pending })
+  const { data } = await axios.post('/pos/sync', { sales: pending })
 
   for (const sale of pending) {
     await deletePendingSale(sale.local_id)

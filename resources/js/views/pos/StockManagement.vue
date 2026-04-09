@@ -29,32 +29,32 @@
 
         <div v-else class="space-y-2">
           <div v-for="p in filteredProducts" :key="p.id"
-            class="bg-white rounded-xl border border-gray-100 px-4 py-3 flex items-center gap-3">
-            <!-- Info produto -->
-            <div class="flex-1 min-w-0">
-              <p class="font-semibold text-sm text-gray-800 truncate">{{ p.name }}</p>
-              <p class="text-xs text-gray-400">{{ p.sku || 'Sem SKU' }}</p>
+            class="bg-white rounded-xl border border-gray-100 px-4 py-3 flex flex-col gap-2">
+            <!-- Linha superior: info + stock -->
+            <div class="flex items-center gap-3">
+              <div class="flex-1 min-w-0">
+                <p class="font-semibold text-sm text-gray-800 truncate">{{ p.name }}</p>
+                <p class="text-xs text-gray-400">{{ p.sku || 'Sem SKU' }}</p>
+              </div>
+              <div class="text-center flex-shrink-0">
+                <p class="text-lg font-black" :class="stockColor(p.stock?.quantity)">{{ p.stock?.quantity ?? 0 }}</p>
+                <p class="text-[10px] text-gray-400">em stock</p>
+              </div>
             </div>
 
-            <!-- Stock atual -->
-            <div class="text-center w-16">
-              <p class="text-lg font-black" :class="stockColor(p.stock?.quantity)">{{ p.stock?.quantity ?? 0 }}</p>
-              <p class="text-[10px] text-gray-400">em stock</p>
-            </div>
-
-            <!-- Botões movimento -->
+            <!-- Linha inferior: botões de movimento -->
             <div class="flex gap-2">
               <button @click="openMovement(p, 'in')"
-                class="px-3 py-1.5 rounded-lg text-xs font-bold text-white transition hover:opacity-90"
+                class="flex-1 py-1.5 rounded-lg text-xs font-bold text-white transition hover:opacity-90"
                 style="background:#22C55E;">
                 + Entrada
               </button>
               <button @click="openMovement(p, 'out')"
-                class="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition">
+                class="flex-1 py-1.5 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition">
                 − Saída
               </button>
               <button @click="openMovement(p, 'adjustment')"
-                class="px-3 py-1.5 rounded-lg text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition">
+                class="flex-1 py-1.5 rounded-lg text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition">
                 ± Ajuste
               </button>
             </div>
@@ -176,7 +176,7 @@ async function confirmMovement() {
   movModal.value.loading = true
   movModal.value.error = ''
   try {
-    await axios.post('/api/pos/stock/movement', {
+    await axios.post('/pos/stock/movement', {
       product_id: movModal.value.product.id,
       type:       movModal.value.type,
       quantity:   movModal.value.quantity,
@@ -201,7 +201,7 @@ async function confirmMovement() {
 async function loadHistory() {
   loadingHistory.value = true
   try {
-    const { data } = await axios.get('/api/pos/stock/history')
+    const { data } = await axios.get('/pos/stock/history')
     movements.value = data.data
   } finally {
     loadingHistory.value = false
@@ -209,7 +209,7 @@ async function loadHistory() {
 }
 
 onMounted(async () => {
-  const { data } = await axios.get('/api/pos/stock')
+  const { data } = await axios.get('/pos/stock')
   products.value = data
   loading.value = false
   loadHistory()
