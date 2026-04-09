@@ -808,8 +808,16 @@ async function loadProducts() {
   if (isOnline.value) {
     try {
       const { data } = await axios.get('/pos/products')
-      allProducts.value = data
-      await cacheProducts(data)
+      // Só substitui se a API devolveu produtos — evita apagar o cache
+      // quando o servidor ainda não terminou a migration ou tem cache vazio
+      if (data && data.length > 0) {
+        allProducts.value = data
+        await cacheProducts(data)
+      } else if (!cached.length) {
+        // Sem cache local e API retornou vazio → loja sem produtos
+        allProducts.value = []
+      }
+      // Se API retornou vazio mas temos cache: mantemos o cache
     } catch {
       // Mantém cache se servidor falhar
     }

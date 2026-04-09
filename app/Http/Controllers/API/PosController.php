@@ -553,6 +553,8 @@ class PosController extends Controller
             }
         });
 
+        Cache::forget("pos_products_{$store->id}");
+
         return response()->json(['created' => $created, 'id_map' => $map]);
     }
 
