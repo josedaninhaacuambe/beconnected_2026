@@ -53,6 +53,7 @@ class ProductController extends Controller
     {
         $query = Product::with(['store.province', 'store.city', 'brand', 'category', 'stock'])
             ->where('is_active', true)
+            ->where(fn($q) => $q->where('pos_only', false)->orWhereNull('pos_only'))
             ->whereHas('store', fn($q) => $q->where('status', 'active'))
             ->whereHas('store', fn($q) => $q->whereHas('visibilityPurchases', fn($vp) => $vp->where('expires_at', '>', now())));
 
@@ -198,7 +199,8 @@ class ProductController extends Controller
     {
         $query = Product::with(['brand', 'category', 'stock'])
             ->where('store_id', $store->id)
-            ->where('is_active', true);
+            ->where('is_active', true)
+            ->where(fn($q) => $q->where('pos_only', false)->orWhereNull('pos_only'));
 
         // Aplicar limitações se não houver visibilidade activa
         // MySQL 8.0 não suporta LIMIT em subquery com IN — buscar IDs primeiro
@@ -207,6 +209,7 @@ class ProductController extends Controller
             $limitedIds = DB::table('products')
                 ->where('store_id', $store->id)
                 ->where('is_active', true)
+                ->where(fn($q) => $q->where('pos_only', false)->orWhereNull('pos_only'))
                 ->whereNull('deleted_at')
                 ->orderByDesc('is_featured')
                 ->orderByDesc('created_at')
@@ -293,6 +296,7 @@ class ProductController extends Controller
             ->where('store_id', $store->id)
             ->where('slug', $productSlug)
             ->where('is_active', true)
+            ->where(fn($q) => $q->where('pos_only', false)->orWhereNull('pos_only'))
             ->firstOrFail();
 
         return response()->json($product);
@@ -334,6 +338,7 @@ class ProductController extends Controller
             'unit' => 'nullable|string|max:50',
             'images' => 'nullable|array',
             'images.*' => 'image|max:2048',
+            'pos_only' => 'nullable|boolean',
         ]);
 
         $images = [];
@@ -359,6 +364,7 @@ class ProductController extends Controller
             'store_id' => $store->id,
             'slug' => Str::slug($validated['name']) . '-' . Str::random(6),
             'images' => $images,
+            'pos_only' => (bool) ($validated['pos_only'] ?? false),
         ]);
 
         ProductStock::create([
@@ -394,6 +400,7 @@ class ProductController extends Controller
             'images'              => 'nullable|array',
             'images.*'            => 'image|max:2048',
             'minimum_stock'       => 'nullable|integer|min:0',
+            'pos_only'            => 'nullable|boolean',
         ]);
 
         // Handle image uploads
@@ -499,6 +506,7 @@ class ProductController extends Controller
         $products = Cache::remember('products_flash', 60, fn () =>
             Product::with(['store', 'stock'])
                 ->where('is_active', true)
+                ->where(fn($q) => $q->where('pos_only', false)->orWhereNull('pos_only'))
                 ->whereNotNull('flash_price')
                 ->whereNotNull('flash_until')
                 ->where('flash_until', '>', now())
@@ -516,6 +524,7 @@ class ProductController extends Controller
         $products = Cache::remember('products_trending', 600, fn () =>
             Product::with(['store', 'stock'])
                 ->where('is_active', true)
+                ->where(fn($q) => $q->where('pos_only', false)->orWhereNull('pos_only'))
                 ->whereHas('store', fn($q) => $q->where('status', 'active'))
                 ->orderByDesc('total_sold')
                 ->take(8)
@@ -531,6 +540,7 @@ class ProductController extends Controller
         $products = Cache::remember('products_discounts', 300, fn () =>
             Product::with(['store', 'stock'])
                 ->where('is_active', true)
+                ->where(fn($q) => $q->where('pos_only', false)->orWhereNull('pos_only'))
                 ->whereNotNull('compare_price')
                 ->whereColumn('compare_price', '>', 'price')
                 ->whereHas('store', fn($q) => $q->where('status', 'active'))

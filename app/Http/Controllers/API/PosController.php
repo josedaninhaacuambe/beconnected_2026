@@ -64,8 +64,9 @@ class PosController extends Controller
             return $store->products()
                 ->with('stock')
                 ->where('is_active', true)
+                // POS mostra TODOS os produtos activos (incluindo os pos_only)
                 ->orderBy('name')
-                ->get(['id', 'name', 'price', 'cost_price', 'sku', 'barcode', 'images', 'is_weighable', 'weight_unit'])
+                ->get(['id', 'name', 'price', 'cost_price', 'sku', 'barcode', 'images', 'is_weighable', 'weight_unit', 'pos_only'])
                 ->map(function ($p) {
                     $images = $p->images ?? [];
                     if (is_string($images)) $images = json_decode($images, true) ?? [];
@@ -488,15 +489,16 @@ class PosController extends Controller
         $store = $this->resolveStore($request);
 
         $request->validate([
-            'products'              => 'required|array|min:1',
-            'products.*.local_id'   => 'required|string',
-            'products.*.name'       => 'required|string|max:255',
-            'products.*.price'      => 'required|numeric|min:0',
-            'products.*.cost_price' => 'nullable|numeric|min:0',
-            'products.*.sku'        => 'nullable|string|max:100',
-            'products.*.is_weighable'=> 'nullable|boolean',
-            'products.*.weight_unit'=> 'nullable|in:g,kg,l,ml,un',
+            'products'                => 'required|array|min:1',
+            'products.*.local_id'     => 'required|string',
+            'products.*.name'         => 'required|string|max:255',
+            'products.*.price'        => 'required|numeric|min:0',
+            'products.*.cost_price'   => 'nullable|numeric|min:0',
+            'products.*.sku'          => 'nullable|string|max:100',
+            'products.*.is_weighable' => 'nullable|boolean',
+            'products.*.weight_unit'  => 'nullable|in:g,kg,l,ml,un',
             'products.*.initial_stock'=> 'nullable|integer|min:0',
+            'products.*.pos_only'     => 'nullable|boolean',
         ]);
 
         $created = 0;
@@ -516,7 +518,7 @@ class PosController extends Controller
                         'is_weighable'=> $pd['is_weighable'] ?? false,
                         'weight_unit' => $pd['weight_unit'] ?? 'un',
                         'is_active'   => true,
-                        'role'        => 'store_owner',
+                        'pos_only'    => $pd['pos_only'] ?? false,
                     ]);
 
                 // Criar stock inicial

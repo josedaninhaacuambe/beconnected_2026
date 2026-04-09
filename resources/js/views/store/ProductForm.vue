@@ -121,8 +121,9 @@
         <input v-model="form.barcode" type="text" placeholder="Código de barras / EAN" class="input-african" />
       </div>
 
-      <!-- Estado -->
-      <div class="card-african p-4">
+      <!-- Estado e visibilidade -->
+      <div class="card-african p-4 space-y-3">
+        <!-- Activo/Inactivo -->
         <label class="flex items-center gap-3 cursor-pointer">
           <div class="relative" @click="form.is_active = !form.is_active">
             <div :class="['w-10 h-6 rounded-full transition', form.is_active ? 'bg-bc-gold' : 'bg-bc-surface-2']"></div>
@@ -131,6 +132,22 @@
           <div>
             <span class="text-bc-light text-sm font-medium">{{ form.is_active ? 'Produto activo' : 'Produto inactivo' }}</span>
             <p class="text-bc-muted text-xs">{{ form.is_active ? 'Visível na loja' : 'Oculto aos clientes' }}</p>
+          </div>
+        </label>
+
+        <!-- POS Only -->
+        <label class="flex items-center gap-3 cursor-pointer border-t border-bc-gold/10 pt-3">
+          <div class="relative" @click="form.pos_only = !form.pos_only">
+            <div :class="['w-10 h-6 rounded-full transition', form.pos_only ? 'bg-blue-500' : 'bg-bc-surface-2']"></div>
+            <div :class="['absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform', form.pos_only ? 'translate-x-5' : 'translate-x-1']"></div>
+          </div>
+          <div>
+            <span class="text-bc-light text-sm font-medium flex items-center gap-1.5">
+              🏪 {{ form.pos_only ? 'Apenas no POS' : 'Visível na loja online' }}
+            </span>
+            <p class="text-bc-muted text-xs">
+              {{ form.pos_only ? 'Não aparece na loja online — só disponível no terminal POS' : 'Aparece normalmente na loja online e no POS' }}
+            </p>
           </div>
         </label>
       </div>
@@ -177,6 +194,7 @@ const form = reactive({
   product_category_id: '', store_section_id: '',
   brand_id: '', model: '', barcode: '',
   is_active: true,
+  pos_only: false,
 })
 
 function onImagesChange(e) {
@@ -230,6 +248,7 @@ async function submit() {
       if (form[k] !== null && form[k] !== undefined && form[k] !== '') fd.append(k, form[k])
     })
     fd.append('is_active', form.is_active ? '1' : '0')
+    fd.append('pos_only', form.pos_only ? '1' : '0')
     imageFiles.value.forEach(f => fd.append('images[]', f))
 
     if (isEditing.value) {
@@ -276,6 +295,7 @@ onMounted(async () => {
         store_section_id: p.store_section_id ?? '',
         brand_id: p.brand_id ?? '', model: p.model ?? '', barcode: p.barcode ?? '',
         is_active: p.is_active ?? true,
+        pos_only:  p.pos_only  ?? false,
       })
       if (p.images?.length) {
         existingImages.value = p.images

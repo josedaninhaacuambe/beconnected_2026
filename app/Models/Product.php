@@ -17,7 +17,7 @@ class Product extends Model
         'store_id', 'product_category_id', 'store_section_id', 'brand_id', 'name', 'slug',
         'description', 'price', 'cost_price', 'compare_price', 'flash_price', 'flash_until',
         'sku', 'barcode', 'model', 'images', 'attributes', 'is_active', 'is_featured',
-        'total_sold', 'is_weighable', 'weight_unit',
+        'total_sold', 'is_weighable', 'weight_unit', 'pos_only',
     ];
 
     protected function casts(): array
@@ -33,6 +33,7 @@ class Product extends Model
             'attributes' => 'array',
             'is_active' => 'boolean',
             'is_featured' => 'boolean',
+            'pos_only' => 'boolean',
             'rating' => 'float',
             'total_sold' => 'integer',
         ];

@@ -293,6 +293,18 @@
                 <p class="text-xs text-gray-400">Cereais, legumes, frutas...</p>
               </div>
             </div>
+            <!-- Apenas no POS -->
+            <div class="flex items-center gap-3 p-3 rounded-xl border border-gray-200">
+              <button type="button" @click="newProduct.pos_only = !newProduct.pos_only"
+                class="w-10 h-6 rounded-full transition flex items-center px-1"
+                :class="newProduct.pos_only ? 'bg-blue-500 justify-end' : 'bg-gray-200 justify-start'">
+                <span class="w-4 h-4 bg-white rounded-full shadow"></span>
+              </button>
+              <div>
+                <p class="text-sm font-semibold text-gray-700">🏪 Apenas no POS</p>
+                <p class="text-xs text-gray-400">Não aparece na loja online</p>
+              </div>
+            </div>
             <div v-if="newProduct.is_weighable">
               <label class="text-xs font-semibold text-gray-500">Unidade de medida</label>
               <div class="flex gap-2 mt-1">
@@ -527,7 +539,7 @@ const showAddProduct  = ref(false)
 const addProductError = ref('')
 const newProduct = reactive({
   name: '', price: '', cost_price: '', sku: '',
-  initial_stock: 0, is_weighable: false, weight_unit: 'kg',
+  initial_stock: 0, is_weighable: false, weight_unit: 'kg', pos_only: false,
 })
 
 async function saveNewProduct() {
@@ -542,29 +554,29 @@ async function saveNewProduct() {
     initial_stock: parseInt(newProduct.initial_stock) || 0,
     is_weighable: newProduct.is_weighable,
     weight_unit:  newProduct.weight_unit,
+    pos_only:     newProduct.pos_only,
   }
 
   try {
     if (isOnline.value) {
-      const { data } = await axios.post('/pos/sync-products', { products: [prod] })
-      // Recarregar produtos após criação online
+      await axios.post('/pos/sync-products', { products: [prod] })
       await loadProducts()
     } else {
       await savePendingProduct(prod)
       await refreshPendingCount()
-      // Adicionar ao cache local com ID temporário negativo
       const tempId = -Date.now()
       const localProd = {
         id: tempId, local_id: localId,
         name: prod.name, price: prod.price, cost_price: prod.cost_price,
         sku: prod.sku, is_weighable: prod.is_weighable, weight_unit: prod.weight_unit,
+        pos_only: prod.pos_only,
         image: null, stock: { quantity: prod.initial_stock },
       }
       allProducts.value.push(localProd)
       filterProducts()
     }
     showAddProduct.value = false
-    Object.assign(newProduct, { name:'', price:'', cost_price:'', sku:'', initial_stock:0, is_weighable:false, weight_unit:'kg' })
+    Object.assign(newProduct, { name:'', price:'', cost_price:'', sku:'', initial_stock:0, is_weighable:false, weight_unit:'kg', pos_only:false })
   } catch (e) {
     addProductError.value = e.response?.data?.message ?? 'Erro ao criar produto.'
   }
