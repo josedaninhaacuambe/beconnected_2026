@@ -136,17 +136,6 @@ class AuthController extends Controller
 
         $user = Auth::user();
 
-        // Conta não verificada — reenviar OTP e pedir verificação
-        if (!$user->email_verified) {
-            $this->sendOtp($user);
-            Auth::logout();
-            return response()->json([
-                'requires_otp' => true,
-                'email'        => $user->email,
-                'message'      => 'Verifica o teu email. Código reenviado.',
-            ], 403);
-        }
-
         if (!$user->is_active) {
             Auth::logout();
             return response()->json(['message' => 'Conta suspensa. Contacte o suporte.'], 403);
@@ -154,8 +143,21 @@ class AuthController extends Controller
 
         $token = $user->createToken('beconnect-app')->plainTextToken;
 
+        $userData = $user->load(['province', 'city'])->toArray();
+
+        // Incluir permissões POS para funcionários de loja
+        if (!in_array($user->role, ['store_owner', 'admin'])) {
+            $emp = StoreEmployee::where('user_id', $user->id)
+                ->where('is_active', true)
+                ->select(['id', 'store_id', 'role', 'permissions'])
+                ->first();
+            $userData['pos_employee'] = $emp?->toArray();
+        } else {
+            $userData['pos_employee'] = null;
+        }
+
         return response()->json([
-            'user'  => $user->load(['province', 'city']),
+            'user'  => $userData,
             'token' => $token,
         ]);
     }

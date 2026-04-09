@@ -70,8 +70,10 @@
         </div>
         <div v-else class="space-y-3">
           <div v-for="emp in employees" :key="emp.id"
-            class="p-3 rounded-xl bg-gray-50 border border-gray-100 space-y-2">
-            <div class="flex items-center gap-3">
+            class="rounded-xl border border-gray-100 overflow-hidden">
+
+            <!-- Cabeçalho do funcionário -->
+            <div class="flex items-center gap-3 p-3 bg-gray-50">
               <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-black text-base flex-shrink-0"
                 style="background:#1C2B3C;">
                 {{ (emp.user?.name ?? 'F')[0].toUpperCase() }}
@@ -84,19 +86,83 @@
                 {{ roleLabel(emp.role) }}
               </span>
               <span class="w-2 h-2 rounded-full flex-shrink-0" :class="emp.is_active ? 'bg-green-400' : 'bg-gray-300'"></span>
+              <!-- Botão editar -->
+              <button @click="toggleEdit(emp)"
+                class="text-xs px-2 py-1 rounded-lg border transition flex-shrink-0"
+                :class="editingId === emp.id
+                  ? 'border-bc-gold text-bc-gold bg-bc-gold/5'
+                  : 'border-gray-200 text-gray-500 hover:border-gray-300'">
+                {{ editingId === emp.id ? 'Fechar' : '✏️ Editar' }}
+              </button>
               <button @click="removeEmployee(emp)"
                 class="text-red-400 hover:text-red-600 transition text-xs px-2 py-1 rounded-lg hover:bg-red-50 flex-shrink-0">
                 Remover
               </button>
             </div>
-            <!-- Permissões actuais -->
-            <div class="flex flex-wrap gap-1 pl-1">
+
+            <!-- Permissões actuais (collapsed) -->
+            <div v-if="editingId !== emp.id" class="flex flex-wrap gap-1 px-3 py-2 border-t border-gray-100">
               <span v-for="perm in (emp.permissions ?? [])" :key="perm"
                 class="text-[10px] font-semibold px-2 py-0.5 rounded-full"
                 :class="permBadge(perm)">
                 {{ permLabel(perm) }}
               </span>
               <span v-if="!(emp.permissions ?? []).length" class="text-xs text-gray-400 italic">Sem permissões definidas</span>
+            </div>
+
+            <!-- Painel de edição (expanded) -->
+            <div v-else class="p-4 border-t border-gray-100 bg-white space-y-4">
+              <!-- Selecção de role -->
+              <div>
+                <label class="text-xs font-semibold text-gray-500 block mb-2">Perfil base</label>
+                <div class="grid grid-cols-2 gap-2">
+                  <button v-for="r in roles" :key="r.value" type="button"
+                    @click="setEditRole(emp.id, r.value)"
+                    class="p-2.5 rounded-xl border-2 text-left transition"
+                    :class="editForms[emp.id]?.role === r.value ? 'border-bc-gold bg-bc-gold/5' : 'border-gray-200 hover:border-gray-300'">
+                    <p class="font-bold text-xs" :class="editForms[emp.id]?.role === r.value ? 'text-bc-gold' : 'text-gray-700'">
+                      {{ r.icon }} {{ r.label }}
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Permissões granulares -->
+              <div>
+                <label class="text-xs font-semibold text-gray-500 block mb-2">Permissões de acesso</label>
+                <div class="space-y-2 border border-gray-100 rounded-xl p-3 bg-gray-50">
+                  <div v-for="p in availablePermissions" :key="p.key"
+                    class="flex items-start gap-3 cursor-pointer group"
+                    @click="toggleEditPermission(emp.id, p.key)">
+                    <div class="mt-0.5 w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition"
+                      :class="editForms[emp.id]?.permissions?.includes(p.key)
+                        ? 'border-bc-gold bg-bc-gold'
+                        : 'border-gray-300 group-hover:border-bc-gold'">
+                      <svg v-if="editForms[emp.id]?.permissions?.includes(p.key)" class="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                      </svg>
+                    </div>
+                    <div class="flex-1">
+                      <p class="text-xs font-semibold text-gray-800">{{ p.icon }} {{ p.label }}</p>
+                      <p class="text-[11px] text-gray-400">{{ p.desc }}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="editErrors[emp.id]" class="text-red-500 text-xs">{{ editErrors[emp.id] }}</div>
+              <div class="flex gap-2">
+                <button @click="toggleEdit(emp)"
+                  class="flex-1 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50">
+                  Cancelar
+                </button>
+                <button @click="saveEdit(emp)"
+                  :disabled="savingId === emp.id"
+                  class="flex-1 py-2 rounded-xl text-white font-bold text-xs transition disabled:opacity-50"
+                  style="background:#F07820;">
+                  {{ savingId === emp.id ? 'A guardar...' : '✓ Guardar Permissões' }}
+                </button>
+              </div>
             </div>
           </div>
           <p v-if="!employees.length" class="text-center py-8 text-gray-400">Sem funcionários adicionados.</p>
@@ -146,6 +212,58 @@ const addError   = ref('')
 const addSuccess = ref('')
 
 const form = reactive({ email: '', role: '', permissions: [] })
+
+// ── Edição de funcionários existentes ──────────────────────────────────────
+const editingId  = ref(null)   // ID do funcionário a editar
+const editForms  = reactive({}) // { [emp.id]: { role, permissions } }
+const editErrors = reactive({})
+const savingId   = ref(null)
+
+function toggleEdit(emp) {
+  if (editingId.value === emp.id) {
+    editingId.value = null
+    return
+  }
+  editingId.value = emp.id
+  editForms[emp.id] = {
+    role:        emp.role,
+    permissions: [...(emp.permissions ?? defaultPerms[emp.role] ?? [])],
+  }
+  editErrors[emp.id] = ''
+}
+
+function setEditRole(empId, role) {
+  editForms[empId].role        = role
+  editForms[empId].permissions = [...(defaultPerms[role] ?? [])]
+}
+
+function toggleEditPermission(empId, key) {
+  const perms = editForms[empId].permissions
+  const idx   = perms.indexOf(key)
+  if (idx >= 0) perms.splice(idx, 1)
+  else perms.push(key)
+}
+
+async function saveEdit(emp) {
+  editErrors[emp.id] = ''
+  savingId.value = emp.id
+  try {
+    const { data } = await axios.put(`/pos/employees/${emp.id}`, {
+      role:        editForms[emp.id].role,
+      permissions: editForms[emp.id].permissions,
+    })
+    // Actualizar localmente
+    const idx = employees.value.findIndex(e => e.id === emp.id)
+    if (idx >= 0) {
+      employees.value[idx] = { ...employees.value[idx], ...data.employee }
+    }
+    editingId.value = null
+  } catch (e) {
+    editErrors[emp.id] = e.response?.data?.message ?? 'Erro ao guardar.'
+  } finally {
+    savingId.value = null
+  }
+}
 
 const roles = [
   { value: 'cashier',      icon: '🛒', label: 'Vendedor',       desc: 'Apenas vendas no terminal POS' },
@@ -227,7 +345,7 @@ async function addEmployee() {
   addSuccess.value = ''
   addLoading.value = true
   try {
-    await axios.post('/api/pos/employees', {
+    await axios.post('/pos/employees', {
       email: form.email,
       role:  form.role,
       permissions: form.permissions,
@@ -246,14 +364,14 @@ async function addEmployee() {
 
 async function removeEmployee(emp) {
   if (!confirm(`Remover ${emp.user?.name} da equipa?`)) return
-  await axios.delete(`/api/pos/employees/${emp.id}`)
+  await axios.delete(`/pos/employees/${emp.id}`)
   await loadEmployees()
 }
 
 async function loadEmployees() {
   loading.value = true
   try {
-    const { data } = await axios.get('/api/pos/employees')
+    const { data } = await axios.get('/pos/employees')
     employees.value = data
   } finally {
     loading.value = false

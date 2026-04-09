@@ -18,14 +18,13 @@ use Illuminate\Support\Str;
 
 class PosController extends Controller
 {
-    // Middleware: verifica se o utilizador pertence à loja (owner ou employee activo)
+    // Resolve a loja do utilizador (dono ou funcionário activo)
     private function resolveStore(Request $request)
     {
         $user  = $request->user();
         $store = $user->store; // store_owner
 
         if (!$store) {
-            // pode ser funcionário
             $emp = StoreEmployee::where('user_id', $user->id)
                 ->where('is_active', true)
                 ->with('store')
@@ -37,28 +36,44 @@ class PosController extends Controller
         return $store;
     }
 
+    // Verifica se o utilizador tem uma permissão POS específica
+    // Donos e admins têm sempre acesso total
+    private function requirePosPermission(Request $request, string $permission): void
+    {
+        $user = $request->user();
+        if (in_array($user->role, ['store_owner', 'admin'])) return;
+
+        $emp = StoreEmployee::where('user_id', $user->id)
+            ->where('is_active', true)
+            ->first();
+
+        abort_if(!$emp, 403, 'Sem acesso ao POS.');
+
+        $permissions = $emp->permissions ?? StoreEmployee::defaultPermissions($emp->role);
+        abort_unless(in_array($permission, $permissions), 403, "Sem permissão: {$permission}.");
+    }
+
     // ─── Produtos para o terminal POS ─────────────────────────────────────────
     public function products(Request $request): JsonResponse
     {
+        $this->requirePosPermission($request, 'fazer_vendas');
         $store = $this->resolveStore($request);
 
-        $products = $store->products()
-            ->with('stock')
-            ->where('is_active', true)
-            ->when($request->search, fn($q) => $q->where(function ($q2) use ($request) {
-                $q2->where('name', 'like', '%' . $request->search . '%')
-                   ->orWhere('sku', 'like', '%' . $request->search . '%')
-                   ->orWhere('barcode', 'like', '%' . $request->search . '%');
-            }))
-            ->orderBy('name')
-            ->get(['id', 'name', 'price', 'cost_price', 'sku', 'barcode', 'images', 'is_weighable', 'weight_unit'])
-            ->map(function ($p) {
-                $images = $p->images ?? [];
-                if (is_string($images)) $images = json_decode($images, true) ?? [];
-                $p->image = count($images) > 0 ? $images[0] : null;
-                unset($p->images);
-                return $p;
-            });
+        // Cache por 5 minutos — invalidado ao registar venda/movimento de stock
+        $products = Cache::remember("pos_products_{$store->id}", 300, function () use ($store) {
+            return $store->products()
+                ->with('stock')
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name', 'price', 'cost_price', 'sku', 'barcode', 'images', 'is_weighable', 'weight_unit'])
+                ->map(function ($p) {
+                    $images = $p->images ?? [];
+                    if (is_string($images)) $images = json_decode($images, true) ?? [];
+                    $p->image = count($images) > 0 ? $images[0] : null;
+                    unset($p->images);
+                    return $p;
+                });
+        });
 
         return response()->json($products);
     }
@@ -66,6 +81,7 @@ class PosController extends Controller
     // ─── Registar venda (single ou batch sync offline) ─────────────────────────
     public function sync(Request $request): JsonResponse
     {
+        $this->requirePosPermission($request, 'fazer_vendas');
         $store = $this->resolveStore($request);
 
         $request->validate([
@@ -166,6 +182,7 @@ class PosController extends Controller
         if (!empty($productIdsToInvalidate)) {
             Cache::forget('products_flash');
             Cache::forget('products_trending');
+            Cache::forget("pos_products_{$store->id}");
         }
 
         return response()->json(['synced' => $created, 'skipped' => $skipped]);
@@ -174,6 +191,7 @@ class PosController extends Controller
     // ─── Movimento de stock (entrada / saída / ajuste) ─────────────────────────
     public function stockMovement(Request $request): JsonResponse
     {
+        $this->requirePosPermission($request, 'gerir_stock');
         $store = $this->resolveStore($request);
 
         $validated = $request->validate([
@@ -207,12 +225,15 @@ class PosController extends Controller
             'user_id'         => $request->user()->id,
         ]);
 
+        Cache::forget("pos_products_{$store->id}");
+
         return response()->json(['message' => 'Movimento registado.', 'stock' => $stock->fresh()]);
     }
 
     // ─── Relatórios unificados POS + Online ───────────────────────────────────
     public function reports(Request $request): JsonResponse
     {
+        $this->requirePosPermission($request, 'ver_relatorios');
         $store = $this->resolveStore($request);
 
         $from = $request->from ? now()->parse($request->from)->startOfDay() : now()->startOfMonth();
@@ -379,6 +400,7 @@ class PosController extends Controller
     // ─── Listar stock da loja ──────────────────────────────────────────────────
     public function stock(Request $request): JsonResponse
     {
+        $this->requirePosPermission($request, 'gerir_stock');
         $store = $this->resolveStore($request);
 
         $products = $store->products()
@@ -393,6 +415,7 @@ class PosController extends Controller
     // ─── Histórico de movimentos ───────────────────────────────────────────────
     public function stockHistory(Request $request): JsonResponse
     {
+        $this->requirePosPermission($request, 'gerir_stock');
         $store = $this->resolveStore($request);
 
         $movements = StockMovement::whereIn('product_id', $store->products()->pluck('id'))
@@ -461,6 +484,7 @@ class PosController extends Controller
     // ─── Sincronizar produtos criados offline ──────────────────────────────────
     public function syncProducts(Request $request): JsonResponse
     {
+        $this->requirePosPermission($request, 'adicionar_produtos');
         $store = $this->resolveStore($request);
 
         $request->validate([
@@ -527,6 +551,33 @@ class PosController extends Controller
         abort_if(!$store || $employee->store_id !== $store->id, 403);
 
         $employee->update(['is_active' => false]);
+        Cache::forget("user_me_{$employee->user_id}");
         return response()->json(['message' => 'Acesso removido.']);
+    }
+
+    // ─── Actualizar role e permissões de um funcionário ───────────────────────
+    public function updateEmployee(Request $request, StoreEmployee $employee): JsonResponse
+    {
+        $store = $request->user()->store;
+        abort_if(!$store || $employee->store_id !== $store->id, 403, 'Sem permissão.');
+
+        $validated = $request->validate([
+            'role'          => 'required|in:manager,cashier,stock_keeper,viewer',
+            'permissions'   => 'required|array',
+            'permissions.*' => 'in:fazer_vendas,gerir_stock,ver_relatorios,adicionar_produtos',
+            // gerir_equipa é gerido pelo dono, não atribuível a funcionários
+        ]);
+
+        $employee->update([
+            'role'        => $validated['role'],
+            'permissions' => $validated['permissions'],
+        ]);
+
+        Cache::forget("user_me_{$employee->user_id}");
+
+        return response()->json([
+            'message'  => 'Permissões actualizadas.',
+            'employee' => $employee->fresh()->load('user:id,name,email'),
+        ]);
     }
 }

@@ -171,7 +171,7 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
     // =============================================
     // ROTAS DO DONO DE LOJA (e funcionários)
     // =============================================
-    Route::middleware('role:store_owner')->prefix('store')->group(function () {
+    Route::middleware('role:store_owner,admin')->prefix('store')->group(function () {
         Route::get('/', [StoreController::class, 'myStore']);
         Route::post('/', [StoreController::class, 'store']);
         Route::post('update', [StoreController::class, 'updateMyStore']);
@@ -275,9 +275,10 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
         Route::get('stock/history',   [PosController::class, 'stockHistory']);
         Route::get('reports',         [PosController::class, 'reports']);
         Route::post('sync-products',  [PosController::class, 'syncProducts']);
-        Route::get('employees',       [PosController::class, 'employees']);
-        Route::post('employees',      [PosController::class, 'addEmployee']);
-        Route::delete('employees/{employee}', [PosController::class, 'removeEmployee']);
+        Route::get('employees',                    [PosController::class, 'employees']);
+        Route::post('employees',                   [PosController::class, 'addEmployee']);
+        Route::put('employees/{employee}',         [PosController::class, 'updateEmployee']);
+        Route::delete('employees/{employee}',      [PosController::class, 'removeEmployee']);
     });
 
     // =============================================

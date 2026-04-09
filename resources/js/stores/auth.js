@@ -49,6 +49,16 @@ export const useAuthStore = defineStore('auth', () => {
         }
     }
 
+    // Retorna o path para onde o utilizador deve ir após login
+    function postLoginRedirect(userData) {
+        const role = userData?.role
+        if (role === 'store_owner') return '/loja'
+        if (role === 'admin')       return '/admin'
+        // Funcionário de loja → vai para o POS
+        if (userData?.pos_employee) return '/pos'
+        return '/'
+    }
+
     async function login(email, password) {
         const { data } = await axios.post('/auth/login', { email, password })
         token.value = data.token
@@ -85,6 +95,6 @@ export const useAuthStore = defineStore('auth', () => {
     return {
         user, token, isAuthenticated, isStoreOwner, isAdmin, isFullAdmin,
         hasPermission, posRole, posPermissions, hasPosPermission,
-        initAuth, login, register, logout, updateProfile,
+        postLoginRedirect, initAuth, login, register, logout, updateProfile,
     }
 })

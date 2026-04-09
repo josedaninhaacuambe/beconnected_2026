@@ -141,10 +141,37 @@
           </button>
         </div>
 
+        <!-- Valor entregue + troco (apenas dinheiro) -->
+        <div v-if="payMethod === 'cash'" class="space-y-1.5">
+          <div class="flex items-center gap-2">
+            <label class="text-xs text-gray-500 flex-shrink-0">Entregue</label>
+            <input v-model.number="amountPaid" type="number" min="0" step="0.01"
+              :placeholder="fmt(total)"
+              class="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:border-bc-gold text-right" />
+          </div>
+          <!-- Atalhos rápidos -->
+          <div class="flex gap-1">
+            <button v-for="hint in changeHints" :key="hint"
+              @click="amountPaid = hint"
+              class="flex-1 py-1 rounded-lg text-[10px] font-bold bg-gray-100 text-gray-600 hover:bg-bc-gold/10 hover:text-bc-gold transition">
+              {{ fmt(hint) }}
+            </button>
+          </div>
+          <div v-if="amountPaid >= total && amountPaid > 0"
+            class="flex justify-between items-center bg-green-50 border border-green-200 rounded-xl px-3 py-2">
+            <span class="text-xs font-semibold text-green-700">💰 Troco</span>
+            <span class="text-base font-black text-green-700">{{ fmt(change) }}</span>
+          </div>
+          <div v-else-if="amountPaid > 0 && amountPaid < total"
+            class="text-xs text-red-500 text-center font-semibold">
+            Faltam {{ fmt(total - amountPaid) }}
+          </div>
+        </div>
+
         <input v-model="customerName" type="text" placeholder="Nome do cliente (opcional)"
           class="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-bc-gold" />
 
-        <button @click="finalizeSale" :disabled="!cart.length || processing"
+        <button @click="finalizeSale" :disabled="!cart.length || processing || (payMethod === 'cash' && amountPaid > 0 && amountPaid < total)"
           class="w-full py-3 rounded-xl font-black text-white text-sm transition hover:opacity-90 active:scale-95 disabled:opacity-40"
           style="background:#F07820;">
           {{ processing ? 'A registar...' : isOnline ? '✅ Confirmar Venda' : '📥 Guardar Offline' }}
@@ -291,29 +318,98 @@
       </div>
     </Teleport>
 
-    <!-- ══ MODAL: Recibo de sucesso ══════════════════════════════════════ -->
+    <!-- ══ MODAL: Recibo ══════════════════════════════════════════════════ -->
     <Teleport to="body">
-      <div v-if="receipt" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,0.6)">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
-          <div class="text-5xl mb-3">✅</div>
-          <h3 class="font-black text-xl text-gray-800 mb-1">Venda Registada!</h3>
-          <p class="text-sm text-gray-500 mb-4">
-            {{ isOnline ? 'Sincronizada com o servidor.' : '⚠️ Guardada localmente. Será sincronizada quando online.' }}
-          </p>
-          <div class="bg-gray-50 rounded-xl p-3 text-left text-sm space-y-1 mb-4">
-            <div class="flex justify-between"><span class="text-gray-500">Subtotal</span><span>{{ fmt(receipt.subtotal) }}</span></div>
-            <div v-if="receipt.discount > 0" class="flex justify-between"><span class="text-gray-500">Desconto</span><span class="text-red-500">- {{ fmt(receipt.discount) }}</span></div>
-            <div v-if="receipt.apply_vat" class="flex justify-between text-green-600"><span>IVA {{ receipt.vat_rate }}%</span><span>+ {{ fmt(receipt.vat_amount) }}</span></div>
-            <div class="flex justify-between font-bold border-t border-gray-200 pt-1 mt-1">
-              <span>TOTAL</span><span style="color:#F07820;">{{ fmt(receipt.total) }}</span>
-            </div>
-            <div class="flex justify-between"><span class="text-gray-500">Pagamento</span><span class="font-semibold">{{ receipt.payment_method }}</span></div>
-            <div v-if="receipt.customer_name" class="flex justify-between"><span class="text-gray-500">Cliente</span><span>{{ receipt.customer_name }}</span></div>
-            <div class="flex justify-between"><span class="text-gray-500">Hora</span><span>{{ formatTime(receipt.sale_at) }}</span></div>
+      <div v-if="receipt" class="fixed inset-0 z-50 flex items-center justify-center p-2" style="background:rgba(0,0,0,0.7)">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xs flex flex-col" style="max-height:95vh;">
+          <!-- Cabeçalho modal -->
+          <div class="px-4 pt-4 pb-2 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+            <span class="text-sm font-bold text-gray-700">✅ Venda Registada</span>
+            <span class="text-xs text-gray-400">{{ isOnline ? 'Sincronizada' : '⚠️ Offline' }}</span>
           </div>
-          <div class="flex gap-3">
-            <button @click="printReceipt" class="flex-1 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">🖨️ Imprimir</button>
-            <button @click="newSale" class="flex-1 py-2 rounded-xl text-white font-bold text-sm transition" style="background:#F07820;">Nova Venda</button>
+
+          <!-- Área de impressão térmica -->
+          <div class="flex-1 overflow-y-auto">
+            <div id="pos-receipt" class="p-4" style="font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.5;">
+              <!-- Cabeçalho -->
+              <div style="text-align:center; margin-bottom:8px;">
+                <div style="font-size:16px; font-weight:900; letter-spacing:2px;">BECONNECT</div>
+                <div style="font-size:10px; color:#666;">{{ auth.user?.store?.name ?? 'Loja' }}</div>
+                <div style="font-size:10px; color:#666;">{{ formatDateTime(receipt.sale_at) }}</div>
+                <div style="font-size:10px; color:#666;">{{ receipt.local_id }}</div>
+              </div>
+
+              <div style="border-top:1px dashed #ccc; margin:6px 0;"></div>
+
+              <!-- Itens -->
+              <div v-for="item in receipt.items" :key="item._key ?? item.product_name" style="margin-bottom:4px;">
+                <div style="font-weight:700; font-size:11px;">{{ item.product_name }}</div>
+                <div style="display:flex; justify-content:space-between; color:#444; font-size:11px;">
+                  <span v-if="item.weight_amount">
+                    {{ item.weight_amount }}{{ item.weight_unit }} × {{ fmtN(item.unit_price) }}
+                  </span>
+                  <span v-else>
+                    {{ item.quantity }} × {{ fmtN(item.unit_price) }}
+                  </span>
+                  <span style="font-weight:700;">{{ fmtN(item.subtotal) }}</span>
+                </div>
+              </div>
+
+              <div style="border-top:1px dashed #ccc; margin:6px 0;"></div>
+
+              <!-- Totais -->
+              <div style="display:flex; justify-content:space-between; font-size:11px;">
+                <span>Subtotal</span><span>{{ fmtN(receipt.subtotal) }}</span>
+              </div>
+              <div v-if="receipt.discount > 0" style="display:flex; justify-content:space-between; font-size:11px; color:#d00;">
+                <span>Desconto</span><span>- {{ fmtN(receipt.discount) }}</span>
+              </div>
+              <div v-if="receipt.apply_vat" style="display:flex; justify-content:space-between; font-size:11px; color:#080;">
+                <span>IVA ({{ receipt.vat_rate }}%)</span><span>+ {{ fmtN(receipt.vat_amount) }}</span>
+              </div>
+
+              <div style="border-top:2px solid #000; margin:6px 0;"></div>
+
+              <div style="display:flex; justify-content:space-between; font-size:14px; font-weight:900;">
+                <span>TOTAL</span><span>{{ fmtN(receipt.total) }}</span>
+              </div>
+
+              <div style="border-top:1px dashed #ccc; margin:6px 0;"></div>
+
+              <!-- Pagamento -->
+              <div style="display:flex; justify-content:space-between; font-size:11px;">
+                <span>Forma de pagamento</span>
+                <span style="font-weight:700; text-transform:uppercase;">{{ receipt.payment_method }}</span>
+              </div>
+              <div v-if="receipt.amount_paid > 0" style="display:flex; justify-content:space-between; font-size:11px;">
+                <span>Valor entregue</span><span>{{ fmtN(receipt.amount_paid) }}</span>
+              </div>
+              <div v-if="receipt.change > 0" style="display:flex; justify-content:space-between; font-size:13px; font-weight:900; color:#080;">
+                <span>TROCO</span><span>{{ fmtN(receipt.change) }}</span>
+              </div>
+
+              <div v-if="receipt.customer_name" style="margin-top:4px; font-size:11px;">
+                Cliente: <strong>{{ receipt.customer_name }}</strong>
+              </div>
+
+              <div v-if="receipt.apply_vat" style="margin-top:6px; font-size:10px; color:#666; border-top:1px dashed #ccc; padding-top:4px;">
+                Base tributável: {{ fmtN(receipt.total - receipt.vat_amount) }}
+                · IVA {{ receipt.vat_rate }}%: {{ fmtN(receipt.vat_amount) }}
+              </div>
+
+              <div style="border-top:1px dashed #ccc; margin:8px 0;"></div>
+
+              <div style="text-align:center; font-size:10px; color:#666;">
+                <div>Obrigado pela sua compra!</div>
+                <div>beconnect.co.mz</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Botões -->
+          <div class="flex gap-2 p-3 border-t border-gray-100 flex-shrink-0">
+            <button @click="printReceipt" class="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">🖨️ Imprimir</button>
+            <button @click="newSale" class="flex-1 py-2.5 rounded-xl text-white font-bold text-sm transition" style="background:#F07820;">Nova Venda</button>
           </div>
         </div>
       </div>
@@ -322,7 +418,7 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -450,7 +546,7 @@ async function saveNewProduct() {
 
   try {
     if (isOnline.value) {
-      const { data } = await axios.post('/api/pos/sync-products', { products: [prod] })
+      const { data } = await axios.post('/pos/sync-products', { products: [prod] })
       // Recarregar produtos após criação online
       await loadProducts()
     } else {
@@ -481,16 +577,39 @@ const payMethods = [
   { value: 'emola', icon: '📲', label: 'eMola' },
 ]
 
+const amountPaid = ref(0)
 const subtotal  = computed(() => cart.value.reduce((s, i) => s + i.subtotal, 0))
 const afterDisc = computed(() => Math.max(0, subtotal.value - (discount.value || 0)))
 const vatAmount = computed(() => applyVat.value
   ? parseFloat((afterDisc.value - afterDisc.value / (1 + vatRate.value / 100)).toFixed(2))
   : 0
 )
-const total = computed(() => afterDisc.value)
+const total  = computed(() => afterDisc.value)
+const change = computed(() => payMethod.value === 'cash' && amountPaid.value > total.value
+  ? parseFloat((amountPaid.value - total.value).toFixed(2))
+  : 0
+)
 
-function fmt(v) {
-  return new Intl.NumberFormat('pt-MZ', { style: 'currency', currency: 'MZN' }).format(v ?? 0)
+// Atalhos de valor: arredondar para cima nos múltiplos comuns
+const changeHints = computed(() => {
+  const t = total.value
+  const hints = new Set()
+  ;[50, 100, 200, 500, 1000].forEach(v => { if (v >= t) hints.add(v) })
+  // Arredondamento imediato acima (5, 10, 20, 50...)
+  const rounds = [5, 10, 20, 50, 100, 200, 500, 1000]
+  for (const r of rounds) {
+    const up = Math.ceil(t / r) * r
+    if (up >= t && up <= t * 2) hints.add(up)
+  }
+  return [...hints].sort((a, b) => a - b).slice(0, 4)
+})
+
+const _fmt  = new Intl.NumberFormat('pt-MZ', { style: 'currency', currency: 'MZN' })
+const _fmtN = new Intl.NumberFormat('pt-MZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+function fmt(v)  { return _fmt.format(v ?? 0) }
+function fmtN(v) { return _fmtN.format(v ?? 0) + ' MZN' }
+function formatDateTime(iso) {
+  return new Date(iso).toLocaleString('pt-MZ', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })
 }
 
 function filterProducts() {
@@ -543,6 +662,7 @@ function clearCart() {
   cart.value = []
   discount.value = 0
   customerName.value = ''
+  amountPaid.value = 0
 }
 
 function generateLocalId() {
@@ -561,6 +681,8 @@ async function finalizeSale() {
     vat_rate:       vatRate.value,
     vat_amount:     vatAmount.value,
     total:          total.value,
+    amount_paid:    payMethod.value === 'cash' && amountPaid.value >= total.value ? amountPaid.value : total.value,
+    change:         change.value,
     payment_method: payMethod.value,
     customer_name:  customerName.value || null,
     sale_at:        new Date().toISOString(),
@@ -577,9 +699,12 @@ async function finalizeSale() {
     })),
   }
 
+  // Snapshot dos items antes de limpar o carrinho
+  const soldItems = cart.value.map(i => ({ product_id: i.product_id, quantity: i.quantity, weight_amount: i.weight_amount }))
+
   try {
     if (isOnline.value) {
-      await axios.post('/api/pos/sync', { sales: [sale] })
+      await axios.post('/pos/sync', { sales: [sale] })
     } else {
       await savePendingSale(sale)
       pendingCount.value++
@@ -594,12 +719,21 @@ async function finalizeSale() {
     clearCart()
   } finally {
     processing.value = false
+    // Decrementar stock local (evita reload completo)
+    for (const item of soldItems) {
+      if (!item.weight_amount) {
+        const prod = allProducts.value.find(p => p.id === item.product_id)
+        if (prod?.stock) prod.stock.quantity = Math.max(0, (prod.stock.quantity ?? 0) - item.quantity)
+      }
+    }
+    filtered.value = [...allProducts.value]
+    // Actualizar cache com novo stock
+    cacheProducts(allProducts.value)
   }
 }
 
 function newSale() {
   receipt.value = null
-  loadProducts()
   if (isOnline.value) trySyncNow()
   if (scanMode.value && searchInput.value) searchInput.value.focus()
 }
@@ -608,36 +742,62 @@ function formatTime(iso) {
   return new Date(iso).toLocaleTimeString('pt-MZ', { hour: '2-digit', minute: '2-digit' })
 }
 
-function printReceipt() { window.print() }
+function printReceipt() {
+  const el = document.getElementById('pos-receipt')
+  if (!el) return
+  const html = el.innerHTML
+  const win = window.open('', '_blank', 'width=400,height=600')
+  win.document.write(`
+    <!DOCTYPE html><html><head>
+    <meta charset="utf-8">
+    <title>Recibo</title>
+    <style>
+      body { margin:0; padding:4mm; font-family:'Courier New',monospace; font-size:12px; line-height:1.5; color:black; width:80mm; }
+      @media print { body { width:80mm; margin:0; padding:4mm; } }
+    </style>
+    </head><body>${html}</body></html>
+  `)
+  win.document.close()
+  win.focus()
+  setTimeout(() => { win.print(); win.close() }, 300)
+}
 
 async function loadProducts() {
   loadingProducts.value = true
-  try {
-    if (isOnline.value) {
-      const { data } = await axios.get('/api/pos/products')
-      allProducts.value = data
-      await cacheProducts(data)
-    } else {
-      allProducts.value = await getCachedProducts()
-    }
-    // Adicionar produtos offline pendentes ao grid
-    const pending = await getPendingProducts()
-    for (const p of pending) {
-      if (!allProducts.value.find(x => x.local_id === p.local_id)) {
-        allProducts.value.push({
-          id: -Date.now(), local_id: p.local_id, name: p.name, price: p.price,
-          cost_price: p.cost_price, sku: p.sku, is_weighable: p.is_weighable,
-          weight_unit: p.weight_unit, image: null,
-          stock: { quantity: p.initial_stock ?? 0 },
-        })
-      }
-    }
-  } catch {
-    allProducts.value = await getCachedProducts()
-  } finally {
-    filtered.value = allProducts.value
+
+  // 1. Mostrar cache imediatamente (sem esperar servidor)
+  const cached = await getCachedProducts()
+  if (cached.length) {
+    allProducts.value = cached
+    filtered.value = cached
     loadingProducts.value = false
   }
+
+  // 2. Actualizar do servidor em background (ou primeiro load se sem cache)
+  if (isOnline.value) {
+    try {
+      const { data } = await axios.get('/pos/products')
+      allProducts.value = data
+      await cacheProducts(data)
+    } catch {
+      // Mantém cache se servidor falhar
+    }
+  }
+
+  // 3. Adicionar produtos offline pendentes ao grid
+  const pending = await getPendingProducts()
+  for (const p of pending) {
+    if (!allProducts.value.find(x => x.local_id === p.local_id)) {
+      allProducts.value.push({
+        id: -Date.now(), local_id: p.local_id, name: p.name, price: p.price,
+        cost_price: p.cost_price, sku: p.sku, is_weighable: p.is_weighable,
+        weight_unit: p.weight_unit, image: null,
+        stock: { quantity: p.initial_stock ?? 0 },
+      })
+    }
+  }
+  filtered.value = allProducts.value
+  loadingProducts.value = false
 }
 
 onMounted(async () => {
@@ -650,10 +810,31 @@ onMounted(async () => {
   }
   if (scanMode.value && searchInput.value) searchInput.value.focus()
 })
+
+// Recarregar produtos quando ficar online (sincroniza stock online → POS)
+watch(isOnline, (online) => {
+  if (online) loadProducts()
+})
 </script>
 
 <style>
 @media print {
-  body > *:not(#pos-receipt) { display: none !important; }
+  /* Esconder tudo excepto o recibo */
+  body > * { display: none !important; }
+  body > div#pos-receipt,
+  #pos-receipt { display: block !important; }
+
+  /* Formato térmico 80mm */
+  body { margin: 0; padding: 0; background: white; }
+  #pos-receipt {
+    width: 80mm;
+    max-width: 80mm;
+    margin: 0 auto;
+    padding: 4mm;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    line-height: 1.4;
+    color: black;
+  }
 }
 </style>

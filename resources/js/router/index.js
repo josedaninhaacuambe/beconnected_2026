@@ -89,13 +89,21 @@ const routes = [
     {
         path: '/pos',
         component: () => import('../components/layout/PosLayout.vue'),
-        meta: { requiresAuth: true },
-        redirect: '/pos/terminal',
+        meta: { requiresAuth: true, requiresPosAccess: true },
+        redirect: () => {
+            // Redireciona para o primeiro tab disponível (auth já importado no topo)
+            const auth = useAuthStore()
+            if (auth.hasPosPermission('fazer_vendas'))   return '/pos/terminal'
+            if (auth.hasPosPermission('gerir_stock'))    return '/pos/stock'
+            if (auth.hasPosPermission('ver_relatorios')) return '/pos/reports'
+            if (auth.hasPosPermission('gerir_equipa'))   return '/pos/employees'
+            return '/acesso-negado'
+        },
         children: [
-            { path: 'terminal',  name: 'pos-terminal',   component: () => import('../views/pos/Terminal.vue') },
-            { path: 'stock',     name: 'pos-stock',      component: () => import('../views/pos/StockManagement.vue') },
-            { path: 'reports',   name: 'pos-reports',    component: () => import('../views/pos/Reports.vue') },
-            { path: 'employees', name: 'pos-employees',  component: () => import('../views/pos/Employees.vue') },
+            { path: 'terminal',  name: 'pos-terminal',   component: () => import('../views/pos/Terminal.vue'),        meta: { posPermission: 'fazer_vendas'   } },
+            { path: 'stock',     name: 'pos-stock',      component: () => import('../views/pos/StockManagement.vue'), meta: { posPermission: 'gerir_stock'    } },
+            { path: 'reports',   name: 'pos-reports',    component: () => import('../views/pos/Reports.vue'),         meta: { posPermission: 'ver_relatorios' } },
+            { path: 'employees', name: 'pos-employees',  component: () => import('../views/pos/Employees.vue'),       meta: { posPermission: 'gerir_equipa'   } },
         ],
     },
 
@@ -120,16 +128,38 @@ router.beforeEach((to, _from, next) => {
         return next({ name: 'login', query: { redirect: to.fullPath } })
     }
 
-    // Rota requer um role específico
+    // Rota requer um role específico (ex: /loja → store_owner)
     if (to.meta.role) {
         const userRole = authStore.user?.role
 
-        // Não tem o role necessário
         if (userRole !== to.meta.role) {
-            // Admin pode ver qualquer área (bypass)
             if (userRole === 'admin') return next()
-
             return next({ name: 'forbidden', query: { role: to.meta.role } })
+        }
+    }
+
+    // Rota requer acesso ao POS — utilizador deve pertencer a uma loja
+    if (to.meta.requiresPosAccess) {
+        const userRole = authStore.user?.role
+        const hasPosAccess = userRole === 'store_owner' || userRole === 'admin' || !!authStore.user?.pos_employee
+        if (!hasPosAccess) {
+            return next({ name: 'forbidden' })
+        }
+    }
+
+    // Rota POS requer permissão específica
+    if (to.meta.posPermission) {
+        const userRole = authStore.user?.role
+        // Dono e admin têm sempre acesso
+        if (userRole !== 'store_owner' && userRole !== 'admin') {
+            if (!authStore.hasPosPermission(to.meta.posPermission)) {
+                // Redireciona para o primeiro tab disponível
+                if (authStore.hasPosPermission('fazer_vendas'))   return next('/pos/terminal')
+                if (authStore.hasPosPermission('gerir_stock'))    return next('/pos/stock')
+                if (authStore.hasPosPermission('ver_relatorios')) return next('/pos/reports')
+                if (authStore.hasPosPermission('gerir_equipa'))   return next('/pos/employees')
+                return next({ name: 'forbidden' })
+            }
         }
     }
 
