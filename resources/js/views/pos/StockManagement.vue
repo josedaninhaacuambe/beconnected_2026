@@ -1,11 +1,25 @@
 <template>
   <div class="flex flex-col h-full overflow-hidden">
+
+    <!-- Aviso offline -->
+    <div v-if="!isOnline" class="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-amber-800 bg-amber-50 border-b border-amber-200">
+      <span>📵</span>
+      <span>Modo offline — os movimentos serão sincronizados quando houver ligação</span>
+      <span v-if="pendingMovementsCount > 0" class="ml-auto bg-amber-200 text-amber-800 rounded-full px-2 py-0.5">
+        {{ pendingMovementsCount }} pendente{{ pendingMovementsCount > 1 ? 's' : '' }}
+      </span>
+    </div>
+
     <!-- Tabs -->
     <div class="flex border-b border-gray-200 bg-white px-4">
       <button v-for="t in tabs" :key="t.key" @click="activeTab = t.key"
         class="px-4 py-3 text-sm font-semibold border-b-2 transition"
         :class="activeTab === t.key ? 'border-bc-gold text-bc-gold' : 'border-transparent text-gray-500 hover:text-gray-700'">
         {{ t.icon }} {{ t.label }}
+        <span v-if="t.key === 'history' && pendingMovementsCount > 0"
+          class="ml-1 bg-amber-400 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+          {{ pendingMovementsCount }}
+        </span>
       </button>
     </div>
 
@@ -33,7 +47,10 @@
             <!-- Linha superior: info + stock -->
             <div class="flex items-center gap-3">
               <div class="flex-1 min-w-0">
-                <p class="font-semibold text-sm text-gray-800 truncate">{{ p.name }}</p>
+                <div class="flex items-center gap-2">
+                  <p class="font-semibold text-sm text-gray-800 truncate">{{ p.name }}</p>
+                  <span v-if="p._offline" class="text-[9px] bg-amber-100 text-amber-700 font-bold px-1.5 py-0.5 rounded-full flex-shrink-0">offline</span>
+                </div>
                 <p class="text-xs text-gray-400">{{ p.sku || 'Sem SKU' }}</p>
               </div>
               <div class="text-center flex-shrink-0">
@@ -50,7 +67,8 @@
                 + Entrada
               </button>
               <button @click="openMovement(p, 'out')"
-                class="flex-1 py-1.5 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition">
+                :disabled="(p.stock?.quantity ?? 0) <= 0"
+                class="flex-1 py-1.5 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition disabled:opacity-40">
                 − Saída
               </button>
               <button @click="openMovement(p, 'adjustment')"
@@ -59,15 +77,45 @@
               </button>
             </div>
           </div>
-          <p v-if="!filteredProducts.length" class="text-center py-12 text-gray-400">Nenhum produto encontrado.</p>
+          <p v-if="!filteredProducts.length && !loading" class="text-center py-12 text-gray-400">Nenhum produto encontrado.</p>
         </div>
       </div>
 
       <!-- ── Tab: Histórico ───────────────────────────────────────────── -->
       <div v-if="activeTab === 'history'">
-        <div v-if="loadingHistory" class="space-y-2">
+
+        <!-- Movimentos pendentes offline -->
+        <div v-if="pendingMovements.length" class="mb-4">
+          <p class="text-xs font-bold text-amber-700 mb-2">📵 Pendentes (offline)</p>
+          <div class="space-y-1.5">
+            <div v-for="m in pendingMovements" :key="m.local_id"
+              class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-3">
+              <span class="text-lg">{{ m.type === 'in' ? '📥' : m.type === 'out' ? '📤' : '⚖️' }}</span>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-semibold text-gray-800 truncate">{{ m.product_name }}</p>
+                <p class="text-xs text-amber-600">{{ m.reason || 'Sem motivo' }} · pendente sync</p>
+              </div>
+              <div class="text-right">
+                <p class="font-bold text-sm" :class="m.type === 'in' ? 'text-green-600' : m.type === 'out' ? 'text-red-500' : 'text-blue-500'">
+                  {{ m.type === 'in' ? '+' : m.type === 'out' ? '-' : '' }}{{ m.quantity }}
+                </p>
+                <p class="text-[10px] text-gray-400">{{ formatDate(m.created_at) }}</p>
+              </div>
+            </div>
+          </div>
+          <div class="border-t border-gray-200 my-3"></div>
+        </div>
+
+        <!-- Histórico online -->
+        <div v-if="!isOnline && !loadingHistory" class="text-center py-8 text-gray-400">
+          <span class="text-3xl block mb-2">📵</span>
+          <p class="text-sm">Histórico disponível quando online</p>
+        </div>
+
+        <div v-else-if="loadingHistory" class="space-y-2">
           <div v-for="i in 6" :key="i" class="skeleton h-12 rounded-xl"></div>
         </div>
+
         <div v-else class="space-y-1.5">
           <div v-for="m in movements" :key="m.id"
             class="bg-white rounded-xl border border-gray-100 px-4 py-3 flex items-center gap-3">
@@ -84,7 +132,7 @@
             </div>
             <p class="text-[10px] text-gray-400 w-20 text-right">{{ formatDate(m.created_at) }}</p>
           </div>
-          <p v-if="!movements.length" class="text-center py-12 text-gray-400">Sem movimentos registados.</p>
+          <p v-if="!movements.length && !loadingHistory" class="text-center py-12 text-gray-400">Sem movimentos registados.</p>
         </div>
       </div>
 
@@ -97,7 +145,11 @@
           <h3 class="font-bold text-lg mb-1">
             {{ movModal.type === 'in' ? '📥 Entrada de Stock' : movModal.type === 'out' ? '📤 Saída de Stock' : '⚖️ Ajuste de Stock' }}
           </h3>
-          <p class="text-sm text-gray-500 mb-4">{{ movModal.product?.name }}</p>
+          <p class="text-sm text-gray-500 mb-1">{{ movModal.product?.name }}</p>
+          <p v-if="!isOnline" class="text-xs text-amber-600 font-semibold mb-4">
+            📵 Offline — será sincronizado quando houver ligação
+          </p>
+          <p v-else class="mb-4"></p>
 
           <div class="space-y-3">
             <div>
@@ -119,10 +171,10 @@
           <div class="flex gap-3 mt-5">
             <button @click="movModal.open = false" class="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600">Cancelar</button>
             <button @click="confirmMovement"
-              :disabled="movModal.loading"
-              class="flex-1 py-2.5 rounded-xl text-white font-bold text-sm transition"
+              :disabled="movModal.loading || !movModal.quantity || movModal.quantity <= 0"
+              class="flex-1 py-2.5 rounded-xl text-white font-bold text-sm transition disabled:opacity-40"
               style="background:#F07820;">
-              {{ movModal.loading ? 'A guardar...' : 'Confirmar' }}
+              {{ movModal.loading ? 'A guardar...' : isOnline ? 'Confirmar' : '💾 Guardar Offline' }}
             </button>
           </div>
         </div>
@@ -132,8 +184,15 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
+import {
+  useOfflinePos,
+  getCachedProducts, updateCachedProduct,
+  savePendingMovement, getPendingMovements,
+} from '@/composables/useOfflinePos'
+
+const { isOnline, trySyncNow, refreshPendingCount } = useOfflinePos()
 
 const activeTab = ref('stock')
 const tabs = [
@@ -141,18 +200,24 @@ const tabs = [
   { key: 'history', icon: '📋', label: 'Histórico' },
 ]
 
-const products  = ref([])
-const movements = ref([])
-const loading   = ref(true)
-const loadingHistory = ref(false)
-const search    = ref('')
-const stockFilter = ref('all')
+const products         = ref([])
+const movements        = ref([])
+const pendingMovements = ref([])
+const loading          = ref(true)
+const loadingHistory   = ref(false)
+const search           = ref('')
+const stockFilter      = ref('all')
 
-const movModal = ref({ open: false, product: null, type: 'in', quantity: 1, reason: '', loading: false, error: '' })
+const pendingMovementsCount = computed(() => pendingMovements.value.length)
+
+const movModal = ref({
+  open: false, product: null, type: 'in',
+  quantity: 1, reason: '', loading: false, error: '',
+})
 
 const filteredProducts = computed(() => {
   let list = products.value
-  if (search.value) list = list.filter(p => p.name.toLowerCase().includes(search.value.toLowerCase()))
+  if (search.value) list = list.filter(p => p.name.toLowerCase().includes(search.value.toLowerCase()) || (p.sku && p.sku.toLowerCase().includes(search.value.toLowerCase())))
   if (stockFilter.value === 'low')  list = list.filter(p => (p.stock?.quantity ?? 0) > 0 && (p.stock?.quantity ?? 0) <= (p.stock?.minimum_stock ?? 5))
   if (stockFilter.value === 'out')  list = list.filter(p => (p.stock?.quantity ?? 0) <= 0)
   return list
@@ -173,24 +238,48 @@ function openMovement(product, type) {
 }
 
 async function confirmMovement() {
+  if (!movModal.value.quantity || movModal.value.quantity <= 0) return
   movModal.value.loading = true
-  movModal.value.error = ''
+  movModal.value.error   = ''
+
+  const { product, type, quantity, reason } = movModal.value
+
   try {
-    await axios.post('/pos/stock/movement', {
-      product_id: movModal.value.product.id,
-      type:       movModal.value.type,
-      quantity:   movModal.value.quantity,
-      reason:     movModal.value.reason,
-    })
-    // Actualizar stock localmente
-    const p = products.value.find(x => x.id === movModal.value.product.id)
-    if (p && p.stock) {
-      if (movModal.value.type === 'in')         p.stock.quantity += movModal.value.quantity
-      else if (movModal.value.type === 'out')   p.stock.quantity -= movModal.value.quantity
-      else                                      p.stock.quantity  = movModal.value.quantity
+    if (isOnline.value) {
+      // ── Online: enviar para API ──────────────────────────────────────
+      await axios.post('/pos/stock/movement', {
+        product_id: product.id,
+        type, quantity, reason,
+      })
+    } else {
+      // ── Offline: guardar na fila do IndexedDB ────────────────────────
+      const mov = {
+        local_id:     `mov_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        product_id:   product.id,
+        product_name: product.name,
+        type, quantity,
+        reason:       reason || '',
+        created_at:   new Date().toISOString(),
+      }
+      await savePendingMovement(mov)
+      pendingMovements.value.unshift(mov)
+      await refreshPendingCount()
     }
+
+    // Actualizar stock localmente + cache
+    const p = products.value.find(x => x.id === product.id)
+    if (p && p.stock) {
+      if (type === 'in')         p.stock.quantity += quantity
+      else if (type === 'out')   p.stock.quantity  = Math.max(0, p.stock.quantity - quantity)
+      else                       p.stock.quantity  = quantity
+      await updateCachedProduct(p)
+    }
+
     movModal.value.open = false
-    loadHistory()
+
+    // Histórico só carrega se online
+    if (isOnline.value) loadHistory()
+
   } catch (e) {
     movModal.value.error = e.response?.data?.message ?? 'Erro ao registar.'
   } finally {
@@ -199,6 +288,7 @@ async function confirmMovement() {
 }
 
 async function loadHistory() {
+  if (!isOnline.value) return
   loadingHistory.value = true
   try {
     const { data } = await axios.get('/pos/stock/history')
@@ -208,10 +298,47 @@ async function loadHistory() {
   }
 }
 
+async function loadProducts() {
+  loading.value = true
+
+  // 1. Mostrar cache imediatamente
+  const cached = await getCachedProducts()
+  if (cached.length) {
+    products.value = cached
+    loading.value  = false
+  }
+
+  // 2. Actualizar do servidor em background se online
+  if (isOnline.value) {
+    try {
+      const { data } = await axios.get('/pos/stock')
+      products.value = data
+      loading.value  = false
+    } catch {
+      // mantém cache
+    }
+  }
+
+  if (!products.value.length) loading.value = false
+}
+
+async function loadPendingMovements() {
+  pendingMovements.value = await getPendingMovements()
+}
+
+// Quando volta a ficar online: sincronizar e recarregar
+watch(isOnline, async (online) => {
+  if (online) {
+    await trySyncNow()
+    await loadProducts()
+    await loadHistory()
+    await loadPendingMovements()
+  }
+})
+
 onMounted(async () => {
-  const { data } = await axios.get('/pos/stock')
-  products.value = data
-  loading.value = false
-  loadHistory()
+  await loadProducts()
+  await loadPendingMovements()
+  if (isOnline.value) loadHistory()
 })
 </script>

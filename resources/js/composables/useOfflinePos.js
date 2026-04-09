@@ -7,7 +7,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 
 const DB_NAME    = 'beconnect_pos'
-const DB_VERSION = 2  // incrementado para adicionar pending_products
+const DB_VERSION = 3  // v3: adicionar pending_stock_movements
 let db = null
 
 // ── Abrir / inicializar IndexedDB ──────────────────────────────────────────
@@ -24,13 +24,15 @@ async function openDB() {
         const s = d.createObjectStore('products_cache', { keyPath: 'id' })
         s.createIndex('store_id', 'store_id')
       }
-      // Produtos criados no POS offline aguardando sync
       if (!d.objectStoreNames.contains('pending_products')) {
         d.createObjectStore('pending_products', { keyPath: 'local_id' })
       }
-      // Permissões do funcionário para uso offline
       if (!d.objectStoreNames.contains('pos_session')) {
         d.createObjectStore('pos_session', { keyPath: 'key' })
+      }
+      // v3: movimentos de stock feitos offline aguardando sync
+      if (!d.objectStoreNames.contains('pending_stock_movements')) {
+        d.createObjectStore('pending_stock_movements', { keyPath: 'local_id' })
       }
     }
     req.onsuccess  = (e) => { db = e.target.result; resolve(db) }
@@ -93,6 +95,44 @@ export async function deletePendingProduct(local_id) {
   await openDB()
   return new Promise((resolve, reject) => {
     const req = txStore('pending_products', 'readwrite').delete(local_id)
+    req.onsuccess = () => resolve()
+    req.onerror   = (e) => reject(e.target.error)
+  })
+}
+
+// ── Movimentos de stock offline ────────────────────────────────────────────
+export async function savePendingMovement(movement) {
+  await openDB()
+  return new Promise((resolve, reject) => {
+    const req = txStore('pending_stock_movements', 'readwrite').put(movement)
+    req.onsuccess = () => resolve()
+    req.onerror   = (e) => reject(e.target.error)
+  })
+}
+
+export async function getPendingMovements() {
+  await openDB()
+  return new Promise((resolve, reject) => {
+    const req = txStore('pending_stock_movements').getAll()
+    req.onsuccess = (e) => resolve(e.target.result)
+    req.onerror   = (e) => reject(e.target.error)
+  })
+}
+
+export async function deletePendingMovement(local_id) {
+  await openDB()
+  return new Promise((resolve, reject) => {
+    const req = txStore('pending_stock_movements', 'readwrite').delete(local_id)
+    req.onsuccess = () => resolve()
+    req.onerror   = (e) => reject(e.target.error)
+  })
+}
+
+// Actualiza um produto individual na cache (após movimento offline)
+export async function updateCachedProduct(product) {
+  await openDB()
+  return new Promise((resolve, reject) => {
+    const req = txStore('products_cache', 'readwrite').put(product)
     req.onsuccess = () => resolve()
     req.onerror   = (e) => reject(e.target.error)
   })
@@ -163,6 +203,30 @@ export async function syncPendingProducts() {
   return data
 }
 
+// ── Sincronização de movimentos de stock pendentes ────────────────────────
+export async function syncPendingMovements() {
+  const pending = await getPendingMovements()
+  if (!pending.length) return { synced: 0 }
+
+  let synced = 0
+  const errors = []
+  for (const mov of pending) {
+    try {
+      await axios.post('/pos/stock/movement', {
+        product_id: mov.product_id,
+        type:       mov.type,
+        quantity:   mov.quantity,
+        reason:     mov.reason,
+      })
+      await deletePendingMovement(mov.local_id)
+      synced++
+    } catch (e) {
+      errors.push(mov.local_id)
+    }
+  }
+  return { synced, errors }
+}
+
 // ── Sincronização de vendas pendentes ─────────────────────────────────────
 export async function syncPendingSales() {
   const pending = await getPendingSales()
@@ -185,15 +249,19 @@ export function useOfflinePos() {
   const syncMessage        = ref('')
 
   async function refreshPendingCount() {
-    const [sales, products] = await Promise.all([getPendingSales(), getPendingProducts()])
-    pendingCount.value        = sales.length
+    const [sales, products, movements] = await Promise.all([
+      getPendingSales(), getPendingProducts(), getPendingMovements(),
+    ])
+    pendingCount.value        = sales.length + movements.length
     pendingProductCount.value = products.length
   }
 
   async function trySyncNow() {
     if (!isOnline.value || syncing.value) return
-    const [sales, products] = await Promise.all([getPendingSales(), getPendingProducts()])
-    if (!sales.length && !products.length) return
+    const [sales, products, movements] = await Promise.all([
+      getPendingSales(), getPendingProducts(), getPendingMovements(),
+    ])
+    if (!sales.length && !products.length && !movements.length) return
 
     syncing.value = true
     syncMessage.value = ''
@@ -202,6 +270,10 @@ export function useOfflinePos() {
       if (products.length) {
         const r = await syncPendingProducts()
         if (r.created > 0) msg += `${r.created} produto(s) criado(s). `
+      }
+      if (movements.length) {
+        const r = await syncPendingMovements()
+        if (r.synced > 0) msg += `${r.synced} movimento(s) de stock sincronizado(s). `
       }
       if (sales.length) {
         const r = await syncPendingSales()
