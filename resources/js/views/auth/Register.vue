@@ -267,8 +267,14 @@ async function resendOtp() {
 
 // ─── Registo com email ───────────────────────────────────────
 async function submitRegister(role) {
-  loading.value = true
   error.value = ''
+
+  if (form.password !== form.password_confirmation) {
+    error.value = 'A senha e a confirmação não coincidem.'
+    return
+  }
+
+  loading.value = true
   try {
     const { data } = await axios.post('/auth/register', {
       name: form.name, email: form.email,

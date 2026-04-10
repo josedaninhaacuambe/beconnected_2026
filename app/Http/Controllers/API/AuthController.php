@@ -39,6 +39,7 @@ class AuthController extends Controller
             'email'                 => 'required|string|email|max:255|unique:users',
             'phone'                 => 'nullable|string|max:20|unique:users',
             'password'              => 'required|string|min:8|confirmed',
+            'password_confirmation' => 'required_with:password|string|min:8',
             'role'                  => 'nullable|in:customer,store_owner',
             'province_id'           => 'nullable|exists:provinces,id',
             'city_id'               => 'nullable|exists:cities,id',
