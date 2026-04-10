@@ -578,7 +578,6 @@ class PosController extends Controller
             'role'          => 'required|in:manager,cashier,stock_keeper,viewer',
             'permissions'   => 'required|array',
             'permissions.*' => 'in:fazer_vendas,gerir_stock,ver_relatorios,adicionar_produtos',
-            // gerir_equipa é gerido pelo dono, não atribuível a funcionários
         ]);
 
         $employee->update([
@@ -592,5 +591,67 @@ class PosController extends Controller
             'message'  => 'Permissões actualizadas.',
             'employee' => $employee->fresh()->load('user:id,name,email'),
         ]);
+    }
+
+    // ─── Criar conta de utilizador + funcionário (sem OTP) ───────────────────
+    public function createEmployeeAccount(Request $request): JsonResponse
+    {
+        $user  = $request->user();
+        $store = $user->store;
+        abort_if(!$store, 403, 'Apenas proprietários de loja podem criar contas de funcionários.');
+
+        $validated = $request->validate([
+            'name'          => 'required|string|max:255',
+            'email'         => 'required|email|max:255|unique:users,email',
+            'password'      => 'required|string|min:6',
+            'role'          => 'required|in:manager,cashier,stock_keeper,viewer',
+            'permissions'   => 'nullable|array',
+            'permissions.*' => 'in:fazer_vendas,gerir_stock,ver_relatorios,gerir_equipa,adicionar_produtos',
+        ]);
+
+        $permissions = !empty($validated['permissions'])
+            ? $validated['permissions']
+            : StoreEmployee::defaultPermissions($validated['role']);
+        $permissions = array_values(array_diff($permissions, ['gerir_equipa']));
+
+        // Criar utilizador sem OTP — activo imediatamente
+        $newUser = \App\Models\User::create([
+            'name'           => $validated['name'],
+            'email'          => $validated['email'],
+            'password'       => $validated['password'], // hashed pelo cast
+            'role'           => 'customer',
+            'email_verified' => true,
+            'is_active'      => true,
+        ]);
+
+        $emp = StoreEmployee::create([
+            'store_id'    => $store->id,
+            'user_id'     => $newUser->id,
+            'role'        => $validated['role'],
+            'permissions' => $permissions,
+            'is_active'   => true,
+            'added_by'    => $user->id,
+        ]);
+
+        return response()->json([
+            'message'  => 'Conta criada com sucesso.',
+            'employee' => $emp->load('user:id,name,email'),
+        ], 201);
+    }
+
+    // ─── Redefinir senha de um funcionário (pelo dono) ───────────────────────
+    public function resetEmployeePassword(Request $request, StoreEmployee $employee): JsonResponse
+    {
+        $store = $request->user()->store;
+        abort_if(!$store || $employee->store_id !== $store->id, 403, 'Sem permissão.');
+
+        $validated = $request->validate([
+            'password' => 'required|string|min:6',
+        ]);
+
+        $employee->user->update(['password' => $validated['password']]);
+        Cache::forget("user_me_{$employee->user_id}");
+
+        return response()->json(['message' => 'Senha redefinida com sucesso.']);
     }
 }

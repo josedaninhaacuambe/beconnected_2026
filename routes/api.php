@@ -275,10 +275,12 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
         Route::get('stock/history',   [PosController::class, 'stockHistory']);
         Route::get('reports',         [PosController::class, 'reports']);
         Route::post('sync-products',  [PosController::class, 'syncProducts']);
-        Route::get('employees',                    [PosController::class, 'employees']);
-        Route::post('employees',                   [PosController::class, 'addEmployee']);
-        Route::put('employees/{employee}',         [PosController::class, 'updateEmployee']);
-        Route::delete('employees/{employee}',      [PosController::class, 'removeEmployee']);
+        Route::get('employees',                              [PosController::class, 'employees']);
+        Route::post('employees',                             [PosController::class, 'addEmployee']);
+        Route::post('employees/create-account',             [PosController::class, 'createEmployeeAccount']);
+        Route::put('employees/{employee}',                   [PosController::class, 'updateEmployee']);
+        Route::put('employees/{employee}/reset-password',    [PosController::class, 'resetEmployeePassword']);
+        Route::delete('employees/{employee}',                [PosController::class, 'removeEmployee']);
     });
 
     // =============================================

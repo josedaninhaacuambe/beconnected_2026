@@ -55,8 +55,9 @@
           <div class="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-white text-xs font-bold">
             {{ initial }}
           </div>
-          <div v-if="showMenu" class="absolute right-0 top-9 bg-white rounded-xl shadow-xl border border-gray-100 w-40 z-50 py-1">
+          <div v-if="showMenu" class="absolute right-0 top-9 bg-white rounded-xl shadow-xl border border-gray-100 w-48 z-50 py-1">
             <button @click="goHome" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">🏠 Ir para loja</button>
+            <button @click="showChangePass = true; showMenu = false" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">🔒 Alterar senha</button>
             <button @click="logout" class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Sair</button>
           </div>
         </div>
@@ -85,14 +86,57 @@
     <main class="flex-1 overflow-hidden">
       <RouterView />
     </main>
+
+    <!-- Modal: Alterar senha -->
+    <Teleport to="body">
+      <div v-if="showChangePass" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,0.6)">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+          <h3 class="font-black text-gray-800 mb-1">🔒 Alterar Senha</h3>
+          <p class="text-xs text-gray-400 mb-4">A nova senha entra em vigor imediatamente.</p>
+          <div class="space-y-3">
+            <div class="relative">
+              <label class="text-xs font-semibold text-gray-500">Senha actual</label>
+              <input v-model="passForm.current" :type="showPass.current ? 'text' : 'password'"
+                placeholder="Senha actual" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 mt-1 text-sm focus:outline-none focus:border-bc-gold pr-10" />
+              <button type="button" @click="showPass.current = !showPass.current"
+                class="absolute right-3 bottom-2.5 text-gray-400 text-xs">{{ showPass.current ? '🙈' : '👁️' }}</button>
+            </div>
+            <div class="relative">
+              <label class="text-xs font-semibold text-gray-500">Nova senha</label>
+              <input v-model="passForm.password" :type="showPass.new ? 'text' : 'password'"
+                placeholder="Mínimo 8 caracteres" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 mt-1 text-sm focus:outline-none focus:border-bc-gold pr-10" />
+              <button type="button" @click="showPass.new = !showPass.new"
+                class="absolute right-3 bottom-2.5 text-gray-400 text-xs">{{ showPass.new ? '🙈' : '👁️' }}</button>
+            </div>
+            <div class="relative">
+              <label class="text-xs font-semibold text-gray-500">Confirmar nova senha</label>
+              <input v-model="passForm.password_confirmation" :type="showPass.confirm ? 'text' : 'password'"
+                placeholder="Repita a nova senha" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 mt-1 text-sm focus:outline-none focus:border-bc-gold pr-10" />
+              <button type="button" @click="showPass.confirm = !showPass.confirm"
+                class="absolute right-3 bottom-2.5 text-gray-400 text-xs">{{ showPass.confirm ? '🙈' : '👁️' }}</button>
+            </div>
+          </div>
+          <div v-if="passError" class="text-red-500 text-sm mt-3">{{ passError }}</div>
+          <div v-if="passSuccess" class="text-green-600 text-sm mt-3">✅ {{ passSuccess }}</div>
+          <div class="flex gap-3 mt-4">
+            <button @click="closeChangePass" class="flex-1 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancelar</button>
+            <button @click="changePassword" :disabled="passLoading"
+              class="flex-1 py-2 rounded-xl text-white font-bold text-sm disabled:opacity-40" style="background:#F07820;">
+              {{ passLoading ? 'A guardar...' : 'Guardar' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useOfflinePos } from '@/composables/useOfflinePos'
+import axios from 'axios'
 
 const auth    = useAuthStore()
 const route   = useRoute()
@@ -119,10 +163,50 @@ const allTabs = [
 
 const visibleTabs = computed(() => allTabs.filter(t => auth.hasPosPermission(t.perm)))
 
-function isActive(path) {
-  return route.path.startsWith(path)
+function isActive(path) { return route.path.startsWith(path) }
+function goHome()       { router.push('/'); showMenu.value = false }
+async function logout() { await auth.logout(); router.push('/') }
+
+// ── Alterar senha ────────────────────────────────────────────────────────────
+const showChangePass = ref(false)
+const passLoading    = ref(false)
+const passError      = ref('')
+const passSuccess    = ref('')
+const showPass       = reactive({ current: false, new: false, confirm: false })
+const passForm       = reactive({ current: '', password: '', password_confirmation: '' })
+
+function closeChangePass() {
+  showChangePass.value = false
+  passError.value   = ''
+  passSuccess.value = ''
+  Object.assign(passForm, { current: '', password: '', password_confirmation: '' })
+  Object.assign(showPass, { current: false, new: false, confirm: false })
 }
 
-function goHome()  { router.push('/'); showMenu.value = false }
-async function logout() { await auth.logout(); router.push('/') }
+async function changePassword() {
+  passError.value   = ''
+  passSuccess.value = ''
+  if (passForm.password !== passForm.password_confirmation) {
+    passError.value = 'As senhas não coincidem.'
+    return
+  }
+  if (passForm.password.length < 8) {
+    passError.value = 'A nova senha deve ter pelo menos 8 caracteres.'
+    return
+  }
+  passLoading.value = true
+  try {
+    await axios.post('/auth/change-password', {
+      current_password:      passForm.current,
+      password:              passForm.password,
+      password_confirmation: passForm.password_confirmation,
+    })
+    passSuccess.value = 'Senha alterada com sucesso!'
+    setTimeout(closeChangePass, 2000)
+  } catch (e) {
+    passError.value = e.response?.data?.message ?? 'Erro ao alterar senha.'
+  } finally {
+    passLoading.value = false
+  }
+}
 </script>
