@@ -36,14 +36,61 @@ class AuthController extends Controller
     {
         $validated = $request->validate([
             'name'                  => 'required|string|max:255',
-            'email'                 => 'required|string|email|max:255|unique:users',
-            'phone'                 => 'nullable|string|max:20|unique:users',
+            'email'                 => 'required|string|email|max:255',
+            'phone'                 => 'nullable|string|max:20',
             'password'              => 'required|string|min:8|confirmed',
             'password_confirmation' => 'required_with:password|string|min:8',
             'role'                  => 'nullable|in:customer,store_owner',
             'province_id'           => 'nullable|exists:provinces,id',
             'city_id'               => 'nullable|exists:cities,id',
         ]);
+
+        $existingUser = User::where('email', $validated['email'])->first();
+
+        if ($existingUser) {
+            if ($existingUser->email_verified) {
+                return response()->json([
+                    'message' => 'Este email já está registado. Usa outro email ou faz login.',
+                ], 422);
+            }
+
+            if (!empty($validated['phone'])) {
+                $phoneOwner = User::where('phone', $validated['phone'])
+                    ->where('id', '!=', $existingUser->id)
+                    ->first();
+
+                if ($phoneOwner) {
+                    return response()->json([
+                        'message' => 'Este número de telefone já está a ser usado por outra conta.',
+                    ], 422);
+                }
+            }
+
+            $existingUser->update([
+                'name'           => $validated['name'],
+                'password'       => $validated['password'],
+                'phone'          => $validated['phone'] ?? $existingUser->phone,
+                'role'           => $validated['role'] ?? $existingUser->role ?? 'customer',
+                'province_id'    => $validated['province_id'] ?? $existingUser->province_id,
+                'city_id'        => $validated['city_id'] ?? $existingUser->city_id,
+                'email_verified' => false,
+                'is_active'      => false,
+            ]);
+
+            $this->sendOtp($existingUser);
+
+            return response()->json([
+                'requires_otp' => true,
+                'email'        => $existingUser->email,
+                'message'      => 'Conta já registada anteriormente mas ainda não confirmada. Enviámos um novo código para ' . $existingUser->email,
+            ], 200);
+        }
+
+        if (!empty($validated['phone']) && User::where('phone', $validated['phone'])->exists()) {
+            return response()->json([
+                'message' => 'Este número de telefone já está a ser usado por outra conta.',
+            ], 422);
+        }
 
         $user = User::create([
             ...$validated,
