@@ -106,6 +106,32 @@ class AdminController extends Controller
         return response()->json(['message' => "Loja '{$store->name}' suspensa."]);
     }
 
+    public function updateStore(Request $request, Store $store): JsonResponse
+    {
+        $validated = $request->validate([
+            'name'        => 'sometimes|string|max:255',
+            'description' => 'nullable|string',
+            'phone'       => 'nullable|string|max:20',
+            'whatsapp'    => 'nullable|string|max:20',
+            'address'     => 'nullable|string|max:500',
+            'latitude'    => 'nullable|numeric|between:-90,90',
+            'longitude'   => 'nullable|numeric|between:-180,180',
+            'logo'        => 'nullable|image|max:2048',
+            'banner'      => 'nullable|image|max:5120',
+        ]);
+
+        if ($request->hasFile('logo')) {
+            $validated['logo'] = $request->file('logo')->store('stores/logos', 'public');
+        }
+        if ($request->hasFile('banner')) {
+            $validated['banner'] = $request->file('banner')->store('stores/banners', 'public');
+        }
+
+        $store->update($validated);
+
+        return response()->json($store->fresh()->load(['category', 'province', 'city']));
+    }
+
     // ─── Dashboard de Comissões ───────────────────────────────────────────────
 
     public function commissionDashboard(): JsonResponse

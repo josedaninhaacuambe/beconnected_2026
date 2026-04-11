@@ -206,11 +206,11 @@
       </div>
     </section>
 
-    <!-- Banner Android -->
+    <!-- Banner App -->
     <section class="bg-white mx-4 rounded-2xl p-6 mb-12 flex flex-col sm:flex-row items-center justify-between gap-4" style="border: 1px solid #e0e0e0;">
       <div>
         <h3 class="text-black font-bold text-xl">Baixa a App Beconnect</h3>
-        <p class="text-gray-700 text-sm">Disponível para Android. Compra ainda mais fácil no teu telemóvel.</p>
+        <p class="text-gray-700 text-sm">Disponível para telemóvel e computador. Compra ainda mais fácil em qualquer dispositivo.</p>
       </div>
       <button @click="installPWA" class="bg-bc-gold text-white font-bold px-6 py-3 rounded-xl hover:bg-orange-600 transition whitespace-nowrap">
         📱 Instalar App
@@ -333,10 +333,44 @@ onMounted(async () => {
     })
   })
 async function installPWA() {
-  if (deferredPrompt) {
-    deferredPrompt.prompt()
-    const { outcome } = await deferredPrompt.userChoice
-    deferredPrompt = null
+  // Detectar dispositivo
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+  const isAndroid = /Android/.test(navigator.userAgent)
+
+  if (isMobile) {
+    if (isIOS) {
+      // iOS - redirecionar para App Store (ou mostrar instruções PWA)
+      if (deferredPrompt) {
+        // Tentar instalar PWA nativa
+        deferredPrompt.prompt()
+        const { outcome } = await deferredPrompt.userChoice
+        deferredPrompt = null
+      } else {
+        // Mostrar instruções para instalar PWA no iOS
+        alert('Para instalar no iOS:\n1. Toque no botão compartilhar (📤)\n2. Selecione "Adicionar à Tela de Início"\n3. Toque em "Adicionar"')
+      }
+    } else if (isAndroid) {
+      // Android - tentar instalar PWA
+      if (deferredPrompt) {
+        deferredPrompt.prompt()
+        const { outcome } = await deferredPrompt.userChoice
+        deferredPrompt = null
+      } else {
+        // Mostrar instruções para instalar PWA no Android
+        alert('Para instalar PWA no Android:\n1. Abra o menu (⋮)\n2. Selecione "Adicionar à tela inicial"\n3. Toque em "Adicionar"')
+      }
+    }
+  } else {
+    // Desktop - tentar instalar PWA ou mostrar instruções
+    if (deferredPrompt) {
+      deferredPrompt.prompt()
+      const { outcome } = await deferredPrompt.userChoice
+      deferredPrompt = null
+    } else {
+      // Desktop - mostrar instruções para instalar PWA
+      alert('Para instalar no computador:\n\nChrome/Edge:\n1. Clique no ícone de instalação na barra de endereço\n\nFirefox:\n1. Clique no menu (☰)\n2. Selecione "Instalar Esta Aplicação"')
+    }
   }
 }
 </script>

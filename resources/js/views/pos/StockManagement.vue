@@ -27,14 +27,26 @@
 
       <!-- ── Tab: Produtos e Stock ─────────────────────────────────────── -->
       <div v-if="activeTab === 'stock'">
-        <div class="flex items-center gap-3 mb-4">
-          <input v-model="search" type="text" placeholder="🔍 Pesquisar produto..."
-            class="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-bc-gold" />
-          <select v-model="stockFilter" class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none">
-            <option value="all">Todos</option>
-            <option value="low">Stock baixo</option>
-            <option value="out">Sem stock</option>
-          </select>
+        <div class="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex-1 min-w-0 flex items-center gap-3">
+            <input v-model="search" type="text" placeholder="🔍 Pesquisar produto..."
+              class="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-bc-gold" />
+            <select v-model="stockFilter" class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none">
+              <option value="all">Todos</option>
+              <option value="low">Stock baixo</option>
+              <option value="out">Sem stock</option>
+            </select>
+          </div>
+          <div class="flex flex-col gap-2 w-full sm:w-auto sm:flex-row sm:items-center">
+            <button v-if="canPrintStock" @click="printStockList"
+              class="w-full sm:w-auto px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition">
+              🖨️ Imprimir / Guardar PDF
+            </button>
+            <button v-if="canPrintStock" @click="exportStockCsv"
+              class="w-full sm:w-auto px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition">
+              📄 Exportar CSV
+            </button>
+          </div>
         </div>
 
         <div v-if="loading" class="space-y-2">
@@ -186,6 +198,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
+import { useAuthStore } from '@/stores/auth.js'
 import {
   useOfflinePos,
   getCachedProducts, updateCachedProduct,
@@ -200,6 +213,7 @@ const tabs = [
   { key: 'history', icon: '📋', label: 'Histórico' },
 ]
 
+const auth = useAuthStore()
 const products         = ref([])
 const movements        = ref([])
 const pendingMovements = ref([])
@@ -222,6 +236,96 @@ const filteredProducts = computed(() => {
   if (stockFilter.value === 'out')  list = list.filter(p => (p.stock?.quantity ?? 0) <= 0)
   return list
 })
+
+const canPrintStock = computed(() => auth.hasPosPermission('gerir_stock'))
+
+function printStockList() {
+  const rows = filteredProducts.value.map((p, index) => {
+    const qty = p.stock?.quantity ?? 0
+    const min = p.stock?.minimum_stock ?? 0
+    return `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${p.name}</td>
+        <td>${p.sku || '-'}</td>
+        <td>${p.barcode || '-'}</td>
+        <td class="text-right">${qty}</td>
+        <td class="text-right">${min}</td>
+      </tr>
+    `
+  }).join('')
+
+  const html = `<!doctype html>
+    <html lang="pt">
+      <head>
+        <meta charset="utf-8" />
+        <title>Lista de Stock - POS</title>
+        <style>
+          @page { size: A4 portrait; margin: 16mm; }
+          body { font-family: Inter, sans-serif; color: #111827; margin: 0; padding: 18px; background: #fff; }
+          h1 { font-size: 18px; margin-bottom: 10px; }
+          p { margin: 0; }
+          table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 11px; }
+          th, td { border: 1px solid #D1D5DB; padding: 8px 10px; vertical-align: top; }
+          th { background: #F9FAFB; text-align: left; }
+          td.text-right { text-align: right; }
+          tbody tr { page-break-inside: avoid; }
+          .small { font-size: 10px; color: #6B7280; }
+        </style>
+      </head>
+      <body>
+        <h1>Lista de Stock - POS</h1>
+        <p class="small">Gerado em ${new Date().toLocaleString('pt-MZ')}</p>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Produto</th>
+              <th>SKU</th>
+              <th>Barcode</th>
+              <th>Stock</th>
+              <th>Stock mínimo</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows || '<tr><td colspan="6" class="small">Nenhum produto encontrado.</td></tr>'}
+          </tbody>
+        </table>
+      </body>
+    </html>`
+
+  const win = window.open('', '_blank')
+  if (!win) return
+  win.document.write(html)
+  win.document.close()
+  win.focus()
+  setTimeout(() => {
+    win.print()
+    win.close()
+  }, 300)
+}
+
+function exportStockCsv() {
+  const header = ['#', 'Produto', 'SKU', 'Barcode', 'Stock', 'Stock mínimo']
+  const rows = filteredProducts.value.map((p, index) => [
+    index + 1,
+    p.name,
+    p.sku || '-',
+    p.barcode || '-',
+    p.stock?.quantity ?? 0,
+    p.stock?.minimum_stock ?? 0,
+  ])
+  const csv = [header, ...rows].map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\r\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.setAttribute('download', `stock-pos-${new Date().toISOString().slice(0,10)}.csv`)
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
 
 function stockColor(qty) {
   if (!qty || qty <= 0) return 'text-red-500'

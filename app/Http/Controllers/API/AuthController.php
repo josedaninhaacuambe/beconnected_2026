@@ -34,6 +34,28 @@ class AuthController extends Controller
     // ─── Registo com email — cria conta e envia OTP ───────────────────────────
     public function register(Request $request): JsonResponse
     {
+        $messages = [
+            'name.required'                 => 'O nome é obrigatório.',
+            'name.string'                   => 'O nome deve ser um texto.',
+            'name.max'                      => 'O nome pode ter no máximo 255 caracteres.',
+            'email.required'                => 'O email é obrigatório.',
+            'email.string'                  => 'O email deve ser um texto.',
+            'email.email'                   => 'Introduz um email válido.',
+            'email.max'                     => 'O email pode ter no máximo 255 caracteres.',
+            'phone.string'                  => 'O telefone deve ser um texto.',
+            'phone.max'                     => 'O telefone pode ter no máximo 20 caracteres.',
+            'password.required'             => 'A senha é obrigatória.',
+            'password.string'               => 'A senha deve ser um texto.',
+            'password.min'                  => 'A senha deve ter pelo menos 8 caracteres.',
+            'password.confirmed'            => 'A confirmação da senha não corresponde.',
+            'password_confirmation.required_with' => 'A confirmação da senha é obrigatória.',
+            'password_confirmation.string'  => 'A confirmação da senha deve ser um texto.',
+            'password_confirmation.min'     => 'A confirmação da senha deve ter pelo menos 8 caracteres.',
+            'role.in'                       => 'O tipo de conta é inválido.',
+            'province_id.exists'            => 'A província selecionada é inválida.',
+            'city_id.exists'                => 'A cidade selecionada é inválida.',
+        ];
+
         $validated = $request->validate([
             'name'                  => 'required|string|max:255',
             'email'                 => 'required|string|email|max:255',
@@ -43,7 +65,7 @@ class AuthController extends Controller
             'role'                  => 'nullable|in:customer,store_owner',
             'province_id'           => 'nullable|exists:provinces,id',
             'city_id'               => 'nullable|exists:cities,id',
-        ]);
+        ], $messages);
 
         $existingUser = User::where('email', $validated['email'])->first();
 

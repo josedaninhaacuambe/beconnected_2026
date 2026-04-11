@@ -274,22 +274,42 @@ class StoreController extends Controller
         return response()->json($store->fresh()->load(['category', 'province', 'city']));
     }
 
-    // Actualizar a minha loja (dono autenticado)
+    // Actualizar a minha loja (dono autenticado) ou admin actualizando uma loja
     public function updateMyStore(Request $request): JsonResponse
     {
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $user = $request->user();
 
-        $validated = $request->validate([
-            'name'        => 'sometimes|string|max:255',
-            'description' => 'nullable|string',
-            'phone'       => 'nullable|string|max:20',
-            'whatsapp'    => 'nullable|string|max:20',
-            'address'     => 'nullable|string|max:500',
-            'latitude'    => 'nullable|numeric|between:-90,90',
-            'longitude'   => 'nullable|numeric|between:-180,180',
-            'logo'        => 'nullable|image|max:2048',
-            'banner'      => 'nullable|image|max:5120',
-        ]);
+        if ($user->role === 'admin') {
+            // Admin pode actualizar qualquer loja, precisa de store_id
+            $validated = $request->validate([
+                'store_id' => 'required|exists:stores,id',
+                'name' => 'sometimes|string|max:255',
+                'description' => 'nullable|string',
+                'phone' => 'nullable|string|max:20',
+                'whatsapp' => 'nullable|string|max:20',
+                'address' => 'nullable|string|max:500',
+                'latitude' => 'nullable|numeric|between:-90,90',
+                'longitude' => 'nullable|numeric|between:-180,180',
+                'logo' => 'nullable|image|max:2048',
+                'banner' => 'nullable|image|max:5120',
+            ]);
+            $store = Store::findOrFail($validated['store_id']);
+            unset($validated['store_id']);
+        } else {
+            // Dono da loja actualiza a sua própria loja
+            $store = Store::where('user_id', $user->id)->firstOrFail();
+            $validated = $request->validate([
+                'name' => 'sometimes|string|max:255',
+                'description' => 'nullable|string',
+                'phone' => 'nullable|string|max:20',
+                'whatsapp' => 'nullable|string|max:20',
+                'address' => 'nullable|string|max:500',
+                'latitude' => 'nullable|numeric|between:-90,90',
+                'longitude' => 'nullable|numeric|between:-180,180',
+                'logo' => 'nullable|image|max:2048',
+                'banner' => 'nullable|image|max:5120',
+            ]);
+        }
 
         if ($request->hasFile('logo')) {
             $validated['logo'] = $request->file('logo')->store('stores/logos', 'public');

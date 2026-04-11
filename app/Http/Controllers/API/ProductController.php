@@ -210,8 +210,8 @@ class ProductController extends Controller
                 ->where('store_id', $store->id)
                 ->where('is_active', true)
                 ->whereNull('deleted_at');
-            if (Product::hasPosOnlyColumn()) {
-                $limitedIdsQuery->where(fn($q) => $q->where('pos_only', false)->orWhereNull('pos_only'));
+            if (Product::hasAvailabilityColumn()) {
+                $limitedIdsQuery->forVirtualStore();
             }
             $limitedIds = $limitedIdsQuery
                 ->orderByDesc('is_featured')
@@ -342,6 +342,9 @@ class ProductController extends Controller
             'images' => 'nullable|array',
             'images.*' => 'image|max:2048',
             'pos_only' => 'nullable|boolean',
+            'availability' => 'nullable|in:virtual_store,pos,both',
+            'selling_modes' => 'nullable|array',
+            'selling_modes.*' => 'in:weight,unit',
         ]);
 
         $images = [];
@@ -368,9 +371,10 @@ class ProductController extends Controller
             'slug' => Str::slug($validated['name']) . '-' . Str::random(6),
             'images' => $images,
         ];
-        if (Product::hasPosOnlyColumn()) {
-            $productData['pos_only'] = (bool) ($validated['pos_only'] ?? false);
+        if (Product::hasAvailabilityColumn()) {
+            $productData['availability'] = $validated['availability'] ?? 'both';
         }
+        $productData['selling_modes'] = $validated['selling_modes'] ?? ['unit'];
 
         $product = Product::create($productData);
 
@@ -408,6 +412,9 @@ class ProductController extends Controller
             'images.*'            => 'image|max:2048',
             'minimum_stock'       => 'nullable|integer|min:0',
             'pos_only'            => 'nullable|boolean',
+            'availability'        => 'nullable|in:virtual_store,pos,both',
+            'selling_modes'       => 'nullable|array',
+            'selling_modes.*'     => 'in:weight,unit',
         ]);
 
         // Handle image uploads
@@ -419,8 +426,8 @@ class ProductController extends Controller
             $validated['images'] = array_merge($product->images ?? [], $images);
         }
         unset($validated['minimum_stock']);
-        if (!Product::hasPosOnlyColumn()) {
-            unset($validated['pos_only']);
+        if (!Product::hasAvailabilityColumn()) {
+            unset($validated['availability']);
         }
 
         $product->update($validated);

@@ -16,7 +16,7 @@
             class="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-bc-gold"
           />
           <!-- Botão adicionar produto offline -->
-          <button v-if="canAddProducts" @click="showAddProduct = true"
+          <button v-if="canAddProducts" @click="openAddProductModal"
             class="px-3 py-2 rounded-xl border-2 border-dashed border-gray-300 text-gray-400 hover:border-bc-gold hover:text-bc-gold transition text-xs font-bold flex-shrink-0"
             title="Adicionar produto">
             ➕
@@ -274,8 +274,20 @@
           <div class="space-y-3">
             <div>
               <label class="text-xs font-semibold text-gray-500">Nome do produto *</label>
-              <input v-model="newProduct.name" type="text" placeholder="Nome"
+              <input v-model="newProduct.name" type="text" placeholder="Nome do produto"
                 class="w-full border border-gray-200 rounded-xl px-3 py-2 mt-1 text-sm focus:outline-none focus:border-bc-gold" />
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-gray-500">Categoria *</label>
+              <select v-model="newProduct.product_category_id" class="w-full border border-gray-200 rounded-xl px-3 py-2 mt-1 text-sm focus:outline-none focus:border-bc-gold">
+                <option value="">Selecione uma categoria</option>
+                <option v-for="cat in productCategories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-gray-500">Foto do produto (opcional)</label>
+              <input type="file" accept="image/*" @change="handleImageUpload" class="w-full border border-gray-200 rounded-xl px-3 py-2 mt-1 text-sm focus:outline-none focus:border-bc-gold" />
+              <p class="text-xs text-gray-400 mt-1">Máximo 2MB. Se não selecionar, será usada uma imagem automática.</p>
             </div>
             <div class="grid grid-cols-2 gap-2">
               <div>
@@ -351,7 +363,7 @@
           <div v-if="addProductError" class="text-red-500 text-sm mt-3">{{ addProductError }}</div>
           <div class="flex gap-3 mt-4">
             <button @click="showAddProduct = false" class="flex-1 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancelar</button>
-            <button @click="saveNewProduct" :disabled="!newProduct.name || !newProduct.price"
+            <button @click="saveNewProduct" :disabled="!newProduct.name || !newProduct.price || !newProduct.product_category_id"
               class="flex-1 py-2 rounded-xl text-white font-bold text-sm disabled:opacity-40"
               style="background:#F07820;">
               {{ isOnline ? 'Criar Produto' : '💾 Guardar Offline' }}
@@ -568,47 +580,67 @@ function confirmWeight() {
 // ── Adicionar produto offline ───────────────────────────────────────────────
 const showAddProduct  = ref(false)
 const addProductError = ref('')
+const productCategories = ref([])
 const newProduct = reactive({
   name: '', price: '', cost_price: '', sku: '',
   initial_stock: 0, is_weighable: false, weight_unit: 'kg', availability: 'both', selling_modes: ['unit'],
+  product_category_id: '', image: null,
 })
 
 async function saveNewProduct() {
   addProductError.value = ''
   const localId = `prod_local_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
   const prod = {
-    local_id:     localId,
-    name:         newProduct.name,
-    price:        parseFloat(newProduct.price) || 0,
-    cost_price:   parseFloat(newProduct.cost_price) || 0,
-    sku:          newProduct.sku || null,
-    initial_stock: parseInt(newProduct.initial_stock) || 0,
-    is_weighable: newProduct.is_weighable,
-    weight_unit:  newProduct.weight_unit,
-    availability: newProduct.availability,
-    selling_modes: newProduct.selling_modes,
+    local_id:            localId,
+    name:                newProduct.name,
+    price:               parseFloat(newProduct.price) || 0,
+    cost_price:          parseFloat(newProduct.cost_price) || 0,
+    sku:                 newProduct.sku || null,
+    initial_stock:       parseInt(newProduct.initial_stock) || 0,
+    is_weighable:        newProduct.is_weighable,
+    weight_unit:         newProduct.weight_unit,
+    availability:        newProduct.availability,
+    selling_modes:       newProduct.selling_modes,
+    product_category_id: newProduct.product_category_id,
   }
 
   try {
     if (isOnline.value) {
-      await axios.post('/pos/sync-products', { products: [prod] })
+      if (newProduct.image) {
+        const formData = new FormData()
+        formData.append('products', JSON.stringify([prod]))
+        formData.append('images', newProduct.image)
+        await axios.post('/pos/sync-products', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })
+      } else {
+        await axios.post('/pos/sync-products', { products: [prod] })
+      }
       await loadProducts()
     } else {
+      if (newProduct.image) {
+        alert('Upload de imagem não disponível offline. Imagem será ignorada.')
+        return
+      }
       await savePendingProduct(prod)
       await refreshPendingCount()
       const tempId = -Date.now()
-      const localProd = {
+      allProducts.value.push({
         id: tempId, local_id: localId,
         name: prod.name, price: prod.price, cost_price: prod.cost_price,
         sku: prod.sku, is_weighable: prod.is_weighable, weight_unit: prod.weight_unit,
         availability: prod.availability || 'both',
         image: null, stock: { quantity: prod.initial_stock },
-      }
-      allProducts.value.push(localProd)
+      })
       filterProducts()
     }
+
     showAddProduct.value = false
-    Object.assign(newProduct, { name:'', price:'', cost_price:'', sku:'', initial_stock:0, is_weighable:false, weight_unit:'kg', availability:'both', selling_modes:['unit'] })
+    Object.assign(newProduct, {
+      name: '', price: '', cost_price: '', sku: '', initial_stock: 0,
+      is_weighable: false, weight_unit: 'kg', availability: 'both',
+      selling_modes: ['unit'], image: null, product_category_id: '',
+    })
   } catch (e) {
     addProductError.value = e.response?.data?.message ?? 'Erro ao criar produto.'
   }
@@ -700,6 +732,32 @@ function changeQty(item, delta) {
 
 function removeItem(item) {
   cart.value = cart.value.filter(i => i._key !== item._key)
+}
+
+async function openAddProductModal() {
+  await loadProductCategories()
+  showAddProduct.value = true
+}
+
+function handleImageUpload(event) {
+  const file = event.target.files[0]
+  if (file) {
+    if (file.size > 2 * 1024 * 1024) { // 2MB
+      alert('Imagem muito grande. Máximo 2MB.')
+      event.target.value = ''
+      return
+    }
+    newProduct.image = file
+  }
+}
+
+async function loadProductCategories() {
+  // try {
+  //   const { data } = await axios.get('/api/product-categories')
+  //   productCategories.value = data.flatMap(cat => [cat, ...(cat.children || [])])
+  // } catch (e) {
+  //   console.warn('Erro ao carregar categorias:', e)
+  // }
 }
 
 function clearCart() {
@@ -819,20 +877,25 @@ async function loadProducts() {
 
   // 2. Actualizar do servidor em background (ou primeiro load se sem cache)
   if (isOnline.value) {
-    try {
-      const { data } = await axios.get('/pos/products')
-      // Só substitui se a API devolveu produtos — evita apagar o cache
-      // quando o servidor ainda não terminou a migration ou tem cache vazio
-      if (data && data.length > 0) {
-        allProducts.value = data
-        await cacheProducts(data)
-      } else if (!cached.length) {
-        // Sem cache local e API retornou vazio → loja sem produtos
-        allProducts.value = []
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        if (attempt > 0) await new Promise(r => setTimeout(r, 3000)) // retry após 3s
+        const { data } = await axios.get('/pos/products')
+        if (data && data.length > 0) {
+          allProducts.value = data
+          filtered.value = data
+          await cacheProducts(data)
+          break // sucesso — sair do loop
+        } else if (!cached.length && attempt === 1) {
+          // Sem cache local e API retornou vazio em ambas as tentativas → loja sem produtos
+          allProducts.value = []
+        }
+        // Se API retornou vazio mas temos cache: mantemos o cache e tentamos novamente
+        if (cached.length && attempt === 0) continue
+        break
+      } catch {
+        break // Mantém cache se servidor falhar
       }
-      // Se API retornou vazio mas temos cache: mantemos o cache
-    } catch {
-      // Mantém cache se servidor falhar
     }
   }
 
@@ -854,6 +917,7 @@ async function loadProducts() {
 
 onMounted(async () => {
   await loadProducts()
+  await loadProductCategories()
   // Mostrar escolha de modo scan se for a primeira vez nesta sessão
   const sessionKey = `pos_scan_shown_${new Date().toDateString()}`
   if (!localStorage.getItem(sessionKey)) {
@@ -863,10 +927,7 @@ onMounted(async () => {
   if (scanMode.value && searchInput.value) searchInput.value.focus()
 })
 
-// Recarregar produtos quando ficar online (sincroniza stock online → POS)
-watch(isOnline, (online) => {
-  if (online) loadProducts()
-})
+// ── Watchers ────────────────────────────────────────────────────────────────
 </script>
 
 <style>

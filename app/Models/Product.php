@@ -18,7 +18,7 @@ class Product extends Model
         'store_id', 'product_category_id', 'store_section_id', 'brand_id', 'name', 'slug',
         'description', 'price', 'cost_price', 'compare_price', 'flash_price', 'flash_until',
         'sku', 'barcode', 'model', 'images', 'attributes', 'is_active', 'is_featured',
-        'total_sold', 'is_weighable', 'weight_unit', 'pos_only',
+        'total_sold', 'is_weighable', 'weight_unit', 'availability', 'selling_modes',
     ];
 
     protected $casts = [
@@ -32,22 +32,40 @@ class Product extends Model
         'attributes' => 'array',
         'is_active' => 'boolean',
         'is_featured' => 'boolean',
-        'pos_only' => 'boolean',
+        'availability' => 'string',
+        'selling_modes' => 'array',
         'rating' => 'float',
         'total_sold' => 'integer',
     ];
 
-    protected static ?bool $hasPosOnlyColumn = null;
+    protected static ?bool $hasAvailabilityColumn = null;
 
-    public static function hasPosOnlyColumn(): bool
+    public static function hasAvailabilityColumn(): bool
     {
         // Remover cache estático para garantir que a migração seja detectada
-        return Schema::hasColumn((new self)->getTable(), 'pos_only');
+        return Schema::hasColumn((new self)->getTable(), 'availability');
+    }
+
+    public function scopeForVirtualStore($query)
+    {
+        if (self::hasAvailabilityColumn()) {
+            return $query->whereIn('availability', ['virtual_store', 'both']);
+        }
+        return $query->where(fn($q) => $q->where('pos_only', false)->orWhereNull('pos_only'));
+    }
+
+    public function scopeForPos($query)
+    {
+        if (self::hasAvailabilityColumn()) {
+            return $query->whereIn('availability', ['pos', 'both']);
+        }
+        // Fallback: show all products (since old logic showed all in POS)
+        return $query;
     }
 
     public function scopeExcludePosOnly($query)
     {
-        return $query->where(fn($q) => $q->where('pos_only', false)->orWhereNull('pos_only'));
+        return $query->forVirtualStore();
     }
 
     public function store(): BelongsTo

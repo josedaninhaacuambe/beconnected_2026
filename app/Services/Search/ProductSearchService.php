@@ -70,8 +70,8 @@ class ProductSearchService
         // Mostrar apenas produtos com stock > 0 por omissão
         $filters[] = 'stock_quantity > 0';
         // Excluir produtos apenas disponíveis no POS, se o campo existir no schema
-        if (Product::hasPosOnlyColumn()) {
-            $filters[] = 'pos_only = false';
+        if (Product::hasAvailabilityColumn()) {
+            $filters[] = "availability IN ('virtual_store', 'both')";
         }
 
         $payload = [

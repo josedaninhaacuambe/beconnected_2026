@@ -305,6 +305,7 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
         Route::put('stores/{store}/approve', [AdminController::class, 'approveStore']);
         Route::put('stores/{store}/reject', [AdminController::class, 'rejectStore']);
         Route::put('stores/{store}/suspend', [AdminController::class, 'suspendStore']);
+        Route::put('stores/{store}', [AdminController::class, 'updateStore']);
 
         // Estafetas
         Route::get('drivers', fn() => \App\Models\DeliveryDriver::with('user')->paginate(20));

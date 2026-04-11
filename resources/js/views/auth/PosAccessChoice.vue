@@ -9,7 +9,7 @@
 
         <div class="rounded-3xl border border-bc-gold/20 bg-bc-dark p-6 space-y-4">
           <p class="text-bc-light text-sm">Loja:</p>
-          <h2 class="text-white text-xl font-semibold">{{ storeName }}</h2>
+          <h2 class="text-black text-xl font-semibold">{{ storeName }}</h2>
           <p class="text-bc-muted text-sm">Podes usar o Beconnected como cliente normal ou entrar no painel POS desta loja.</p>
         </div>
 

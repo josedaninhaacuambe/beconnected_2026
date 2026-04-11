@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
 class PosController extends Controller
@@ -62,14 +63,14 @@ class PosController extends Controller
         // Cache por 5 minutos — invalidado ao registar venda/movimento de stock
         $products = Cache::remember("pos_products_{$store->id}", 300, function () use ($store) {
             $fields = ['id', 'name', 'price', 'cost_price', 'sku', 'barcode', 'images', 'is_weighable', 'weight_unit'];
-            if (Product::hasPosOnlyColumn()) {
-                $fields[] = 'pos_only';
+            if (Product::hasAvailabilityColumn()) {
+                $fields[] = 'availability';
             }
 
             return $store->products()
                 ->with('stock')
                 ->where('is_active', true)
-                // POS mostra TODOS os produtos activos (incluindo os pos_only)
+                ->forPos()
                 ->orderBy('name')
                 ->get($fields)
                 ->map(function ($p) {
@@ -493,7 +494,21 @@ class PosController extends Controller
         $this->requirePosPermission($request, 'adicionar_produtos');
         $store = $this->resolveStore($request);
 
-        $request->validate([
+        // Verificar se é FormData (com imagem) ou JSON
+        $isFormData = $request->hasFile('images');
+        $products = $isFormData ? json_decode($request->products, true) : $request->products;
+
+        // Validação básica
+        if ($isFormData) {
+            $request->validate([
+                'products' => 'required|string',
+                'images' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048', // 2MB
+            ]);
+            $products = json_decode($request->products, true);
+        }
+
+        // Validar produtos
+        $validator = Validator::make(['products' => $products], [
             'products'                => 'required|array|min:1',
             'products.*.local_id'     => 'required|string',
             'products.*.name'         => 'required|string|max:255',
@@ -504,13 +519,21 @@ class PosController extends Controller
             'products.*.weight_unit'  => 'nullable|in:g,kg,l,ml,un',
             'products.*.initial_stock'=> 'nullable|integer|min:0',
             'products.*.pos_only'     => 'nullable|boolean',
+            'products.*.availability' => 'nullable|in:virtual_store,pos,both',
+            'products.*.selling_modes' => 'nullable|array',
+            'products.*.selling_modes.*' => 'in:weight,unit',
+            'products.*.product_category_id' => 'required|integer|exists:product_categories,id',
         ]);
+
+        if ($validator->fails()) {
+            return response()->json(['message' => 'Dados inválidos.', 'errors' => $validator->errors()], 422);
+        }
 
         $created = 0;
         $map     = []; // local_id → server product_id
 
-        DB::transaction(function () use ($request, $store, &$created, &$map) {
-            foreach ($request->products as $pd) {
+        DB::transaction(function () use ($request, $store, $products, $isFormData, &$created, &$map) {
+            foreach ($products as $pd) {
                 // Evitar duplicados pelo nome + loja
                 $productData = [
                     'store_id'    => $store->id,
@@ -522,13 +545,23 @@ class PosController extends Controller
                     'is_weighable'=> $pd['is_weighable'] ?? false,
                     'weight_unit' => $pd['weight_unit'] ?? 'un',
                     'is_active'   => true,
+                    'product_category_id' => $pd['product_category_id'] ?? null,
                 ];
-                if (Product::hasPosOnlyColumn()) {
-                    $productData['pos_only'] = $pd['pos_only'] ?? false;
+                if (Product::hasAvailabilityColumn()) {
+                    $productData['availability'] = $pd['availability'] ?? 'both';
                 }
+                $productData['selling_modes'] = $pd['selling_modes'] ?? ['unit'];
 
                 $product = $store->products()->where('name', $pd['name'])->first()
                     ?? Product::create($productData);
+
+                // Processar imagem se fornecida
+                if ($isFormData && $request->hasFile('images')) {
+                    $image = $request->file('images');
+                    $imageName = 'product_' . $product->id . '_' . time() . '.' . $image->getClientOriginalExtension();
+                    $image->storeAs('products', $imageName, 'public');
+                    $product->update(['image' => $imageName]);
+                }
 
                 // Criar stock inicial
                 $stock = \App\Models\ProductStock::firstOrCreate(

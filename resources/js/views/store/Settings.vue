@@ -152,12 +152,16 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
 import axios from 'axios'
+import { useAuthStore } from '../../stores/auth.js'
+
+const authStore = useAuthStore()
 
 const loading   = ref(true)
 const saving    = ref(false)
 const saved     = ref(false)
 const error     = ref('')
 const storeSlug = ref('')
+const storeData = ref(null)
 const appUrl    = window.location.origin
 
 const currentLogo   = ref('')
@@ -357,7 +361,14 @@ async function save() {
     if (logoFile.value)   fd.append('logo',   logoFile.value)
     if (bannerFile.value) fd.append('banner', bannerFile.value)
 
-    await axios.post('/store/update', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    if (authStore.user?.role === 'admin' && storeData.value?.id) {
+      // Admin updating store
+      fd.append('store_id', storeData.value.id)
+      await axios.post('/store/update', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    } else {
+      // Store owner updating own store
+      await axios.post('/store/update', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    }
     saved.value = true
     setTimeout(() => saved.value = false, 3000)
     logoFile.value   = null
@@ -375,6 +386,7 @@ async function save() {
 onMounted(async () => {
   try {
     const { data } = await axios.get('/store')
+    storeData.value    = data
     storeSlug.value    = data.slug       ?? ''
     currentLogo.value  = data.logo       ?? ''
     currentBanner.value = data.banner    ?? ''
