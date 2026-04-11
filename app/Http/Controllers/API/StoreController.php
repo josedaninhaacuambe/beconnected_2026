@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\Store;
 use App\Models\StoreCategory;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -204,6 +205,23 @@ class StoreController extends Controller
     // Criar loja (dono da loja)
     public function store(Request $request): JsonResponse
     {
+        $user = $request->user();
+
+        // Obrigatoriedade: apenas store_owner pode criar loja
+        if ($user->role !== 'store_owner') {
+            return response()->json([
+                'message' => 'Apenas proprietários de loja podem criar uma loja. Atualize seu perfil para se tornar um proprietário.',
+            ], 403);
+        }
+
+        // Obrigatoriedade: usuário não pode ter mais de uma loja
+        $existingStore = Store::where('user_id', $user->id)->first();
+        if ($existingStore) {
+            return response()->json([
+                'message' => 'Você já possui uma loja cadastrada. Cada proprietário pode ter apenas uma loja.',
+            ], 422);
+        }
+
         $this->authorize('create', Store::class);
 
         $validated = $request->validate([
@@ -225,7 +243,8 @@ class StoreController extends Controller
             'banner' => 'nullable|image|max:5120',
         ]);
 
-        $validated['user_id'] = $request->user()->id;
+        // Obrigatoriedade: sempre associar ao user_id do dono autenticado
+        $validated['user_id'] = $user->id;
         $validated['slug'] = Str::slug($validated['name']) . '-' . Str::random(6);
         $validated['status'] = 'pending';
 
@@ -297,7 +316,13 @@ class StoreController extends Controller
             unset($validated['store_id']);
         } else {
             // Dono da loja actualiza a sua própria loja
-            $store = Store::where('user_id', $user->id)->firstOrFail();
+            $store = Store::where('user_id', $user->id)->first();
+            if (!$store) {
+                return response()->json([
+                    'message' => 'Nenhuma loja encontrada para o proprietário atual. Verifique a associação entre usuário e loja.',
+                ], 404);
+            }
+
             $validated = $request->validate([
                 'name' => 'sometimes|string|max:255',
                 'description' => 'nullable|string',
@@ -381,10 +406,30 @@ class StoreController extends Controller
     // Minha loja (do dono autenticado)
     public function myStore(Request $request): JsonResponse
     {
-        $store = Store::with(['category', 'province', 'city', 'neighborhood'])
-            ->where('user_id', $request->user()->id)
-            ->firstOrFail();
+        $user = $request->user();
 
-        return response()->json($store);
+        try {
+            if ($user->role === 'admin' && $request->has('store_id')) {
+                $store = Store::with(['category', 'province', 'city', 'neighborhood'])
+                    ->findOrFail($request->input('store_id'));
+            } else {
+                $store = Store::with(['category', 'province', 'city', 'neighborhood'])
+                    ->where('user_id', $user->id)
+                    ->firstOrFail();
+            }
+
+            return response()->json($store);
+        } catch (ModelNotFoundException $exception) {
+            return response()->json([
+                'message' => 'Nenhuma loja encontrada para o utilizador atual. Verifique se a loja está associada ao seu utilizador.',
+                'debug' => [
+                    'user_id' => $user->id,
+                    'user_role' => $user->role,
+                    'user_name' => $user->name,
+                    'has_store_relationship' => $user->store() ? 'yes' : 'no',
+                    'store_count_for_user' => Store::where('user_id', $user->id)->count(),
+                ]
+            ], 404);
+        }
     }
 }

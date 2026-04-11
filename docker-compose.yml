@@ -537,6 +537,19 @@ services:
       - beconnect
 
   # ═══════════════════════════════════════════════════════════════════════════
+  # MAILPIT — captura de emails em desenvolvimento (UI em :8025, SMTP em :1025)
+  # ═══════════════════════════════════════════════════════════════════════════
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: beconnect_mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025"   # UI web
+      - "1025:1025"   # SMTP
+    networks:
+      - beconnect
+
+  # ═══════════════════════════════════════════════════════════════════════════
   # phpMyAdmin — administração visual (acesso local)
   # ═══════════════════════════════════════════════════════════════════════════
   phpmyadmin:

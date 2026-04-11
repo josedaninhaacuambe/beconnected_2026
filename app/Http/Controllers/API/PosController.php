@@ -629,9 +629,29 @@ class PosController extends Controller
     // ─── Criar conta de utilizador + funcionário (sem OTP) ───────────────────
     public function createEmployeeAccount(Request $request): JsonResponse
     {
-        $user  = $request->user();
+        $user = $request->user();
+
+        // Verificar se o usuário é store_owner
+        if ($user->role !== 'store_owner') {
+            return response()->json([
+                'message' => 'Apenas proprietários de loja podem criar contas de funcionários.',
+            ], 403);
+        }
+
+        // Verificar se o usuário tem uma loja associada
         $store = $user->store;
-        abort_if(!$store, 403, 'Apenas proprietários de loja podem criar contas de funcionários.');
+        if (!$store) {
+            return response()->json([
+                'message' => 'Você precisa ter uma loja cadastrada para adicionar funcionários. Crie sua loja primeiro.',
+            ], 403);
+        }
+
+        // Verificar se a loja está ativa
+        if ($store->status !== 'active') {
+            return response()->json([
+                'message' => 'Sua loja precisa estar ativa para adicionar funcionários. Aguarde a aprovação da administração.',
+            ], 403);
+        }
 
         $validated = $request->validate([
             'name'          => 'required|string|max:255',
