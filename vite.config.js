@@ -9,8 +9,22 @@ export default defineConfig(({ mode }) => {
     // Produção:   lê .env.production → APP_URL=https://beconnected.escaleno.co.mz
     const env = loadEnv(mode, process.cwd(), '');
     const appUrl = env.APP_URL || 'http://localhost:8000';
-
     return {
+        server: {
+            host: '0.0.0.0',
+            port: 5174,
+            // Permite que o Laravel (localhost:8000) carregue assets do Vite (localhost:5174)
+            cors: {
+                origin: appUrl,
+                credentials: true,
+            },
+            origin: 'http://localhost:5174',
+            hmr: {
+                host: 'localhost',
+                port: 5174,
+            },
+            watch: { ignored: ['**/storage/framework/views/**'] },
+        },
         plugins: [
             laravel({
                 input: ['resources/js/app.js'],
@@ -77,9 +91,6 @@ export default defineConfig(({ mode }) => {
         },
         resolve: {
             alias: { '@': '/resources/js' },
-        },
-        server: {
-            watch: { ignored: ['**/storage/framework/views/**'] },
         },
     };
 });

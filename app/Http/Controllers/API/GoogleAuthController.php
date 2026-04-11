@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Models\Store;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -73,6 +74,26 @@ class GoogleAuthController extends Controller
                 'is_active'            => true,
                 'email_verified_at'    => now(),
             ]);
+
+            // Verificar se há dados de loja na sessão (registro com loja)
+            $storeData = session('store_registration_data');
+            if ($storeData) {
+                // Mudar role para store_owner e criar loja
+                $user->update(['role' => 'store_owner']);
+
+                Store::create([
+                    'user_id'     => $user->id,
+                    'name'        => $storeData['name'],
+                    'description' => $storeData['description'] ?? null,
+                    'phone'       => $storeData['phone'],
+                    'whatsapp'    => $storeData['whatsapp'] ?? null,
+                    'address'     => $storeData['address'] ?? null,
+                    'is_active'   => true, // loja ativa pois email já verificado pelo Google
+                ]);
+
+                // Limpar dados da sessão
+                session()->forget('store_registration_data');
+            }
         }
 
         // Cache google_id → user_id for 5 minutes
@@ -120,6 +141,26 @@ class GoogleAuthController extends Controller
                 'is_active' => true,
                 'email_verified_at' => now(),
             ]);
+
+            // Verificar se há dados de loja na sessão (registro com loja)
+            $storeData = session('store_registration_data');
+            if ($storeData) {
+                // Mudar role para store_owner e criar loja
+                $user->update(['role' => 'store_owner']);
+
+                Store::create([
+                    'user_id'     => $user->id,
+                    'name'        => $storeData['name'],
+                    'description' => $storeData['description'] ?? null,
+                    'phone'       => $storeData['phone'],
+                    'whatsapp'    => $storeData['whatsapp'] ?? null,
+                    'address'     => $storeData['address'] ?? null,
+                    'is_active'   => true, // loja ativa pois email já verificado pelo Google
+                ]);
+
+                // Limpar dados da sessão
+                session()->forget('store_registration_data');
+            }
         } else {
             $user->update([
                 'google_id' => $googleUser->getId(),
@@ -142,5 +183,30 @@ class GoogleAuthController extends Controller
             'role' => $user->role,
             'avatar' => $user->avatar ?? $user->google_avatar,
         ])));
+    }
+
+    /**
+     * Iniciar registro com Google e dados da loja
+     * Armazena dados da loja na sessão e redireciona para Google OAuth
+     */
+    public function registerWithStore(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'store.name'        => 'required|string|max:255',
+            'store.description' => 'nullable|string|max:1000',
+            'store.phone'       => 'required|string|max:20',
+            'store.whatsapp'    => 'nullable|string|max:20',
+            'store.address'     => 'nullable|string|max:500',
+        ]);
+
+        // Armazenar dados da loja na sessão para usar após callback do Google
+        session(['store_registration_data' => $validated['store']]);
+
+        $url = Socialite::driver('google')
+            ->stateless()
+            ->redirect()
+            ->getTargetUrl();
+
+        return response()->json(['redirect_url' => $url]);
     }
 }
