@@ -125,47 +125,78 @@
         <h2 class="text-bc-light font-semibold text-lg mb-1 text-center">Registar a minha loja</h2>
         <p class="text-bc-muted text-xs text-center mb-5">Após o registo, a tua loja será avaliada pela equipa Beconnect.</p>
 
-        <div class="mb-5">
+        <!-- ─── PASSO 1: Escolha método de login ────────────────── -->
+        <div v-if="!storeLoginMethod" class="mb-5">
           <p class="text-bc-muted text-xs mb-2 text-center">Como preferes entrar na tua loja?</p>
           <div class="grid grid-cols-2 gap-2">
             <button @click="storeLoginMethod = 'email'"
-              :class="['py-2 px-3 rounded-xl text-sm font-medium border transition', storeLoginMethod === 'email' ? 'bg-bc-gold text-bc-dark border-bc-gold' : 'border-bc-gold/30 text-bc-muted hover:border-bc-gold hover:text-bc-light']">
+              class="py-2 px-3 rounded-xl text-sm font-medium border border-bc-gold/30 text-bc-muted hover:border-bc-gold hover:text-bc-light transition">
               ✉️ Utilizador e Senha
             </button>
             <button @click="storeLoginMethod = 'google'"
-              :class="['py-2 px-3 rounded-xl text-sm font-medium border transition', storeLoginMethod === 'google' ? 'bg-bc-gold text-bc-dark border-bc-gold' : 'border-bc-gold/30 text-bc-muted hover:border-bc-gold hover:text-bc-light']">
+              class="py-2 px-3 rounded-xl text-sm font-medium border border-bc-gold/30 text-bc-muted hover:border-bc-gold hover:text-bc-light transition">
               🔵 Usar Google
             </button>
           </div>
         </div>
 
-        <div v-if="storeLoginMethod === 'email'">
-          <form @submit.prevent="submitRegister('store_owner')" class="space-y-3">
-            <input v-model="form.name" type="text" placeholder="Teu nome completo" class="input-african" required />
-            <input v-model="form.email" type="email" placeholder="Email" class="input-african" required />
-            <PasswordField v-model="form.password" placeholder="Senha (mín. 8 caracteres)" />
-            <PasswordField v-model="form.password_confirmation" placeholder="Confirmar senha" />
+        <!-- ─── PASSO 2: Dados preliminares da loja ────────────── -->
+        <div v-else-if="!storeDataCollected" class="space-y-4">
+          <button @click="storeLoginMethod = null" class="text-bc-muted text-xs hover:text-bc-gold mb-4 flex items-center gap-1">← Voltar</button>
+
+          <div class="text-center mb-4">
+            <span class="text-4xl">🏪</span>
+            <h3 class="text-bc-light font-semibold text-base mt-2">Dados da tua loja</h3>
+            <p class="text-bc-muted text-xs">Estes dados podem ser alterados posteriormente no painel de configurações.</p>
+          </div>
+
+          <form @submit.prevent="collectStoreData" class="space-y-3">
+            <input v-model="storeForm.name" type="text" placeholder="Nome da loja" class="input-african" required />
+            <textarea v-model="storeForm.description" placeholder="Descrição da loja (ex: O que vendes, horário de funcionamento, etc.)" class="input-african resize-none" rows="3" required></textarea>
+            <input v-model="storeForm.phone" type="tel" placeholder="Contacto (ex: +258 84 123 4567)" class="input-african" required />
+            <input v-model="storeForm.whatsapp" type="tel" placeholder="WhatsApp (ex: +258 84 123 4567)" class="input-african" required />
+            <input v-model="storeForm.address" type="text" placeholder="Endereço (opcional)" class="input-african" />
+
             <p v-if="error" class="text-red-400 text-sm text-center bg-red-900/20 rounded-lg p-2">{{ error }}</p>
+
             <button type="submit" :disabled="loading" class="btn-gold w-full py-3 text-sm">
-              {{ loading ? 'A criar conta...' : 'Registar como Dono de Loja' }}
+              {{ loading ? 'A processar...' : 'Continuar →' }}
             </button>
           </form>
         </div>
 
-        <div v-else-if="storeLoginMethod === 'google'">
-          <div class="bg-bc-gold/5 border border-bc-gold/20 rounded-xl p-3 mb-4 text-xs text-bc-muted">
-            <p class="text-bc-light font-medium mb-1">✅ Mais seguro e rápido</p>
-            <p>A tua conta Google será usada para aceder ao painel da loja.</p>
-          </div>
-          <button @click="registerWithGoogle('store_owner')" :disabled="googleLoading"
-            class="w-full flex items-center justify-center gap-3 bg-white text-gray-700 font-semibold py-3 px-4 rounded-xl hover:bg-gray-100 transition border border-gray-200">
-            <GoogleIcon />
-            {{ googleLoading ? 'A redirecionar...' : 'Registar Loja com Google' }}
-          </button>
-          <p v-if="error" class="text-red-400 text-sm text-center bg-red-900/20 rounded-lg p-2 mt-3">{{ error }}</p>
-        </div>
+        <!-- ─── PASSO 3: Registo do usuário ─────────────────────── -->
+        <div v-else-if="storeDataCollected">
+          <button @click="storeDataCollected = false" class="text-bc-muted text-xs hover:text-bc-gold mb-4 flex items-center gap-1">← Voltar</button>
 
-        <div v-else class="text-center py-4 text-bc-muted text-sm">Selecciona como preferes entrar na tua loja ↑</div>
+          <div v-if="storeLoginMethod === 'email'">
+            <h3 class="text-bc-light font-semibold text-base mb-3 text-center">Criar conta de dono da loja</h3>
+
+            <form @submit.prevent="submitRegisterWithStore('store_owner')" class="space-y-3">
+              <input v-model="form.name" type="text" placeholder="Teu nome completo" class="input-african" required />
+              <input v-model="form.email" type="email" placeholder="Email" class="input-african" required />
+              <PasswordField v-model="form.password" placeholder="Senha (mín. 8 caracteres)" />
+              <PasswordField v-model="form.password_confirmation" placeholder="Confirmar senha" />
+              <p v-if="error" class="text-red-400 text-sm text-center bg-red-900/20 rounded-lg p-2">{{ error }}</p>
+              <button type="submit" :disabled="loading" class="btn-gold w-full py-3 text-sm">
+                {{ loading ? 'A criar conta...' : 'Registar Loja' }}
+              </button>
+            </form>
+          </div>
+
+          <div v-else-if="storeLoginMethod === 'google'">
+            <div class="bg-bc-gold/5 border border-bc-gold/20 rounded-xl p-3 mb-4 text-xs text-bc-muted">
+              <p class="text-bc-light font-medium mb-1">✅ Mais seguro e rápido</p>
+              <p>A tua conta Google será usada para aceder ao painel da loja.</p>
+            </div>
+            <button @click="registerWithGoogleAndStore('store_owner')" :disabled="googleLoading"
+              class="w-full flex items-center justify-center gap-3 bg-white text-gray-700 font-semibold py-3 px-4 rounded-xl hover:bg-gray-100 transition border border-gray-200">
+              <GoogleIcon />
+              {{ googleLoading ? 'A redirecionar...' : 'Registar Loja com Google' }}
+            </button>
+            <p v-if="error" class="text-red-400 text-sm text-center bg-red-900/20 rounded-lg p-2 mt-3">{{ error }}</p>
+          </div>
+        </div>
 
         <p class="text-center text-bc-muted text-sm mt-4">
           Já tens conta? <RouterLink to="/login" class="text-bc-gold hover:underline">Entrar</RouterLink>
@@ -187,6 +218,7 @@ const authStore = useAuthStore()
 
 const accountType      = ref(null)
 const storeLoginMethod = ref(null)
+const storeDataCollected = ref(false)
 const loading          = ref(false)
 const googleLoading    = ref(false)
 const error            = ref('')
@@ -205,6 +237,7 @@ let cooldownTimer = null
 const otpCode = computed(() => otpDigits.value.join(''))
 
 const form = reactive({ name: '', email: '', password: '', password_confirmation: '' })
+const storeForm = reactive({ name: '', description: '', phone: '', whatsapp: '', address: '' })
 
 // ─── OTP input handlers ──────────────────────────────────────
 function onOtpInput(i) {
@@ -318,6 +351,88 @@ const GoogleIcon = defineComponent({
     h('path', { fill: '#EA4335', d: 'M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z' }),
   ])
 })
+
+const collectStoreData = () => {
+  if (!storeForm.name.trim()) {
+    error.value = 'Nome da loja é obrigatório'
+    return
+  }
+  if (!storeForm.phone.trim()) {
+    error.value = 'Telefone é obrigatório'
+    return
+  }
+  storeDataCollected.value = true
+  error.value = ''
+}
+
+const submitRegisterWithStore = async () => {
+  if (!form.name.trim() || !form.email.trim() || !form.password.trim()) {
+    error.value = 'Todos os campos são obrigatórios'
+    return
+  }
+  if (form.password !== form.password_confirmation) {
+    error.value = 'As senhas não coincidem'
+    return
+  }
+
+  loading.value = true
+  error.value = ''
+
+  try {
+    const response = await axios.post('/auth/register-with-store', {
+      name:                  form.name,
+      email:                 form.email,
+      password:              form.password,
+      password_confirmation: form.password_confirmation,
+      store: {
+        name:        storeForm.name,
+        description: storeForm.description,
+        phone:       storeForm.phone,
+        whatsapp:    storeForm.whatsapp,
+        address:     storeForm.address,
+      },
+    })
+
+    if (response.data.requires_otp) {
+      pendingEmail.value = response.data.email || form.email
+      pendingRole.value  = 'store_owner'
+      otpStep.value      = true
+      startCooldown()
+    } else if (response.data.token) {
+      localStorage.setItem('bc_token', response.data.token)
+      authStore.user  = response.data.user
+      authStore.token = response.data.token
+      axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`
+      router.push('/loja')
+    }
+  } catch (err) {
+    const errs = err.response?.data?.errors
+    error.value = errs
+      ? Object.values(errs).flat().join(' ')
+      : (err.response?.data?.message || 'Erro ao registar loja. Tente novamente.')
+  } finally {
+    loading.value = false
+  }
+}
+
+const registerWithGoogleAndStore = async () => {
+  googleLoading.value = true
+  error.value = ''
+
+  try {
+    // Redirect to Google OAuth with store data in session/state
+    const response = await axios.post('auth/google/register-with-store', {
+      store: storeForm
+    })
+
+    if (response.data.redirect_url) {
+      window.location.href = response.data.redirect_url
+    }
+  } catch (err) {
+    error.value = err.response?.data?.message || 'Erro ao iniciar registro com Google'
+    googleLoading.value = false
+  }
+}
 
 const PasswordField = defineComponent({
   props: { modelValue: String, placeholder: String },

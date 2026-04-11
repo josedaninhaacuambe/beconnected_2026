@@ -4,11 +4,13 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Mail\OtpMail;
+use App\Models\Store;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
@@ -88,11 +90,17 @@ class AuthController extends Controller
                 }
             }
 
+            // Nunca fazer downgrade: se já é store_owner, mantém o papel
+            $newRole = $validated['role'] ?? $existingUser->role ?? 'customer';
+            if ($existingUser->role === 'store_owner') {
+                $newRole = 'store_owner';
+            }
+
             $existingUser->update([
                 'name'           => $validated['name'],
                 'password'       => $validated['password'],
                 'phone'          => $validated['phone'] ?? $existingUser->phone,
-                'role'           => $validated['role'] ?? $existingUser->role ?? 'customer',
+                'role'           => $newRole,
                 'province_id'    => $validated['province_id'] ?? $existingUser->province_id,
                 'city_id'        => $validated['city_id'] ?? $existingUser->city_id,
                 'email_verified' => false,
@@ -307,5 +315,124 @@ class AuthController extends Controller
 
         $request->user()->update(['password' => $request->password]);
         return response()->json(['message' => 'Senha alterada com sucesso.']);
+    }
+
+    // ─── Registo com loja — cria conta de usuário e loja ──────────────────────
+    public function registerWithStore(Request $request): JsonResponse
+    {
+        $messages = [
+            'name.required'                 => 'O nome é obrigatório.',
+            'name.string'                   => 'O nome deve ser um texto.',
+            'name.max'                      => 'O nome pode ter no máximo 255 caracteres.',
+            'email.required'                => 'O email é obrigatório.',
+            'email.string'                  => 'O email deve ser um texto.',
+            'email.email'                   => 'Introduz um email válido.',
+            'email.max'                     => 'O email pode ter no máximo 255 caracteres.',
+            'password.required'             => 'A senha é obrigatória.',
+            'password.string'               => 'A senha deve ser um texto.',
+            'password.min'                  => 'A senha deve ter pelo menos 8 caracteres.',
+            'password.confirmed'            => 'A confirmação da senha não corresponde.',
+            'password_confirmation.required_with' => 'A confirmação da senha é obrigatória.',
+            'password_confirmation.string'  => 'A confirmação da senha deve ser um texto.',
+            'password_confirmation.min'     => 'A confirmação da senha deve ter pelo menos 8 caracteres.',
+            'store.name.required'           => 'O nome da loja é obrigatório.',
+            'store.name.string'             => 'O nome da loja deve ser um texto.',
+            'store.name.max'                => 'O nome da loja pode ter no máximo 255 caracteres.',
+            'store.description.string'      => 'A descrição da loja deve ser um texto.',
+            'store.description.max'         => 'A descrição da loja pode ter no máximo 1000 caracteres.',
+            'store.phone.required'          => 'O telefone da loja é obrigatório.',
+            'store.phone.string'            => 'O telefone da loja deve ser um texto.',
+            'store.phone.max'               => 'O telefone da loja pode ter no máximo 20 caracteres.',
+            'store.whatsapp.string'         => 'O WhatsApp da loja deve ser um texto.',
+            'store.whatsapp.max'            => 'O WhatsApp da loja pode ter no máximo 20 caracteres.',
+            'store.address.string'          => 'O endereço da loja deve ser um texto.',
+            'store.address.max'             => 'O endereço da loja pode ter no máximo 500 caracteres.',
+        ];
+
+        $validated = $request->validate([
+            'name'                  => 'required|string|max:255',
+            'email'                 => 'required|string|email|max:255',
+            'password'              => 'required|string|min:8|confirmed',
+            'password_confirmation' => 'required_with:password|string|min:8',
+            'store'                 => 'required|array',
+            'store.name'            => 'required|string|max:255',
+            'store.description'     => 'nullable|string|max:1000',
+            'store.phone'           => 'required|string|max:20',
+            'store.whatsapp'        => 'nullable|string|max:20',
+            'store.address'         => 'nullable|string|max:500',
+        ], $messages);
+
+        $existingUser = User::where('email', $validated['email'])->first();
+
+        if ($existingUser) {
+            if ($existingUser->email_verified) {
+                return response()->json([
+                    'message' => 'Este email já está registado. Usa outro email ou faz login.',
+                ], 422);
+            }
+
+            // Atualizar utilizador e garantir que a loja existe (transação atómica)
+            DB::transaction(function () use ($existingUser, $validated) {
+                $existingUser->update([
+                    'name'           => $validated['name'],
+                    'password'       => $validated['password'],
+                    'role'           => 'store_owner',
+                    'email_verified' => false,
+                    'is_active'      => false,
+                ]);
+
+                if (!$existingUser->store) {
+                    Store::create([
+                        'user_id'     => $existingUser->id,
+                        'name'        => $validated['store']['name'],
+                        'description' => $validated['store']['description'] ?? null,
+                        'phone'       => $validated['store']['phone'],
+                        'whatsapp'    => $validated['store']['whatsapp'] ?? null,
+                        'address'     => $validated['store']['address'] ?? null,
+                        'is_active'   => false,
+                    ]);
+                }
+            });
+
+            $this->sendOtp($existingUser);
+
+            return response()->json([
+                'requires_otp' => true,
+                'email'        => $existingUser->email,
+                'message'      => 'Conta já registada anteriormente mas ainda não confirmada. Enviámos um novo código para ' . $existingUser->email,
+            ], 200);
+        }
+
+        // Criar utilizador + loja numa transação atómica
+        $user = DB::transaction(function () use ($validated) {
+            $user = User::create([
+                'name'           => $validated['name'],
+                'email'          => $validated['email'],
+                'password'       => $validated['password'],
+                'role'           => 'store_owner',
+                'email_verified' => false,
+                'is_active'      => false,
+            ]);
+
+            Store::create([
+                'user_id'     => $user->id,
+                'name'        => $validated['store']['name'],
+                'description' => $validated['store']['description'] ?? null,
+                'phone'       => $validated['store']['phone'],
+                'whatsapp'    => $validated['store']['whatsapp'] ?? null,
+                'address'     => $validated['store']['address'] ?? null,
+                'is_active'   => false,
+            ]);
+
+            return $user;
+        });
+
+        $this->sendOtp($user);
+
+        return response()->json([
+            'requires_otp' => true,
+            'email'        => $user->email,
+            'message'      => 'Código enviado para ' . $user->email,
+        ], 201);
     }
 }
