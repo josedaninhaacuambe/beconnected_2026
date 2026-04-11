@@ -388,6 +388,9 @@ class ProductController extends Controller
         // Indexar no Meilisearch de forma assíncrona
         IndexProductInSearch::dispatch($product->id)->onQueue('search_index');
 
+        // Invalidar cache POS para que o produto apareça imediatamente no terminal
+        Cache::forget("pos_products_{$store->id}");
+
         return response()->json($product->load(['brand', 'category', 'stock']), 201);
     }
 
@@ -439,6 +442,9 @@ class ProductController extends Controller
 
         // Re-indexar no Meilisearch
         IndexProductInSearch::dispatch($product->id)->onQueue('search_index');
+
+        // Invalidar cache POS
+        Cache::forget("pos_products_{$product->store_id}");
 
         return response()->json($product->fresh()->load(['brand', 'category', 'stock']));
     }

@@ -266,112 +266,11 @@
       </div>
     </Teleport>
 
-    <!-- ══ MODAL: Adicionar produto offline ══════════════════════════════ -->
-    <Teleport to="body">
-      <div v-if="showAddProduct" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,0.6)">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto">
-          <h3 class="font-black text-gray-800 mb-4">➕ Novo Produto</h3>
-          <div class="space-y-3">
-            <div>
-              <label class="text-xs font-semibold text-gray-500">Nome do produto *</label>
-              <input v-model="newProduct.name" type="text" placeholder="Nome do produto"
-                class="w-full border border-gray-200 rounded-xl px-3 py-2 mt-1 text-sm focus:outline-none focus:border-bc-gold" />
-            </div>
-            <div>
-              <label class="text-xs font-semibold text-gray-500">Categoria *</label>
-              <select v-model="newProduct.product_category_id" class="w-full border border-gray-200 rounded-xl px-3 py-2 mt-1 text-sm focus:outline-none focus:border-bc-gold">
-                <option value="">Selecione uma categoria</option>
-                <option v-for="cat in productCategories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
-              </select>
-            </div>
-            <div>
-              <label class="text-xs font-semibold text-gray-500">Foto do produto (opcional)</label>
-              <input type="file" accept="image/*" @change="handleImageUpload" class="w-full border border-gray-200 rounded-xl px-3 py-2 mt-1 text-sm focus:outline-none focus:border-bc-gold" />
-              <p class="text-xs text-gray-400 mt-1">Máximo 2MB. Se não selecionar, será usada uma imagem automática.</p>
-            </div>
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="text-xs font-semibold text-gray-500">Preço de venda *</label>
-                <input v-model.number="newProduct.price" type="number" step="0.01" min="0" placeholder="0.00"
-                  class="w-full border border-gray-200 rounded-xl px-3 py-2 mt-1 text-sm focus:outline-none focus:border-bc-gold" />
-              </div>
-              <div>
-                <label class="text-xs font-semibold text-gray-500">Preço de compra</label>
-                <input v-model.number="newProduct.cost_price" type="number" step="0.01" min="0" placeholder="0.00"
-                  class="w-full border border-gray-200 rounded-xl px-3 py-2 mt-1 text-sm focus:outline-none focus:border-bc-gold" />
-              </div>
-            </div>
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="text-xs font-semibold text-gray-500">SKU / Código</label>
-                <input v-model="newProduct.sku" type="text" placeholder="SKU"
-                  class="w-full border border-gray-200 rounded-xl px-3 py-2 mt-1 text-sm focus:outline-none focus:border-bc-gold" />
-              </div>
-              <div>
-                <label class="text-xs font-semibold text-gray-500">Stock inicial</label>
-                <input v-model.number="newProduct.initial_stock" type="number" min="0" placeholder="0"
-                  class="w-full border border-gray-200 rounded-xl px-3 py-2 mt-1 text-sm focus:outline-none focus:border-bc-gold" />
-              </div>
-            </div>
-            <!-- Produto por peso -->
-            <div class="flex items-center gap-3 p-3 rounded-xl border border-gray-200">
-              <button type="button" @click="newProduct.is_weighable = !newProduct.is_weighable"
-                class="w-10 h-6 rounded-full transition flex items-center px-1"
-                :class="newProduct.is_weighable ? 'bg-bc-gold justify-end' : 'bg-gray-200 justify-start'">
-                <span class="w-4 h-4 bg-white rounded-full shadow"></span>
-              </button>
-              <div>
-                <p class="text-sm font-semibold text-gray-700">⚖️ Vendido por peso</p>
-                <p class="text-xs text-gray-400">Cereais, legumes, frutas...</p>
-              </div>
-            </div>
-            <!-- Modos de venda -->
-            <div class="p-3 rounded-xl border border-gray-200">
-              <p class="text-sm font-semibold text-gray-700 mb-2">📦 Modos de venda</p>
-              <div class="flex gap-2">
-                <label class="flex items-center gap-2">
-                  <input v-model="newProduct.selling_modes" type="checkbox" value="unit" class="rounded">
-                  <span class="text-sm">Unidade</span>
-                </label>
-                <label class="flex items-center gap-2">
-                  <input v-model="newProduct.selling_modes" type="checkbox" value="weight" class="rounded">
-                  <span class="text-sm">Peso</span>
-                </label>
-              </div>
-            </div>
-            <!-- Disponibilidade -->
-            <div class="p-3 rounded-xl border border-gray-200">
-              <p class="text-sm font-semibold text-gray-700 mb-2">🏪 Disponibilidade</p>
-              <select v-model="newProduct.availability" class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                <option value="both">Ambos (Loja Virtual e POS)</option>
-                <option value="virtual_store">Apenas Loja Virtual</option>
-                <option value="pos">Apenas POS</option>
-              </select>
-            </div>
-            <div v-if="newProduct.is_weighable">
-              <label class="text-xs font-semibold text-gray-500">Unidade de medida</label>
-              <div class="flex gap-2 mt-1">
-                <button v-for="u in ['g','kg','l','ml']" :key="u"
-                  type="button" @click="newProduct.weight_unit = u"
-                  class="flex-1 py-1.5 rounded-lg border-2 text-xs font-bold transition"
-                  :class="newProduct.weight_unit === u ? 'border-bc-gold text-bc-gold' : 'border-gray-200 text-gray-500'">
-                  {{ u }}
-                </button>
-              </div>
-            </div>
-          </div>
-          <div v-if="addProductError" class="text-red-500 text-sm mt-3">{{ addProductError }}</div>
-          <div class="flex gap-3 mt-4">
-            <button @click="showAddProduct = false" class="flex-1 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancelar</button>
-            <button @click="saveNewProduct" :disabled="!newProduct.name || !newProduct.price || !newProduct.product_category_id"
-              class="flex-1 py-2 rounded-xl text-white font-bold text-sm disabled:opacity-40"
-              style="background:#F07820;">
-              {{ isOnline ? 'Criar Produto' : '💾 Guardar Offline' }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <!-- ══ MODAL: Adicionar produto (formulário completo partilhado) ════════ -->
+    <ProductFormModal
+      v-model="showAddProduct"
+      @saved="onProductSaved"
+    />
 
     <!-- ══ MODAL: Recibo ══════════════════════════════════════════════════ -->
     <Teleport to="body">
@@ -473,16 +372,16 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted, watch } from 'vue'
+import { ref, computed, reactive, onMounted } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import {
   useOfflinePos, cacheProducts, getCachedProducts,
-  savePendingSale, savePendingProduct, getPendingProducts,
+  savePendingSale, getPendingProducts,
 } from '@/composables/useOfflinePos'
 
 const auth = useAuthStore()
-const { isOnline, pendingCount, pendingProductCount, syncing, syncMessage, trySyncNow, refreshPendingCount } = useOfflinePos()
+const { isOnline, pendingCount, pendingProductCount, syncing, syncMessage, trySyncNow } = useOfflinePos()
 
 const canAddProducts = computed(() => auth.hasPosPermission('adicionar_produtos'))
 
@@ -577,73 +476,11 @@ function confirmWeight() {
   weightProduct.value = null
 }
 
-// ── Adicionar produto offline ───────────────────────────────────────────────
-const showAddProduct  = ref(false)
-const addProductError = ref('')
-const productCategories = ref([])
-const newProduct = reactive({
-  name: '', price: '', cost_price: '', sku: '',
-  initial_stock: 0, is_weighable: false, weight_unit: 'kg', availability: 'both', selling_modes: ['unit'],
-  product_category_id: '', image: null,
-})
+// ── Adicionar produto ──────────────────────────────────────────────────────
+const showAddProduct = ref(false)
 
-async function saveNewProduct() {
-  addProductError.value = ''
-  const localId = `prod_local_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
-  const prod = {
-    local_id:            localId,
-    name:                newProduct.name,
-    price:               parseFloat(newProduct.price) || 0,
-    cost_price:          parseFloat(newProduct.cost_price) || 0,
-    sku:                 newProduct.sku || null,
-    initial_stock:       parseInt(newProduct.initial_stock) || 0,
-    is_weighable:        newProduct.is_weighable,
-    weight_unit:         newProduct.weight_unit,
-    availability:        newProduct.availability,
-    selling_modes:       newProduct.selling_modes,
-    product_category_id: newProduct.product_category_id,
-  }
-
-  try {
-    if (isOnline.value) {
-      if (newProduct.image) {
-        const formData = new FormData()
-        formData.append('products', JSON.stringify([prod]))
-        formData.append('images', newProduct.image)
-        await axios.post('/pos/sync-products', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        })
-      } else {
-        await axios.post('/pos/sync-products', { products: [prod] })
-      }
-      await loadProducts()
-    } else {
-      if (newProduct.image) {
-        alert('Upload de imagem não disponível offline. Imagem será ignorada.')
-        return
-      }
-      await savePendingProduct(prod)
-      await refreshPendingCount()
-      const tempId = -Date.now()
-      allProducts.value.push({
-        id: tempId, local_id: localId,
-        name: prod.name, price: prod.price, cost_price: prod.cost_price,
-        sku: prod.sku, is_weighable: prod.is_weighable, weight_unit: prod.weight_unit,
-        availability: prod.availability || 'both',
-        image: null, stock: { quantity: prod.initial_stock },
-      })
-      filterProducts()
-    }
-
-    showAddProduct.value = false
-    Object.assign(newProduct, {
-      name: '', price: '', cost_price: '', sku: '', initial_stock: 0,
-      is_weighable: false, weight_unit: 'kg', availability: 'both',
-      selling_modes: ['unit'], image: null, product_category_id: '',
-    })
-  } catch (e) {
-    addProductError.value = e.response?.data?.message ?? 'Erro ao criar produto.'
-  }
+async function onProductSaved() {
+  await loadProducts()
 }
 
 // ── Carrinho ────────────────────────────────────────────────────────────────
@@ -734,30 +571,8 @@ function removeItem(item) {
   cart.value = cart.value.filter(i => i._key !== item._key)
 }
 
-async function openAddProductModal() {
-  await loadProductCategories()
+function openAddProductModal() {
   showAddProduct.value = true
-}
-
-function handleImageUpload(event) {
-  const file = event.target.files[0]
-  if (file) {
-    if (file.size > 2 * 1024 * 1024) { // 2MB
-      alert('Imagem muito grande. Máximo 2MB.')
-      event.target.value = ''
-      return
-    }
-    newProduct.image = file
-  }
-}
-
-async function loadProductCategories() {
-  // try {
-  //   const { data } = await axios.get('/api/product-categories')
-  //   productCategories.value = data.flatMap(cat => [cat, ...(cat.children || [])])
-  // } catch (e) {
-  //   console.warn('Erro ao carregar categorias:', e)
-  // }
 }
 
 function clearCart() {
@@ -840,10 +655,6 @@ function newSale() {
   if (scanMode.value && searchInput.value) searchInput.value.focus()
 }
 
-function formatTime(iso) {
-  return new Date(iso).toLocaleTimeString('pt-MZ', { hour: '2-digit', minute: '2-digit' })
-}
-
 function printReceipt() {
   const el = document.getElementById('pos-receipt')
   if (!el) return
@@ -917,7 +728,6 @@ async function loadProducts() {
 
 onMounted(async () => {
   await loadProducts()
-  await loadProductCategories()
   // Mostrar escolha de modo scan se for a primeira vez nesta sessão
   const sessionKey = `pos_scan_shown_${new Date().toDateString()}`
   if (!localStorage.getItem(sessionKey)) {
