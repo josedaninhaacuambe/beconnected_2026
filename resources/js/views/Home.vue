@@ -23,7 +23,7 @@
       <div class="relative z-10 flex flex-col justify-center h-full px-6 sm:px-14 py-12 max-w-2xl"
            style="min-height: clamp(320px, 45vw, 620px);">
 
-        <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-black leading-tight mb-4">
+        <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl text-white leading-tight mb-4" style="color:#ffffff;">
           COMPRA. VENDE.<br>
           <span style="color:#F07820;">CONECTA.</span>
         </h1>
@@ -184,15 +184,14 @@
             :to="`/lojas/${store.slug}`"
             class="card-african overflow-hidden hover:border-bc-gold/60 transition"
           >
-            <div class="h-32 bg-bc-surface relative">
-              <AppImg v-if="store.banner" :src="`/storage/${store.banner}`" class="w-full h-full object-cover" :alt="store.name" />
+            <div class="h-32 bg-bc-surface relative overflow-hidden">
+              <AppImg :src="store.banner ? `/storage/${store.banner}` : ''" type="banner" class="w-full h-full object-cover" :alt="store.name" />
               <span v-if="store.is_featured" class="absolute top-2 right-2 bg-bc-gold text-bc-dark text-xs font-bold px-2 py-0.5 rounded-full">⭐ DESTAQUE</span>
             </div>
             <div class="p-3">
               <div class="flex items-center gap-2 mb-1">
-                <div class="w-8 h-8 bg-bc-gold/10 rounded-full flex items-center justify-center">
-                  <AppImg v-if="store.logo" :src="`/storage/${store.logo}`" class="w-8 h-8 rounded-full object-cover" />
-                  <span v-else class="text-bc-gold text-sm font-bold">{{ store.name.charAt(0) }}</span>
+                <div class="w-8 h-8 bg-bc-gold/10 rounded-full flex items-center justify-center overflow-hidden">
+                  <AppImg :src="store.logo ? `/storage/${store.logo}` : ''" type="store" class="w-8 h-8 rounded-full object-cover" />
                 </div>
                 <h3 class="text-bc-light font-semibold text-sm">{{ store.name }}</h3>
               </div>

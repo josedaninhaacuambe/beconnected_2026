@@ -94,6 +94,7 @@
         <div class="h-40 bg-bc-surface-2 relative overflow-hidden">
           <AppImg
             :src="product.images?.[0] ? (product.images[0].startsWith('http') ? product.images[0] : `/storage/${product.images[0]}`) : ''"
+            type="product"
             class="w-full h-full object-cover group-hover:scale-105 transition duration-300"
             :alt="product.name"
           />

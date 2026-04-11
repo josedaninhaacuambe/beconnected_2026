@@ -68,8 +68,7 @@
             :disabled="(p.stock?.quantity ?? 0) <= 0"
           >
             <div class="w-full h-16 rounded-lg overflow-hidden bg-gray-100 mb-2 flex items-center justify-center">
-              <AppImg v-if="p.image" :src="p.image.startsWith('http') ? p.image : '/storage/' + p.image" class="w-full h-full object-cover" />
-              <span v-else class="text-2xl">{{ p.is_weighable ? '⚖️' : '🛍️' }}</span>
+              <AppImg :src="p.image ? (p.image.startsWith('http') ? p.image : '/storage/' + p.image) : ''" type="product" class="w-full h-full object-cover" />
             </div>
             <p class="text-xs font-semibold text-gray-800 line-clamp-2 leading-tight mb-1">{{ p.name }}</p>
             <p class="text-sm font-black" style="color:#F07820;">{{ fmt(p.price) }}</p>
@@ -117,17 +116,19 @@
           class="flex items-center gap-2 p-2 bg-gray-50 rounded-xl">
           <div class="flex-1 min-w-0">
             <p class="text-xs font-semibold text-gray-800 truncate">{{ item.product_name }}</p>
-            <p class="text-xs text-gray-400">{{ fmt(item.unit_price) }}
+            <p class="text-xs text-gray-400 truncate">{{ fmt(item.unit_price) }}
               <span v-if="item.weight_amount">× {{ item.weight_amount }}{{ item.weight_unit }}</span>
             </p>
           </div>
-          <div class="flex items-center gap-1">
+          <div class="flex items-center gap-1 shrink-0">
             <button @click="changeQty(item, -1)" class="w-6 h-6 rounded-lg bg-gray-200 text-gray-600 text-xs font-bold hover:bg-gray-300 transition">−</button>
             <span class="w-6 text-center text-xs font-bold">{{ item.quantity }}</span>
             <button @click="changeQty(item, 1)" class="w-6 h-6 rounded-lg text-white text-xs font-bold transition" style="background:#F07820;">+</button>
           </div>
-          <p class="text-xs font-bold text-gray-800 w-16 text-right">{{ fmt(item.subtotal) }}</p>
-          <button @click="removeItem(item)" class="text-red-400 hover:text-red-600 ml-1">✕</button>
+          <div class="flex items-center gap-1 shrink-0">
+            <p class="text-xs font-bold text-gray-800 min-w-[4.5rem] text-right">{{ fmt(item.subtotal) }}</p>
+            <button @click="removeItem(item)" class="text-red-400 hover:text-red-600 text-sm">✕</button>
+          </div>
         </div>
       </div>
 
@@ -283,7 +284,7 @@
                   class="w-full border border-gray-200 rounded-xl px-3 py-2 mt-1 text-sm focus:outline-none focus:border-bc-gold" />
               </div>
               <div>
-                <label class="text-xs font-semibold text-gray-500">Preço de custo</label>
+                <label class="text-xs font-semibold text-gray-500">Preço de compra</label>
                 <input v-model.number="newProduct.cost_price" type="number" step="0.01" min="0" placeholder="0.00"
                   class="w-full border border-gray-200 rounded-xl px-3 py-2 mt-1 text-sm focus:outline-none focus:border-bc-gold" />
               </div>
@@ -312,17 +313,28 @@
                 <p class="text-xs text-gray-400">Cereais, legumes, frutas...</p>
               </div>
             </div>
-            <!-- Apenas no POS -->
-            <div class="flex items-center gap-3 p-3 rounded-xl border border-gray-200">
-              <button type="button" @click="newProduct.pos_only = !newProduct.pos_only"
-                class="w-10 h-6 rounded-full transition flex items-center px-1"
-                :class="newProduct.pos_only ? 'bg-blue-500 justify-end' : 'bg-gray-200 justify-start'">
-                <span class="w-4 h-4 bg-white rounded-full shadow"></span>
-              </button>
-              <div>
-                <p class="text-sm font-semibold text-gray-700">🏪 Apenas no POS</p>
-                <p class="text-xs text-gray-400">Não aparece na loja online</p>
+            <!-- Modos de venda -->
+            <div class="p-3 rounded-xl border border-gray-200">
+              <p class="text-sm font-semibold text-gray-700 mb-2">📦 Modos de venda</p>
+              <div class="flex gap-2">
+                <label class="flex items-center gap-2">
+                  <input v-model="newProduct.selling_modes" type="checkbox" value="unit" class="rounded">
+                  <span class="text-sm">Unidade</span>
+                </label>
+                <label class="flex items-center gap-2">
+                  <input v-model="newProduct.selling_modes" type="checkbox" value="weight" class="rounded">
+                  <span class="text-sm">Peso</span>
+                </label>
               </div>
+            </div>
+            <!-- Disponibilidade -->
+            <div class="p-3 rounded-xl border border-gray-200">
+              <p class="text-sm font-semibold text-gray-700 mb-2">🏪 Disponibilidade</p>
+              <select v-model="newProduct.availability" class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                <option value="both">Ambos (Loja Virtual e POS)</option>
+                <option value="virtual_store">Apenas Loja Virtual</option>
+                <option value="pos">Apenas POS</option>
+              </select>
             </div>
             <div v-if="newProduct.is_weighable">
               <label class="text-xs font-semibold text-gray-500">Unidade de medida</label>
@@ -558,7 +570,7 @@ const showAddProduct  = ref(false)
 const addProductError = ref('')
 const newProduct = reactive({
   name: '', price: '', cost_price: '', sku: '',
-  initial_stock: 0, is_weighable: false, weight_unit: 'kg', pos_only: false,
+  initial_stock: 0, is_weighable: false, weight_unit: 'kg', availability: 'both', selling_modes: ['unit'],
 })
 
 async function saveNewProduct() {
@@ -573,7 +585,8 @@ async function saveNewProduct() {
     initial_stock: parseInt(newProduct.initial_stock) || 0,
     is_weighable: newProduct.is_weighable,
     weight_unit:  newProduct.weight_unit,
-    pos_only:     newProduct.pos_only,
+    availability: newProduct.availability,
+    selling_modes: newProduct.selling_modes,
   }
 
   try {
@@ -588,14 +601,14 @@ async function saveNewProduct() {
         id: tempId, local_id: localId,
         name: prod.name, price: prod.price, cost_price: prod.cost_price,
         sku: prod.sku, is_weighable: prod.is_weighable, weight_unit: prod.weight_unit,
-        pos_only: prod.pos_only,
+        availability: prod.availability || 'both',
         image: null, stock: { quantity: prod.initial_stock },
       }
       allProducts.value.push(localProd)
       filterProducts()
     }
     showAddProduct.value = false
-    Object.assign(newProduct, { name:'', price:'', cost_price:'', sku:'', initial_stock:0, is_weighable:false, weight_unit:'kg', pos_only:false })
+    Object.assign(newProduct, { name:'', price:'', cost_price:'', sku:'', initial_stock:0, is_weighable:false, weight_unit:'kg', availability:'both', selling_modes:['unit'] })
   } catch (e) {
     addProductError.value = e.response?.data?.message ?? 'Erro ao criar produto.'
   }

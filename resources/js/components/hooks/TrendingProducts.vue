@@ -57,6 +57,7 @@
           <div class="h-36 bg-bc-surface relative overflow-hidden">
             <AppImg
               :src="product.images?.length ? `/storage/${product.images[0]}` : ''"
+              type="product"
               :alt="product.name"
               class="w-full h-full object-cover"
             />
