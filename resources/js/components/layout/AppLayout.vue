@@ -57,18 +57,18 @@
             </RouterLink>
 
             <!-- User menu -->
-            <div v-if="authStore.isAuthenticated" class="relative group">
-              <button class="flex items-center gap-2 text-white hover:text-bc-gold transition">
+            <div v-if="authStore.isAuthenticated" class="relative">
+              <button @click="showMenu = !showMenu" class="flex items-center gap-2 text-white hover:text-bc-gold transition">
                 <div class="w-8 h-8 bg-bc-gold rounded-full flex items-center justify-center">
                   <span class="text-white text-sm font-bold">{{ authStore.user?.name?.charAt(0) }}</span>
                 </div>
               </button>
-              <div class="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-                <RouterLink to="/conta" class="block px-4 py-2 text-sm text-bc-light hover:text-bc-gold hover:bg-orange-50 rounded-t-xl">Minha Conta</RouterLink>
-                <RouterLink to="/conta/pedidos" class="block px-4 py-2 text-sm text-bc-light hover:text-bc-gold hover:bg-orange-50">Pedidos</RouterLink>
-                <RouterLink v-if="authStore.isPosEmployee || authStore.isStoreOwner" to="/pos" class="block px-4 py-2 text-sm text-bc-gold font-semibold hover:bg-orange-50">Acessar POS</RouterLink>
-                <RouterLink v-if="authStore.isStoreOwner" to="/loja" class="block px-4 py-2 text-sm text-bc-gold font-semibold hover:bg-orange-50">Gerir Loja</RouterLink>
-                <button @click="authStore.logout()" class="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 rounded-b-xl">Sair</button>
+              <div v-if="showMenu" class="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-xl transition-all z-50">
+                <RouterLink @click="showMenu = false" to="/conta" class="block px-4 py-2 text-sm text-bc-light hover:text-bc-gold hover:bg-orange-50 rounded-t-xl">Minha Conta</RouterLink>
+                <RouterLink @click="showMenu = false" to="/conta/pedidos" class="block px-4 py-2 text-sm text-bc-light hover:text-bc-gold hover:bg-orange-50">Pedidos</RouterLink>
+                <RouterLink v-if="authStore.isPosEmployee || authStore.isStoreOwner" @click="showMenu = false" to="/pos" class="block px-4 py-2 text-sm text-bc-gold font-semibold hover:bg-orange-50">Acessar POS</RouterLink>
+                <RouterLink v-if="authStore.isStoreOwner" @click="showMenu = false" to="/loja" class="block px-4 py-2 text-sm text-bc-gold font-semibold hover:bg-orange-50">Gerir Loja</RouterLink>
+                <button @click="logout" class="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 rounded-b-xl">Sair</button>
               </div>
             </div>
             <div v-else class="flex gap-2">
@@ -130,21 +130,21 @@
     <FeedbackButton />
 
     <!-- Bottom nav (mobile) -->
-    <nav class="fixed bottom-0 left-0 right-0 bg-bc-navy border-t border-white/10 shadow-lg flex md:hidden z-50">
-      <RouterLink to="/" class="flex-1 flex flex-col items-center py-2 text-white/50 hover:text-bc-gold text-xs gap-0.5">
+    <nav class="fixed bottom-0 left-0 right-0 bg-bc-gold border-t border-bc-dark shadow-lg flex md:hidden z-50">
+      <RouterLink to="/" class="flex-1 flex flex-col items-center py-2 text-bc-dark hover:text-bc-navy text-xs gap-0.5">
         <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
         Início
       </RouterLink>
-      <RouterLink to="/pesquisa" class="flex-1 flex flex-col items-center py-2 text-white/50 hover:text-bc-gold text-xs gap-0.5">
+      <RouterLink to="/pesquisa" class="flex-1 flex flex-col items-center py-2 text-bc-dark hover:text-bc-navy text-xs gap-0.5">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
         Pesquisar
       </RouterLink>
-      <RouterLink to="/conta/carrinho" class="flex-1 flex flex-col items-center py-2 text-bc-muted hover:text-bc-gold text-xs gap-0.5 relative">
+      <RouterLink to="/conta/carrinho" class="flex-1 flex flex-col items-center py-2 text-bc-dark hover:text-bc-navy text-xs gap-0.5 relative">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
         <span v-if="cartStore.totalItems > 0" class="absolute top-1 right-6 bg-bc-orange text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">{{ cartStore.totalItems }}</span>
         Carrinho
       </RouterLink>
-      <RouterLink to="/conta" class="flex-1 flex flex-col items-center py-2 text-white/50 hover:text-bc-gold text-xs gap-0.5">
+      <RouterLink to="/conta" class="flex-1 flex flex-col items-center py-2 text-bc-dark hover:text-bc-navy text-xs gap-0.5">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
         Conta
       </RouterLink>
@@ -166,9 +166,16 @@ const router = useRouter()
 const authStore = useAuthStore()
 const cartStore = useCartStore()
 const searchQuery = ref('')
+const showMenu = ref(false)
 
 if (authStore.isAuthenticated) {
   cartStore.fetchCart()
+}
+
+async function logout() {
+  showMenu.value = false
+  await authStore.logout()
+  router.push('/')
 }
 
 function goSearch() {
