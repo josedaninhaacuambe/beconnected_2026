@@ -309,14 +309,32 @@ class ProductController extends Controller
 
     public function myProducts(Request $request): JsonResponse
     {
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $user = $request->user();
+        $store = null;
+
+        if ($user->isStoreOwner() || $user->isAdmin()) {
+            $store = Store::where('user_id', $user->id)->firstOrFail();
+        } elseif ($employee = $user->activePosEmployee) {
+            $store = $employee->store;
+            abort_unless($store, 404);
+        } else {
+            abort(403, 'Acesso negado.');
+        }
 
         $perPage = min((int) $request->get('per_page', 20), 200);
+        
+        // Filtro opcional: apenas produtos disponíveis em POS
+        $posOnly = $request->boolean('for_pos', false);
 
-        $products = Product::with(['brand', 'category', 'stock', 'storeSection'])
-            ->where('store_id', $store->id)
-            ->latest()
-            ->paginate($perPage);
+        $query = Product::with(['brand', 'category', 'stock', 'storeSection'])
+            ->where('store_id', $store->id);
+        
+        // Aplicar scope forPos se solicitado
+        if ($posOnly) {
+            $query->forPos();
+        }
+        
+        $products = $query->latest()->paginate($perPage);
 
         return response()->json($products);
     }
@@ -362,6 +380,9 @@ class ProductController extends Controller
             $autoImage = (new ProductImageService())->fetchForProduct($validated['name'], $brandName);
             if ($autoImage) {
                 $images = [$autoImage];
+            } else {
+                // Usar imagem padrão se não conseguir buscar automaticamente
+                $images = ['Produto.png'];
             }
         }
 

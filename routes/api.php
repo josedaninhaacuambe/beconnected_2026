@@ -1,7 +1,10 @@
 <?php
 
 use App\Http\Controllers\API\AdminController;
+use App\Http\Controllers\API\AdminProductVisibilityController;
 use App\Http\Controllers\API\AdminStaffController;
+use App\Http\Controllers\API\AdminStoreManagementController;
+use App\Http\Controllers\API\AdminUserManagementController;
 use App\Http\Controllers\API\AdminVisibilityController;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\CartController;
@@ -171,53 +174,57 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
     });
 
     // =============================================
-    // ROTAS DO DONO DE LOJA (e funcionários)
+    // ROTAS DO DONO DE LOJA e POS EMPREGADOS
     // =============================================
-    Route::middleware('role:store_owner,admin')->prefix('store')->group(function () {
-        Route::get('/', [StoreController::class, 'myStore']);
-        Route::post('/', [StoreController::class, 'store']);
-        Route::post('update', [StoreController::class, 'updateMyStore']);
-        Route::get('dashboard', [StoreController::class, 'dashboard']);
-
-        // Produtos
+    Route::prefix('store')->group(function () {
+        // Produtos visíveis ao dono da loja e aos funcionários do POS
         Route::get('products', [ProductController::class, 'myProducts']);
-        Route::post('products', [ProductController::class, 'storeProduct']);
-        Route::put('products/{product}', [ProductController::class, 'updateProduct']);
-        Route::delete('products/{product}', [ProductController::class, 'destroyProduct']);
-        Route::post('products/{product}/stock', [ProductController::class, 'updateStock']);
-        Route::get('products/{product}/stock/movements', [ProductController::class, 'stockMovements']);
-        Route::post('products/fetch-image', [ProductController::class, 'fetchAutoImage']);
 
-        // Pedidos da loja
-        Route::get('orders', [OrderController::class, 'storeOrders']);
-        Route::put('orders/{storeOrder}/status', [OrderController::class, 'updateStoreOrderStatus']);
+        Route::middleware('role:store_owner,admin')->group(function () {
+            Route::get('/', [StoreController::class, 'myStore']);
+            Route::post('/', [StoreController::class, 'store']);
+            Route::post('update', [StoreController::class, 'updateMyStore']);
+            Route::get('dashboard', [StoreController::class, 'dashboard']);
 
-        // Carrinhos activos (potenciais vendas)
-        Route::get('active-carts', function (Illuminate\Http\Request $req) {
-            $store = \App\Models\Store::where('user_id', $req->user()->id)->firstOrFail();
-            $carts = \App\Models\CartItem::with(['cart.user', 'product'])
-                ->whereHas('product', fn($q) => $q->where('store_id', $store->id))
-                ->whereHas('cart', fn($q) => $q->whereNotNull('user_id'))
-                ->get()
-                ->groupBy('cart_id')
-                ->map(function ($items) {
-                    $cart = $items->first()->cart;
-                    return [
-                        'user' => $cart->user->only(['id', 'name', 'phone']),
-                        'items' => $items->map(fn($i) => [
-                            'product_name' => $i->product->name,
-                            'quantity' => $i->quantity,
-                        ]),
-                        'total_value' => $items->sum(fn($i) => $i->unit_price * $i->quantity),
-                        'added_at' => $items->max('created_at'),
-                    ];
-                })
-                ->values();
-            return response()->json($carts);
+            // Produtos
+            Route::post('products', [ProductController::class, 'storeProduct']);
+            Route::put('products/{product}', [ProductController::class, 'updateProduct']);
+            Route::delete('products/{product}', [ProductController::class, 'destroyProduct']);
+            Route::post('products/{product}/stock', [ProductController::class, 'updateStock']);
+            Route::get('products/{product}/stock/movements', [ProductController::class, 'stockMovements']);
+            Route::post('products/fetch-image', [ProductController::class, 'fetchAutoImage']);
+
+            // Pedidos da loja
+            Route::get('orders', [OrderController::class, 'storeOrders']);
+            Route::put('orders/{storeOrder}/status', [OrderController::class, 'updateStoreOrderStatus']);
+
+            // Carrinhos activos (potenciais vendas)
+            Route::get('active-carts', function (Illuminate\Http\Request $req) {
+                $store = \App\Models\Store::where('user_id', $req->user()->id)->firstOrFail();
+                $carts = \App\Models\CartItem::with(['cart.user', 'product'])
+                    ->whereHas('product', fn($q) => $q->where('store_id', $store->id))
+                    ->whereHas('cart', fn($q) => $q->whereNotNull('user_id'))
+                    ->get()
+                    ->groupBy('cart_id')
+                    ->map(function ($items) {
+                        $cart = $items->first()->cart;
+                        return [
+                            'user' => $cart->user->only(['id', 'name', 'phone']),
+                            'items' => $items->map(fn($i) => [
+                                'product_name' => $i->product->name,
+                                'quantity' => $i->quantity,
+                            ]),
+                            'total_value' => $items->sum(fn($i) => $i->unit_price * $i->quantity),
+                            'added_at' => $items->max('created_at'),
+                        ];
+                    })
+                    ->values();
+                return response()->json($carts);
+            });
+
+            // Visibilidade/Posicionamento
+            Route::post('visibility/purchase', [VisibilityController::class, 'purchase']);
         });
-
-        // Visibilidade/Posicionamento
-        Route::post('visibility/purchase', [VisibilityController::class, 'purchase']);
 
         // ─── IMPORTAÇÃO DE STOCK ─────────────────────────────────────────
         Route::prefix('stock')->group(function () {
@@ -362,6 +369,29 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
         Route::put('visibility/{purchase}/status', [AdminVisibilityController::class, 'updateStatus']);
         Route::delete('visibility/{purchase}', [AdminVisibilityController::class, 'remove']);
         Route::post('visibility/{purchase}/remind', [AdminVisibilityController::class, 'sendPaymentReminder']);
+
+        // ─── STORE MANAGEMENT (Enhanced) ───────────────────────────────────
+        Route::get('stores-list', [AdminStoreManagementController::class, 'index']);
+        Route::get('stores-list/{store}', [AdminStoreManagementController::class, 'show']);
+        Route::put('stores-list/{store}/availability', [AdminStoreManagementController::class, 'updateAvailability']);
+        Route::put('stores-list/{store}/visibility', [AdminStoreManagementController::class, 'toggleVisibility']);
+        Route::put('stores-list/{store}/suspend', [AdminStoreManagementController::class, 'suspend']);
+        Route::put('stores-list/{store}/reactivate', [AdminStoreManagementController::class, 'reactivate']);
+
+        // ─── USER MANAGEMENT (Enhanced) ───────────────────────────────────
+        Route::get('users-list', [AdminUserManagementController::class, 'index']);
+        Route::get('users-list/{user}', [AdminUserManagementController::class, 'show']);
+        Route::put('users-list/{user}/deactivate', [AdminUserManagementController::class, 'deactivate']);
+        Route::put('users-list/{user}/reactivate', [AdminUserManagementController::class, 'reactivate']);
+        Route::get('users-list/statistics/overall', [AdminUserManagementController::class, 'statistics']);
+
+        // ─── PRODUCT VISIBILITY MANAGEMENT ────────────────────────────────
+        Route::get('products/pending-approvals', [AdminProductVisibilityController::class, 'pendingApprovals']);
+        Route::get('stores/{store}/products-list', [AdminProductVisibilityController::class, 'storeProducts']);
+        Route::post('products/{product}/approve', [AdminProductVisibilityController::class, 'approveProduct']);
+        Route::post('products/{product}/reject', [AdminProductVisibilityController::class, 'rejectProduct']);
+        Route::put('products/{product}/revoke-approval', [AdminProductVisibilityController::class, 'revokeApproval']);
+        Route::post('stores/{store}/products/approve-all', [AdminProductVisibilityController::class, 'approveStoreProducts']);
 
         // ─── ORDERS (enhanced) ────────────────────────────────────────────
         Route::get('orders', [AdminController::class, 'allOrders']);
