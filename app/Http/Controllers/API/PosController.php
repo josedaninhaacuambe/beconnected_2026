@@ -22,15 +22,27 @@ class PosController extends Controller
     // Resolve a loja do utilizador (dono ou funcionário activo)
     private function resolveStore(Request $request)
     {
-        $user  = $request->user();
-        $store = $user->store; // store_owner
+        $user = $request->user();
 
-        if (!$store) {
-            $emp = StoreEmployee::where('user_id', $user->id)
-                ->where('is_active', true)
-                ->with('store')
-                ->first();
-            $store = $emp?->store;
+        // 1) Se for funcionário POS, usa a loja do employee activo primeiro.
+        if ($user->pos_employee?->store) {
+            return $user->pos_employee->store;
+        }
+
+        $employee = StoreEmployee::where('user_id', $user->id)
+            ->where('is_active', true)
+            ->with('store')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($employee?->store) {
+            return $employee->store;
+        }
+
+        // 2) Se for dono de loja, usa a loja do relacionamento directo.
+        $store = $user->store;
+        if (!$store && method_exists($user, 'stores')) {
+            $store = $user->stores()->first();
         }
 
         abort_if(!$store, 403, 'Sem acesso a nenhuma loja.');
