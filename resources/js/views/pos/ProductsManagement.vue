@@ -2,7 +2,20 @@
   <div class="flex h-full flex-col bg-gray-50 overflow-hidden">
     <!-- Header com botão adicionar -->
     <div class="flex-shrink-0 px-4 py-3 bg-white border-b border-gray-200 flex items-center justify-between">
-      <h2 class="font-bold text-gray-800">📦 Produtos</h2>
+      <div class="flex items-center gap-4">
+        <h2 class="font-bold text-gray-800">📦 Produtos</h2>
+        
+        <!-- Filtro de categoria -->
+        <div class="flex items-center gap-2">
+          <label class="text-sm font-medium text-gray-600">Categoria:</label>
+          <select v-model="selectedCategory" @change="currentPage = 1" 
+                  class="px-3 py-1 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-bc-gold">
+            <option value="all">📦 Todos</option>
+            <option v-for="cat in categoriesWithProducts" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+          </select>
+        </div>
+      </div>
+      
       <button v-if="canManageProducts" @click="openAddForm"
         class="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-bold transition"
         style="background:#F07820; color:white;">
@@ -16,10 +29,12 @@
         <div v-for="i in 6" :key="i" class="bg-white rounded-lg h-48 animate-pulse"></div>
       </div>
 
-      <div v-else-if="!products.length" class="flex flex-col items-center justify-center flex-1 text-gray-400">
+      <div v-else-if="!filteredProducts.length" class="flex flex-col items-center justify-center flex-1 text-gray-400">
         <span class="text-5xl mb-3">📦</span>
-        <p class="text-sm font-semibold">Nenhum produto disponível em POS</p>
-        <p class="text-xs text-gray-400 mt-1 mb-4">Produtos disponíveis apenas na Loja Virtual não aparecem aqui</p>
+        <p class="text-sm font-semibold" v-if="selectedCategory === 'all'">Nenhum produto disponível em POS</p>
+        <p class="text-sm font-semibold" v-else>Nenhum produto nesta categoria</p>
+        <p class="text-xs text-gray-400 mt-1 mb-4" v-if="selectedCategory === 'all'">Produtos disponíveis apenas na Loja Virtual não aparecem aqui</p>
+        <p class="text-xs text-gray-400 mt-1 mb-4" v-else>Tente selecionar "📦 Todos" para ver todos os produtos</p>
         <button v-if="canManageProducts" @click="openAddForm" class="px-4 py-2 rounded-lg text-sm font-bold transition" style="background:#F07820; color:white;">
           ➕ Adicionar Primeiro Produto
         </button>
@@ -47,9 +62,22 @@
                 </div>
                 <div>
                   <p class="text-xs text-gray-500">Stock</p>
-                  <p class="font-bold" :class="(p.stock?.quantity ?? 0) > 0 ? 'text-green-600' : 'text-red-600'">
-                    {{ p.stock?.quantity ?? 0 }}
-                  </p>
+                  <div v-if="editingStock[p.id]" class="flex items-center gap-1">
+                    <input v-model.number="stockEdits[p.id]" type="number" min="0" 
+                           class="w-16 px-1 py-0.5 text-xs border border-gray-300 rounded" 
+                           @keyup.enter="saveStock(p.id)" />
+                    <button @click="saveStock(p.id)" class="text-green-600 text-xs hover:text-green-800">💾</button>
+                    <button @click="cancelStockEdit(p.id)" class="text-gray-600 text-xs hover:text-gray-800">✕</button>
+                  </div>
+                  <div v-else class="flex items-center gap-1">
+                    <p class="font-bold" :class="(p.stock?.quantity ?? 0) > 0 ? 'text-green-600' : 'text-red-600'">
+                      {{ p.stock?.quantity ?? 0 }}
+                    </p>
+                    <button v-if="canManageStock" @click="startStockEdit(p)" 
+                            class="text-blue-600 text-xs hover:text-blue-800 opacity-60 hover:opacity-100">
+                      ✏️
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -240,6 +268,13 @@ const imagePreview = ref(null)
 const imageInput = ref(null)
 const imageFile = ref(null)
 
+// Edição de stock
+const editingStock = ref({})
+const stockEdits = ref({})
+
+// Filtro de categoria
+const selectedCategory = ref('all')
+
 const form = ref({
   name: '',
   sku: '',
@@ -261,12 +296,49 @@ const canManageProducts = computed(() => {
   return role === 'owner' || role === 'manager'
 })
 
-const totalPages = computed(() => Math.ceil(products.value.length / perPage))
+const canManageStock = computed(() => {
+  const role = auth.posRole
+  return role === 'owner' || role === 'manager'
+})
+
+// Categorias que têm produtos
+function flattenCategories(items) {
+  const result = []
+  for (const item of items) {
+    result.push(item)
+    if (item.children?.length) {
+      result.push(...flattenCategories(item.children))
+    }
+  }
+  return result
+}
+
+const allCategories = computed(() => flattenCategories(categories.value || []))
+
+const categoriesWithProducts = computed(() => {
+  const categoryIds = new Set(products.value
+    .map(p => p.category_id ?? p.product_category_id)
+    .filter(id => id))
+  return allCategories.value.filter(cat => categoryIds.has(cat.id))
+})
+
+// Produtos filtrados por categoria
+const filteredProducts = computed(() => {
+  if (selectedCategory.value === 'all') {
+    return products.value
+  }
+  return products.value.filter(p => {
+    const productCategory = p.category_id ?? p.product_category_id
+    return productCategory && productCategory == selectedCategory.value
+  })
+})
+
+const totalPages = computed(() => Math.ceil(filteredProducts.value.length / perPage))
 
 const paginatedProducts = computed(() => {
   const start = (currentPage.value - 1) * perPage
   const end = start + perPage
-  return products.value.slice(start, end)
+  return filteredProducts.value.slice(start, end)
 })
 
 const _fmt = new Intl.NumberFormat('pt-MZ', { style: 'currency', currency: 'MZN' })
@@ -306,11 +378,11 @@ async function loadProducts() {
     console.log('🏪 Store ID:', auth.user?.store?.id || auth.user?.pos_employee?.store?.id)
     console.log('🏪 Store data:', auth.user?.store || auth.user?.pos_employee?.store)
     
-    // Filtra APENAS produtos disponíveis em POS (availability: 'pos' ou 'both')
-    const { data } = await axios.get('/api/store/products', { params: { for_pos: true } })
+    // Carrega os mesmos produtos que aparecem no terminal de vendas
+    const { data } = await axios.get('/pos/products')
     console.log('📦 Products response:', data)
     
-    products.value = data?.data || data || []
+    products.value = data || []
     currentPage.value = 1 // Reset para primeira página
   } catch (e) {
     console.error('❌ Erro ao carregar produtos:', e)
@@ -322,7 +394,7 @@ async function loadProducts() {
 
 async function loadCategories() {
   try {
-    const { data } = await axios.get('/api/store/categories')
+    const { data } = await axios.get('/api/product-categories')
     categories.value = data?.data || data || []
   } catch (e) {
     console.error('Erro ao carregar categorias:', e)
@@ -423,14 +495,53 @@ async function deleteProduct(id) {
   }
 }
 
+// Funções de edição de stock
+function startStockEdit(product) {
+  editingStock.value[product.id] = true
+  stockEdits.value[product.id] = product.stock?.quantity ?? 0
+}
+
+function cancelStockEdit(productId) {
+  editingStock.value[productId] = false
+  delete stockEdits.value[productId]
+}
+
+async function saveStock(productId) {
+  const newQuantity = stockEdits.value[productId]
+  if (newQuantity === undefined || newQuantity < 0) return
+  
+  try {
+    await axios.post('/pos/stock/movement', {
+      product_id: productId,
+      type: 'adjustment',
+      quantity: newQuantity,
+      reason: 'Ajuste manual via gestão de produtos'
+    })
+    
+    // Atualizar o produto na lista local
+    const product = products.value.find(p => p.id === productId)
+    if (product) {
+      if (!product.stock) product.stock = {}
+      product.stock.quantity = newQuantity
+    }
+    
+    editingStock.value[productId] = false
+    delete stockEdits.value[productId]
+    
+    alert('Stock atualizado com sucesso!')
+  } catch (e) {
+    alert('Erro ao atualizar stock: ' + (e.response?.data?.message || e.message))
+  }
+}
+
 onMounted(async () => {
   console.log('🚀 ProductsManagement mounted')
   console.log('👤 Auth user:', auth.user)
   console.log('🏪 User store:', auth.user?.store)
   console.log('🔑 Token exists:', !!localStorage.getItem('bc_token'))
   
-  await loadProducts()
   await loadCategories()
+  await loadProducts()
 })
 </script>
 

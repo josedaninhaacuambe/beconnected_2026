@@ -62,7 +62,7 @@ class PosController extends Controller
 
         // Cache por 5 minutos — invalidado ao registar venda/movimento de stock
         $products = Cache::remember("pos_products_{$store->id}", 300, function () use ($store) {
-            $fields = ['id', 'name', 'price', 'cost_price', 'sku', 'barcode', 'images', 'is_weighable', 'weight_unit'];
+            $fields = ['id', 'name', 'price', 'cost_price', 'sku', 'barcode', 'images', 'is_weighable', 'weight_unit', 'product_category_id'];
             if (Product::hasAvailabilityColumn()) {
                 $fields[] = 'availability';
             }
@@ -77,6 +77,7 @@ class PosController extends Controller
                     $images = $p->images ?? [];
                     if (is_string($images)) $images = json_decode($images, true) ?? [];
                     $p->image = count($images) > 0 ? $images[0] : null;
+                    $p->category_id = $p->product_category_id ?? null;
                     unset($p->images);
                     return $p;
                 });
@@ -829,7 +830,7 @@ class PosController extends Controller
 
                         // Decrementar total_sold do produto
                         Product::where('id', $item->product_id)
-                            ->decrement('total_sold', $item->quantity']);
+                            ->decrement('total_sold', $item->quantity);
                     }
                 }
 
