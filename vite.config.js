@@ -12,16 +12,16 @@ export default defineConfig(({ mode }) => {
     return {
         server: {
             host: '0.0.0.0',
-            port: 5174,
-            // Permite que o Laravel (localhost:8000) carregue assets do Vite (localhost:5174)
-            cors: {
-                origin: appUrl,
-                credentials: true,
-            },
-            origin: 'http://localhost:5174',
+            port: 5173,
+            cors: { origin: '*' },
+            // O browser acede sempre através do gateway nginx (porta 8000).
+            // O nginx proxy /@vite/ e /resources/ para app:5173 (Vite interno).
+            origin: 'http://localhost:8000',
             hmr: {
                 host: 'localhost',
-                port: 5174,
+                port: 8000,
+                clientPort: 8000,
+                protocol: 'ws',
             },
             watch: { ignored: ['**/storage/framework/views/**'] },
         },
