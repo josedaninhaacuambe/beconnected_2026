@@ -497,7 +497,7 @@ class PosController extends Controller
             ->with('stock')
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'sku', 'barcode', 'price', 'image']);
+            ->get(['id', 'name', 'sku', 'barcode', 'price', 'images']);
 
         return response()->json($products);
     }
@@ -643,7 +643,7 @@ class PosController extends Controller
                     $image = $request->file('images');
                     $imageName = 'product_' . $product->id . '_' . time() . '.' . $image->getClientOriginalExtension();
                     $image->storeAs('products', $imageName, 'public');
-                    $product->update(['image' => $imageName]);
+                    $product->update(['images' => json_encode([$imageName])]);
                 }
 
                 // Criar stock inicial
