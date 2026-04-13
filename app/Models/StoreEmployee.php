@@ -20,14 +20,15 @@ class StoreEmployee extends Model
     // ver_relatorios → acesso aos Relatórios (reservado ao dono + quem ele autorizar)
     // gerir_equipa   → acesso à Equipa/Funcionários (reservado ao dono)
     // adicionar_produtos → criar produtos no POS (offline ou online)
+    // deletar_venda   → apagar vendas confirmadas/finalizadas por engano (reservado ao dono)
     public const ALL_PERMISSIONS = [
-        'fazer_vendas', 'gerir_stock', 'ver_relatorios', 'gerir_equipa', 'adicionar_produtos',
+        'fazer_vendas', 'gerir_stock', 'ver_relatorios', 'gerir_equipa', 'adicionar_produtos', 'deletar_venda',
     ];
 
     public static function defaultPermissions(string $role): array
     {
         return match ($role) {
-            'manager'     => ['fazer_vendas', 'gerir_stock', 'adicionar_produtos'],
+            'manager'     => ['fazer_vendas', 'gerir_stock', 'adicionar_produtos', 'deletar_venda'],
             'cashier'     => ['fazer_vendas'],
             'stock_keeper'=> ['gerir_stock', 'adicionar_produtos'],
             'viewer'      => ['ver_relatorios'],

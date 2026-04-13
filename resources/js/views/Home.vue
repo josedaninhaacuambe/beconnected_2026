@@ -1,7 +1,7 @@
 <template>
   <div>
-    <!-- ── Hero Banner ─────────────────────────────────────────────────── -->
-    <section class="relative w-full overflow-hidden" style="background-color:#FFFFFF; min-height: clamp(320px, 45vw, 620px);">
+    <!-- ── Hero Banner (Mobile: Full Screen, Desktop: 45vw) ─────────────────────────────────── -->
+    <section class="relative w-full overflow-hidden" style="background-color:#FFFFFF; min-height: 100vh; md:min-height: clamp(320px, 45vw, 620px);">
 
       <!-- Imagem decorativa (cobre toda a secção) -->
       <picture v-if="!heroBroken">
@@ -19,15 +19,22 @@
         />
       </picture>
 
-      <!-- Conteúdo real (texto + botões funcionais) -->
-      <div class="relative z-10 flex flex-col justify-center h-full px-6 sm:px-14 py-12 max-w-2xl"
-           style="min-height: clamp(320px, 45vw, 620px);">
+      <!-- Overlay escuro (mobile only) para melhor legibilidade -->
+      <div class="absolute inset-0 bg-black/30 md:hidden opacity-40"></div>
 
-        <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl text-white leading-tight mb-4" style="color:#ffffff;">
+      <!-- ═════════════════════════════════════════════════════════════════ 
+           CONTEÚDO PRINCIPAL (Texto + Pesquisa) 
+           ═════════════════════════════════════════════════════════════════ -->
+      <div class="relative z-10 flex flex-col justify-end md:justify-center min-h-screen md:min-h-[clamp(320px,45vw,620px)] px-4 sm:px-14 py-12 max-w-2xl"
+           style="min-height: 100vh; md:min-height: clamp(320px, 45vw, 620px);">
+
+        <h1 class="text-3xl sm:text-5xl md:text-6xl lg:text-7xl text-white leading-tight mb-4" style="color:#ffffff;">
           COMPRA. VENDE.<br>
           <span style="color:#F07820;">CONECTA.</span>
         </h1>
-        <p class="text-gray-700 text-base sm:text-xl mb-8 max-w-sm">
+        
+        <!-- Texto descritivo - oculto no mobile -->
+        <p class="hidden md:block text-white text-base sm:text-xl mb-8 max-w-sm font-semibold drop-shadow-lg">
           O mercado digital de Moçambique
         </p>
 
@@ -37,7 +44,7 @@
             v-model="heroSearch"
             type="text"
             placeholder="Pesquisar produto, marca, loja..."
-            class="flex-1 rounded-xl px-4 py-3 text-sm font-medium outline-none border-2 border-gray-300 focus:border-bc-gold bg-white text-black placeholder-gray-500 backdrop-blur-sm"
+            class="flex-1 rounded-xl px-4 py-3 text-sm font-medium outline-none border-2 border-gray-300 focus:border-bc-gold bg-white text-black placeholder-gray-500"
           />
           <button
             type="submit"
@@ -48,8 +55,8 @@
           </button>
         </form>
 
-        <!-- Botões — compactos no mobile, maiores no desktop -->
-        <div class="flex flex-wrap gap-2 sm:gap-3">
+        <!-- Botões principais — compactos no mobile, maiores no desktop -->
+        <div class="flex flex-wrap gap-2 sm:gap-3 mb-8">
           <RouterLink
             to="/lojas"
             class="inline-flex items-center gap-1.5 sm:gap-2 font-black uppercase tracking-wide rounded-xl text-white transition hover:opacity-90 active:scale-95 text-xs sm:text-sm px-3 py-2 sm:px-6 sm:py-3.5"
@@ -66,8 +73,58 @@
           </RouterLink>
         </div>
 
-        <!-- Indicadores de confiança -->
-        <div class="flex flex-wrap gap-6 mt-10 text-sm sm:text-base text-gray-700">
+        <!-- ═════════════════════════════════════════════════════════════════ 
+             PESQUISA POR LOCALIZAÇÃO (Dentro da Imagem - Mobile) 
+             ═════════════════════════════════════════════════════════════════ -->
+        <div class="w-full max-w-2xl space-y-4 mt-auto mb-12">
+          <h3 class="text-white font-bold text-lg">Pesquisar por Localização</h3>
+          
+          <!-- Botões de localização perto de mim -->
+          <div class="flex justify-start gap-2 flex-wrap">
+            <button
+              @click="goNearby('stores')"
+              :disabled="gpsLoading"
+              class="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 font-semibold text-sm transition active:scale-95 backdrop-blur-sm"
+              :class="gpsLoading ? 'border-bc-gold/30 text-bc-muted bg-black/20' : 'border-bc-gold text-white bg-black/40 hover:bg-bc-gold hover:text-bc-dark'"
+            >
+              <span>{{ gpsLoading ? '⏳' : '📍' }}</span>
+              {{ gpsLoading ? 'A localizar...' : 'Lojas perto de mim' }}
+            </button>
+            <button
+              @click="goNearby('products')"
+              :disabled="gpsLoading"
+              class="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 font-semibold text-sm transition active:scale-95 backdrop-blur-sm"
+              :class="gpsLoading ? 'border-bc-gold/30 text-bc-muted bg-black/20' : 'border-bc-gold text-white bg-black/40 hover:bg-bc-gold hover:text-bc-dark'"
+            >
+              <span>{{ gpsLoading ? '⏳' : '🛍️' }}</span>
+              {{ gpsLoading ? 'A localizar...' : 'Produtos perto de mim' }}
+            </button>
+          </div>
+
+          <p v-if="gpsError" class="text-red-300 text-xs bg-red-900/30 px-3 py-2 rounded-lg backdrop-blur-sm">{{ gpsError }}</p>
+
+          <!-- Pesquisa por região (mobile) -->
+          <div class="hidden md:flex items-center gap-3">
+            <div class="flex-1 border-t border-bc-light/20"></div>
+            <span class="text-white text-xs font-semibold">Ou pesquisa por região</span>
+            <div class="flex-1 border-t border-bc-light/20"></div>
+          </div>
+
+          <div class="hidden md:flex md:flex-row gap-3 max-w-2xl">
+            <select v-model="selectedProvince" @change="loadCities" class="select-african flex-1 bg-black/40 border-bc-light/30 text-white">
+              <option value="" style="background:#1c2b3c; color: #ffffff;">Todas as Províncias</option>
+              <option v-for="p in provinces" :key="p.id" :value="p.id" style="background:#1c2b3c; color: #ffffff;">{{ p.name }}</option>
+            </select>
+            <select v-model="selectedCity" class="select-african flex-1 bg-black/40 border-bc-light/30 text-white" :disabled="!selectedProvince">
+              <option value="" style="background:#1c2b3c; color: #ffffff;">Todas as Cidades</option>
+              <option v-for="c in cities" :key="c.id" :value="c.id" style="background:#1c2b3c; color: #ffffff;">{{ c.name }}</option>
+            </select>
+            <button @click="searchByLocation" class="btn-gold px-6">Ver</button>
+          </div>
+        </div>
+
+        <!-- Indicadores de confiança (apenas desktop) -->
+        <div class="hidden md:flex md:flex-wrap gap-6 mt-10 text-sm sm:text-base text-gray-100">
           <div class="flex items-center gap-2"><span style="color:#F07820;">🏪</span><span>+500 Lojas</span></div>
           <div class="flex items-center gap-2"><span style="color:#F07820;">📦</span><span>Entrega em todo o país</span></div>
           <div class="flex items-center gap-2"><span style="color:#F07820;">📱</span><span>eMola &amp; M-Pesa</span></div>
@@ -77,54 +134,6 @@
 
     <!-- ⚡ HOOK 5: Pulso Vivo — Activity ticker (logo abaixo do hero) -->
     <LivePulse />
-
-    <!-- Pesquisa por localização -->
-    <section class="bg-bc-surface py-8 px-4 border-y border-bc-gold/10">
-      <div class="container mx-auto">
-        <h2 class="text-center text-bc-gold font-semibold mb-4">Pesquisar por Localização</h2>
-
-        <!-- Botão perto de mim -->
-        <div class="flex justify-center mb-4 gap-3 flex-wrap">
-          <button
-            @click="goNearby('stores')"
-            :disabled="gpsLoading"
-            class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border-2 font-semibold text-sm transition active:scale-95"
-            :class="gpsLoading ? 'border-bc-gold/30 text-bc-muted' : 'border-bc-gold text-bc-gold hover:bg-bc-gold hover:text-bc-dark'"
-          >
-            <span>{{ gpsLoading ? '⏳' : '📍' }}</span>
-            {{ gpsLoading ? 'A localizar...' : 'Lojas perto de mim' }}
-          </button>
-          <button
-            @click="goNearby('products')"
-            :disabled="gpsLoading"
-            class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border-2 font-semibold text-sm transition active:scale-95"
-            :class="gpsLoading ? 'border-bc-gold/30 text-bc-muted' : 'border-bc-gold text-bc-gold hover:bg-bc-gold hover:text-bc-dark'"
-          >
-            <span>{{ gpsLoading ? '⏳' : '🛍️' }}</span>
-            {{ gpsLoading ? 'A localizar...' : 'Produtos perto de mim' }}
-          </button>
-        </div>
-        <p v-if="gpsError" class="text-center text-red-400 text-xs mb-3">{{ gpsError }}</p>
-
-        <div class="flex items-center gap-3 max-w-2xl mx-auto mb-4">
-          <div class="flex-1 border-t border-bc-gold/20"></div>
-          <span class="text-bc-muted text-xs">ou pesquisa por região</span>
-          <div class="flex-1 border-t border-bc-gold/20"></div>
-        </div>
-
-        <div class="flex flex-col sm:flex-row gap-3 max-w-2xl mx-auto">
-          <select v-model="selectedProvince" @change="loadCities" class="select-african flex-1">
-            <option value="">Todas as Províncias</option>
-            <option v-for="p in provinces" :key="p.id" :value="p.id">{{ p.name }}</option>
-          </select>
-          <select v-model="selectedCity" class="select-african flex-1" :disabled="!selectedProvince">
-            <option value="">Todas as Cidades</option>
-            <option v-for="c in cities" :key="c.id" :value="c.id">{{ c.name }}</option>
-          </select>
-          <button @click="searchByLocation" class="btn-gold px-6">Ver Lojas</button>
-        </div>
-      </div>
-    </section>
 
     <!-- ⚡ HOOK 1: Relâmpago — Flash Deals (só aparece se houver deals ativos) -->
     <FlashDeals />

@@ -64,8 +64,8 @@
       </div>
     </header>
 
-    <!-- Mobile nav -->
-    <nav class="sm:hidden flex border-b" style="background:#1C2B3C;">
+    <!-- Mobile nav → Footer em mobile -->
+    <nav class="sm:hidden flex border-t fixed bottom-0 left-0 right-0 z-50" style="background:#1C2B3C;">
       <RouterLink
         v-for="tab in visibleTabs" :key="tab.to"
         :to="tab.to"
@@ -82,8 +82,8 @@
       {{ syncMessage }}
     </div>
 
-    <!-- Conteúdo -->
-    <main class="flex-1 overflow-hidden">
+    <!-- Conteúdo (com espaço para footer no mobile) -->
+    <main class="flex-1 overflow-hidden pb-16 sm:pb-0">
       <RouterView />
     </main>
 
@@ -156,12 +156,20 @@ const roleLabel = computed(() => ({
 // Tabs visíveis com base nas permissões POS do utilizador
 const allTabs = [
   { to: '/pos/terminal',   icon: '🛒', label: 'Venda',       perm: 'fazer_vendas'   },
-  { to: '/pos/stock',      icon: '📦', label: 'Stock',       perm: 'gerir_stock'    },
+  { to: '/pos/caixa',      icon: '💰', label: 'Caixa',       perm: 'fazer_vendas'   },
+  { to: '/pos/products',   icon: '📦', label: 'Produtos',    perm: null, rolesOnly: ['owner', 'manager'] },
+  { to: '/pos/stock',      icon: '🗃️', label: 'Stock',       perm: 'gerir_stock'    },
   { to: '/pos/reports',    icon: '📊', label: 'Relatórios',  perm: 'ver_relatorios' },
   { to: '/pos/employees',  icon: '👥', label: 'Equipa',      perm: 'gerir_equipa'   },
 ]
 
-const visibleTabs = computed(() => allTabs.filter(t => auth.hasPosPermission(t.perm)))
+const visibleTabs = computed(() => allTabs.filter(t => {
+  // Se tem restrição de role
+  if (t.rolesOnly) return t.rolesOnly.includes(auth.posRole)
+  // Se tem permissão POS
+  if (t.perm) return auth.hasPosPermission(t.perm)
+  return true
+}))
 
 function isActive(path) { return route.path.startsWith(path) }
 function goHome()       { router.push('/'); showMenu.value = false }

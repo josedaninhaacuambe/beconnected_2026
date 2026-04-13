@@ -101,8 +101,10 @@ const routes = [
             return '/acesso-negado'
         },
         children: [
-            { path: 'terminal',  name: 'pos-terminal',   component: () => import('../views/pos/Terminal.vue'),        meta: { posPermission: 'fazer_vendas'   } },
-            { path: 'stock',     name: 'pos-stock',      component: () => import('../views/pos/StockManagement.vue'), meta: { posPermission: 'gerir_stock'    } },
+            { path: 'terminal',  name: 'pos-terminal',   component: () => import('../views/pos/Terminal.vue'),            meta: { posPermission: 'fazer_vendas'   } },
+            { path: 'caixa',     name: 'pos-caixa',      component: () => import('../views/pos/DailyCash.vue'),           meta: { posPermission: 'fazer_vendas'   } },
+            { path: 'products',  name: 'pos-products',   component: () => import('../views/pos/ProductsManagement.vue'),  meta: { posPermission: 'fazer_vendas'   } },
+            { path: 'stock',     name: 'pos-stock',      component: () => import('../views/pos/StockManagement.vue'),     meta: { posPermission: 'gerir_stock'    } },
             { path: 'reports',   name: 'pos-reports',    component: () => import('../views/pos/Reports.vue'),         meta: { posPermission: 'ver_relatorios' } },
             { path: 'employees', name: 'pos-employees',  component: () => import('../views/pos/Employees.vue'),       meta: { posPermission: 'gerir_equipa'   } },
         ],

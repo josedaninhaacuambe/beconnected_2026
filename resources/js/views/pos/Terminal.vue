@@ -1,8 +1,118 @@
 <template>
-  <div class="flex h-full" style="height: calc(100vh - 88px);">
+  <div class="flex h-full flex-col lg:flex-row" style="height: calc(100vh - 88px);">
 
-    <!-- ── ESQUERDA: Produtos ─────────────────────────────────────────────── -->
-    <div class="flex-1 flex flex-col overflow-hidden border-r border-gray-200">
+    <!-- ── MODAL CARRINHO (Mobile) ─────────────────────────────────────────── -->
+    <div v-if="showMobileCart" class="fixed inset-0 z-40 flex items-end lg:hidden" style="background:rgba(0,0,0,0.5); max-height: calc(100vh - 44px);">
+      <div class="w-full rounded-t-2xl flex flex-col overflow-hidden" style="background:white; max-height: 90vh;">
+        <!-- Header -->
+        <div class="sticky top-0 px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-white">
+          <p class="font-bold text-gray-800">🛒 Carrinho</p>
+          <button @click="showMobileCart = false" class="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+        </div>
+
+        <!-- Items -->
+        <div class="flex-1 overflow-y-auto px-4 py-2 space-y-2 min-h-0">
+          <div v-if="!cart.length" class="flex flex-col items-center justify-center h-40 text-gray-400">
+            <span class="text-3xl mb-1">🛒</span><p class="text-xs">Carrinho vazio</p>
+          </div>
+          <div v-for="item in cart" :key="item.product_id + item._key" class="flex items-center gap-2 p-2 bg-gray-50 rounded-lg text-xs">
+            <div class="flex-1 min-w-0">
+              <p class="font-semibold text-gray-800 truncate">{{ item.product_name }}</p>
+              <p class="text-gray-400">{{ fmt(item.unit_price) }}</p>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <button @click="changeQty(item, -1)" class="w-5 h-5 rounded bg-gray-200 text-gray-600 text-xs font-bold hover:bg-gray-300">−</button>
+              <span class="w-4 text-center font-bold">{{ item.quantity }}</span>
+              <button @click="changeQty(item, 1)" class="w-5 h-5 rounded text-white text-xs font-bold" style="background:#F07820;">+</button>
+            </div>
+            <button @click="removeItem(item)" class="text-red-400 hover:text-red-600">✕</button>
+          </div>
+        </div>
+
+        <!-- Totais e opções de pagamento -->
+        <div class="px-4 py-3 border-t border-gray-100 bg-white space-y-2 max-h-96 overflow-y-auto">
+          <!-- IVA toggle -->
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-gray-600">IVA</span>
+            <button @click="applyVat = !applyVat"
+              class="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg border-2 transition"
+              :class="applyVat ? 'border-green-500 text-green-600 bg-green-50' : 'border-gray-200 text-gray-400'">
+              {{ applyVat ? '✓' : '' }} {{ vatRate }}%
+            </button>
+          </div>
+
+          <!-- Subtotal -->
+          <div class="flex justify-between text-xs text-gray-600">
+            <span>Subtotal</span><span>{{ fmt(subtotal) }}</span>
+          </div>
+
+          <!-- Desconto -->
+          <div class="flex items-center gap-2">
+            <label class="text-xs text-gray-600 flex-shrink-0">Desconto</label>
+            <input v-model.number="discount" type="number" min="0" step="0.01"
+              class="flex-1 border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-bc-gold text-right" />
+          </div>
+
+          <!-- IVA -->
+          <div v-if="applyVat" class="flex justify-between text-xs text-green-600 font-semibold">
+            <span>IVA ({{ vatRate }}%)</span><span>+ {{ fmt(vatAmount) }}</span>
+          </div>
+
+          <!-- Total -->
+          <div class="flex justify-between font-black text-sm border-t border-gray-100 pt-2" style="color:#F07820;">
+            <span>TOTAL</span><span>{{ fmt(total) }}</span>
+          </div>
+
+          <!-- Método de pagamento -->
+          <div class="grid grid-cols-3 gap-1 pt-1">
+            <button v-for="m in payMethods" :key="m.value" @click="payMethod = m.value"
+              class="py-1 rounded text-xs font-bold border-2 transition"
+              :class="payMethod === m.value ? 'border-bc-gold text-bc-gold bg-bc-gold/10' : 'border-gray-200 text-gray-500'">
+              {{ m.icon }} {{ m.label }}
+            </button>
+          </div>
+
+          <!-- Dinheiro: Valor entregue + Troco -->
+          <div v-if="payMethod === 'cash'" class="space-y-1.5 pt-1">
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-gray-600 flex-shrink-0">Entregue</label>
+              <input v-model.number="amountPaid" type="number" min="0" step="0.01"
+                :placeholder="fmt(total)"
+                class="flex-1 border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold focus:outline-none focus:border-bc-gold text-right" />
+            </div>
+            <div v-if="amountPaid >= total && amountPaid > 0"
+              class="flex justify-between items-center bg-green-50 border border-green-200 rounded-lg px-2 py-1 text-xs">
+              <span class="font-semibold text-green-700">💰 Troco</span>
+              <span class="font-black text-green-700">{{ fmt(change) }}</span>
+            </div>
+            <div v-else-if="amountPaid > 0 && amountPaid < total"
+              class="text-xs text-red-500 text-center font-semibold">
+              Faltam {{ fmt(total - amountPaid) }}
+            </div>
+          </div>
+
+          <!-- Nome do cliente -->
+          <input v-model="customerName" type="text" placeholder="Nome do cliente (opcional)"
+            class="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-bc-gold" />
+
+          <!-- Botões -->
+          <div class="flex gap-2 pt-2">
+            <button @click="showMobileCart = false"
+              class="flex-1 px-2 py-2 rounded-lg border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition">
+              Continuar
+            </button>
+            <button @click="finalizeSale" :disabled="!cart.length || processing || (payMethod === 'cash' && amountPaid > 0 && amountPaid < total)"
+              class="flex-1 px-2 py-2 rounded-lg font-black text-white text-xs transition disabled:opacity-40"
+              style="background:#F07820;">
+              {{ processing ? 'A registar...' : '✅ Confirmar' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── ESQUERDA: Produtos (Full width mobile) ────────────────────────────── -->
+    <div class="flex-1 flex flex-col overflow-hidden bg-white lg:border-r lg:border-gray-200">
       <!-- Barra de pesquisa / scan -->
       <div class="p-3 border-b border-gray-200 bg-white space-y-3">
         <div class="flex gap-2 items-start">
@@ -15,13 +125,11 @@
             :placeholder="scanMode ? '📷 Aguardando leitura do scanner...' : '🔍 Pesquisar produto, SKU ou código de barras...'"
             class="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-bc-gold"
           />
-          <!-- Botão adicionar produto offline -->
           <button v-if="canAddProducts" @click="openAddProductModal"
             class="px-3 py-2 rounded-xl border-2 border-dashed border-gray-300 text-gray-400 hover:border-bc-gold hover:text-bc-gold transition text-xs font-bold flex-shrink-0"
             title="Adicionar produto">
             ➕
           </button>
-          <!-- Toggle scan mode -->
           <button @click="toggleScanMode"
             class="px-3 py-2 rounded-xl text-xs font-bold border-2 transition flex-shrink-0"
             :class="scanMode ? 'border-green-500 text-green-600 bg-green-50' : 'border-gray-200 text-gray-400 hover:border-gray-300'"
@@ -48,7 +156,29 @@
         <div v-if="syncMessage" class="text-[11px] text-gray-600">{{ syncMessage }}</div>
       </div>
 
-      <!-- Grid de produtos -->
+      <!-- Categorias -->
+      <div v-if="categories.length > 0" class="px-3 py-2 border-b border-gray-200 bg-white overflow-x-auto hidden lg:block">
+        <div class="flex gap-2 whitespace-nowrap">
+          <button
+            @click="selectedCategory = null; filterProducts()"
+            :class="selectedCategory === null ? 'bg-bc-gold text-white' : 'bg-gray-100 text-gray-700'"
+            class="px-4 py-2 rounded-full text-xs font-bold transition hover:shadow-sm flex-shrink-0"
+          >
+            📦 Todos
+          </button>
+          <button
+            v-for="cat in categories"
+            :key="cat.id"
+            @click="selectedCategory = cat.id; filterProducts()"
+            :class="selectedCategory === cat.id ? 'bg-bc-gold text-white' : 'bg-gray-100 text-gray-700'"
+            class="px-4 py-2 rounded-full text-xs font-bold transition hover:shadow-sm flex-shrink-0"
+          >
+            {{ cat.name }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Grid de produtos (Mobile: lista vertical com botão grande | Desktop: grid) -->
       <div class="flex-1 overflow-y-auto p-3">
         <div v-if="loadingProducts" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
           <div v-for="i in 8" :key="i" class="skeleton h-28 rounded-xl"></div>
@@ -59,37 +189,71 @@
           <p class="text-sm">Nenhum produto encontrado</p>
         </div>
 
-        <div v-else class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-          <button
-            v-for="p in filtered" :key="p.id"
-            @click="clickProduct(p)"
-            class="relative flex flex-col items-center text-center p-3 bg-white rounded-xl border-2 border-transparent hover:border-bc-gold hover:shadow-md transition active:scale-95"
-            :class="(p.stock?.quantity ?? 0) <= 0 ? 'opacity-40 cursor-not-allowed' : ''"
-            :disabled="(p.stock?.quantity ?? 0) <= 0"
-          >
-            <div class="w-full h-16 rounded-lg overflow-hidden bg-gray-100 mb-2 flex items-center justify-center">
-              <AppImg :src="p.image ? (p.image.startsWith('http') ? p.image : '/storage/' + p.image) : ''" type="product" class="w-full h-full object-cover" />
-            </div>
-            <p class="text-xs font-semibold text-gray-800 line-clamp-2 leading-tight mb-1">{{ p.name }}</p>
-            <p class="text-sm font-black" style="color:#F07820;">{{ fmt(p.price) }}</p>
-            <span v-if="p.is_weighable" class="text-[9px] bg-blue-100 text-blue-700 font-bold px-1 py-0.5 rounded mt-0.5">
-              ⚖️ por {{ p.weight_unit ?? 'kg' }}
-            </span>
-            <span v-if="p.stock && p.stock.quantity <= 5 && p.stock.quantity > 0"
-              class="absolute top-1 right-1 text-[9px] bg-yellow-100 text-yellow-700 font-bold px-1 py-0.5 rounded">
-              {{ p.stock.quantity }} restam
-            </span>
-            <span v-if="(p.stock?.quantity ?? 0) <= 0"
-              class="absolute inset-0 flex items-center justify-center bg-white/70 rounded-xl text-xs font-bold text-red-500">
-              Sem stock
-            </span>
-          </button>
+        <!-- Mobile: Lista vertical com cards grandes e touch-friendly -->
+        <div v-else>
+          <div class="lg:hidden space-y-2">
+            <button
+              v-for="p in filtered" :key="p.id"
+              @click="clickProduct(p)"
+              class="w-full flex items-center gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-bc-gold hover:shadow-md transition active:scale-95"
+              :class="(p.stock?.quantity ?? 0) <= 0 ? 'opacity-40 cursor-not-allowed' : ''"
+              :disabled="(p.stock?.quantity ?? 0) <= 0"
+            >
+              <div class="w-20 h-20 bg-white rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center border border-gray-100">
+                <AppImg :src="p.images?.[0] ? (p.images[0].startsWith('http') ? p.images[0] : '/storage/' + p.images[0]) : ''" type="product" class="w-full h-full object-cover" />
+              </div>
+              <div class="flex-1 min-w-0 text-left">
+                <p class="text-sm font-semibold text-gray-800 truncate">{{ p.name }}</p>
+                <p class="text-xs text-gray-500">SKU: {{ p.sku || 'N/A' }}</p>
+                <p class="text-base font-black" style="color:#F07820;">{{ fmt(p.price) }}</p>
+                <span v-if="(p.stock?.quantity ?? 0) <= 0" class="text-xs text-red-500 font-bold">❌ Sem stock</span>
+                <span v-else class="text-xs text-green-600 font-semibold">✓ {{ p.stock?.quantity }} unid.</span>
+              </div>
+              <button v-if="(p.stock?.quantity ?? 0) > 0" class="flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center text-xl font-bold border-2 transition" style="background:#F07820; color:white; border-color:#F07820;">
+                +
+              </button>
+            </button>
+          </div>
+
+          <!-- Desktop: Grid como antes -->
+          <div class="hidden lg:grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+            <button
+              v-for="p in filtered" :key="p.id"
+              @click="clickProduct(p)"
+              class="relative flex flex-col items-center text-center p-3 bg-white rounded-xl border-2 border-transparent hover:border-bc-gold hover:shadow-md transition active:scale-95"
+              :class="(p.stock?.quantity ?? 0) <= 0 ? 'opacity-40 cursor-not-allowed' : ''"
+              :disabled="(p.stock?.quantity ?? 0) <= 0"
+            >
+              <div class="w-full h-16 rounded-lg overflow-hidden bg-gray-100 mb-2 flex items-center justify-center">
+                <AppImg :src="p.images?.[0] ? (p.images[0].startsWith('http') ? p.images[0] : '/storage/' + p.images[0]) : ''" type="product" class="w-full h-full object-cover" />
+              </div>
+              <p class="text-xs font-semibold text-gray-800 line-clamp-2 leading-tight mb-1">{{ p.name }}</p>
+              <p class="text-sm font-black" style="color:#F07820;">{{ fmt(p.price) }}</p>
+              <span v-if="p.is_weighable" class="text-[9px] bg-blue-100 text-blue-700 font-bold px-1 py-0.5 rounded mt-0.5">
+                ⚖️ por {{ p.weight_unit ?? 'kg' }}
+              </span>
+              <span v-if="p.stock && p.stock.quantity <= 5 && p.stock.quantity > 0"
+                class="absolute top-1 right-1 text-[9px] bg-yellow-100 text-yellow-700 font-bold px-1 py-0.5 rounded">
+                {{ p.stock.quantity }} restam
+              </span>
+              <span v-if="(p.stock?.quantity ?? 0) <= 0"
+                class="absolute inset-0 flex items-center justify-center bg-white/70 rounded-xl text-xs font-bold text-red-500">
+                Sem stock
+              </span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- ── DIREITA: Carrinho ──────────────────────────────────────────────── -->
-    <div class="w-72 lg:w-80 flex flex-col bg-white">
+    <!-- ── BOTÃO CARRINHO FLUTUANTE (Mobile) ─────────────────────────────────── -->
+    <button v-if="cart.length > 0" @click="showMobileCart = true" class="lg:hidden fixed bottom-20 right-4 w-14 h-14 rounded-full text-white font-bold text-xl shadow-2xl flex items-center justify-center z-30 active:scale-95 transition" 
+      style="background:#F07820;">
+      🛒<span class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center">{{ cart.length }}</span>
+    </button>
+
+    <!-- ── DIREITA: Carrinho (Desktop only) ──────────────────────────────────── -->
+    <div class="hidden lg:flex lg:w-72 lg:flex-col bg-white">
       <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
         <p class="font-bold text-gray-800">🛒 Carrinho</p>
         <div class="flex items-center gap-2">
@@ -287,8 +451,16 @@
             <div id="pos-receipt" class="p-4" style="font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.5;">
               <!-- Cabeçalho -->
               <div style="text-align:center; margin-bottom:8px;">
+                <!-- Logo customizado (se ativado) -->
+                <div v-if="auth.user?.store?.invoice_show_logo && auth.user?.store?.logo" style="margin-bottom:6px;">
+                  <img :src="auth.user?.store?.logo?.startsWith('http') ? auth.user?.store?.logo : `/storage/${auth.user?.store?.logo}`" style="width:40px; height:40px; margin:0 auto; object-fit:contain;" />
+                </div>
+                <!-- Texto de cabeçalho customizado -->
+                <div v-if="auth.user?.store?.invoice_header_text" style="font-size:11px; margin-bottom:4px; font-style:italic;">{{ auth.user?.store?.invoice_header_text }}</div>
                 <div style="font-size:16px; font-weight:900; letter-spacing:2px;">BECONNECT</div>
                 <div style="font-size:10px; color:#666;">{{ auth.user?.store?.name ?? 'Loja' }}</div>
+                <div v-if="auth.user?.store?.address" style="font-size:9px; color:#666;">{{ auth.user?.store?.address }}</div>
+                <div v-if="auth.user?.store?.phone" style="font-size:9px; color:#666;">{{ auth.user?.store?.phone }}</div>
                 <div style="font-size:10px; color:#666;">{{ formatDateTime(receipt.sale_at) }}</div>
                 <div style="font-size:10px; color:#666;">{{ receipt.local_id }}</div>
               </div>
@@ -353,7 +525,9 @@
 
               <div style="border-top:1px dashed #ccc; margin:8px 0;"></div>
 
-              <div style="text-align:center; font-size:10px; color:#666;">
+              <!-- Rodapé customizado -->
+              <div v-if="auth.user?.store?.invoice_footer_text" style="text-align:center; font-size:10px; color:#666; white-space:pre-line; margin-bottom:4px;">{{ auth.user?.store?.invoice_footer_text }}</div>
+              <div v-else style="text-align:center; font-size:10px; color:#666;">
                 <div>Obrigado pela sua compra!</div>
                 <div>beconnect.co.mz</div>
               </div>
@@ -390,6 +564,8 @@ const allProducts  = ref([])
 const filtered     = ref([])
 const search       = ref('')
 const searchInput  = ref(null)
+const categories   = ref([])
+const selectedCategory = ref(null)
 const cart         = ref([])
 const discount     = ref(0)
 const applyVat     = ref(false)
@@ -399,6 +575,7 @@ const customerName = ref('')
 const processing   = ref(false)
 const receipt      = ref(null)
 const loadingProducts = ref(true)
+const showMobileCart = ref(false)
 
 // ── Modo scanner ────────────────────────────────────────────────────────────
 const showScanChoice = ref(false)
@@ -526,13 +703,24 @@ function formatDateTime(iso) {
 }
 
 function filterProducts() {
+  let result = allProducts.value
+
+  // Filtro por categoria
+  if (selectedCategory.value) {
+    result = result.filter(p => p.category_id === selectedCategory.value)
+  }
+
+  // Filtro por busca
   const q = search.value.toLowerCase().trim()
-  if (!q) { filtered.value = allProducts.value; return }
-  filtered.value = allProducts.value.filter(p =>
-    p.name.toLowerCase().includes(q) ||
-    (p.sku && p.sku.toLowerCase().includes(q)) ||
-    (p.barcode && p.barcode.toLowerCase().includes(q))
-  )
+  if (q) {
+    result = result.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      (p.sku && p.sku.toLowerCase().includes(q)) ||
+      (p.barcode && p.barcode.toLowerCase().includes(q))
+    )
+  }
+
+  filtered.value = result
 }
 
 function addToCart(product) {
@@ -659,20 +847,42 @@ function printReceipt() {
   const el = document.getElementById('pos-receipt')
   if (!el) return
   const html = el.innerHTML
-  const win = window.open('', '_blank', 'width=400,height=600')
-  win.document.write(`
-    <!DOCTYPE html><html><head>
+  const win = window.open('', '_blank', 'width=420,height=700')
+  if (!win) { alert('Popup bloqueado. Permita popups para imprimir.'); return }
+  win.document.write(`<!DOCTYPE html><html><head>
     <meta charset="utf-8">
     <title>Recibo</title>
     <style>
-      body { margin:0; padding:4mm; font-family:'Courier New',monospace; font-size:12px; line-height:1.5; color:black; width:80mm; }
-      @media print { body { width:80mm; margin:0; padding:4mm; } }
+      @page { margin: 2mm; size: 80mm auto; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 4mm 4mm 8mm;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        color: #000 !important;
+        background: #fff;
+        width: 80mm;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      /* forçar cor preta em todos os elementos */
+      * { color: #000 !important; }
+      div, span, p, strong { color: #000 !important; }
+      img { max-width: 100%; display: block; }
+      @media print {
+        body { width: 80mm; margin: 0; padding: 2mm 4mm 8mm; }
+        button { display: none; }
+      }
     </style>
-    </head><body>${html}</body></html>
-  `)
+  </head><body>${html}</body></html>`)
   win.document.close()
   win.focus()
-  setTimeout(() => { win.print(); win.close() }, 300)
+  setTimeout(() => {
+    try { win.print() } catch (e) { /* ignorar */ }
+    setTimeout(() => { try { win.close() } catch (e) { /* ignorar */ } }, 1000)
+  }, 500)
 }
 
 async function loadProducts() {
@@ -726,8 +936,18 @@ async function loadProducts() {
   loadingProducts.value = false
 }
 
+async function loadCategories() {
+  try {
+    const { data } = await axios.get('/api/store/categories')
+    categories.value = data?.data || data || []
+  } catch {
+    categories.value = []
+  }
+}
+
 onMounted(async () => {
   await loadProducts()
+  await loadCategories()
   // Mostrar escolha de modo scan se for a primeira vez nesta sessão
   const sessionKey = `pos_scan_shown_${new Date().toDateString()}`
   if (!localStorage.getItem(sessionKey)) {

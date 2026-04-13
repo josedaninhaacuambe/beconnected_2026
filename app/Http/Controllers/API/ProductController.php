@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Jobs\IndexProductInSearch;
 use App\Models\Brand;
+use App\Models\PriceHistory;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductStock;
@@ -345,24 +346,28 @@ class ProductController extends Controller
 
         $validated = $request->validate([
             'product_category_id' => 'required|exists:product_categories,id',
-            'brand_id' => 'nullable|exists:brands,id',
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'price' => 'required|numeric|min:0',
-            'compare_price' => 'nullable|numeric|min:0',
-            'sku' => 'nullable|string|max:100',
-            'barcode' => 'nullable|string|max:100',
-            'model' => 'nullable|string|max:255',
-            'attributes' => 'nullable|array',
-            'initial_stock' => 'required|integer|min:0',
-            'minimum_stock' => 'nullable|integer|min:0',
-            'unit' => 'nullable|string|max:50',
-            'images' => 'nullable|array',
-            'images.*' => 'image|max:2048',
-            'pos_only' => 'nullable|boolean',
-            'availability' => 'nullable|in:virtual_store,pos,both',
-            'selling_modes' => 'nullable|array',
-            'selling_modes.*' => 'in:weight,unit',
+            'brand_id'            => 'nullable|exists:brands,id',
+            'name'                => 'required|string|max:255',
+            'description'         => 'nullable|string',
+            'price'               => 'required|numeric|min:0',
+            'cost_price'          => 'nullable|numeric|min:0',
+            'compare_price'       => 'nullable|numeric|min:0',
+            'sku'                 => 'nullable|string|max:100',
+            'barcode'             => 'nullable|string|max:100',
+            'model'               => 'nullable|string|max:255',
+            'attributes'          => 'nullable|array',
+            'initial_stock'       => 'required|integer|min:0',
+            'minimum_stock'       => 'nullable|integer|min:0',
+            'unit'                => 'nullable|string|max:50',
+            'images'              => 'nullable|array',
+            'images.*'            => 'image|max:2048',
+            'pos_only'            => 'nullable|boolean',
+            'availability'        => 'nullable|in:virtual_store,pos,both',
+            'selling_modes'       => 'nullable|array',
+            'selling_modes.*'     => 'in:weight,unit',
+            'is_weighable'        => 'nullable|boolean',
+            'weight_unit'         => 'nullable|in:g,kg,l,ml,un',
+            'waste_margin'        => 'nullable|numeric|min:0|max:100',
         ]);
 
         $images = [];
@@ -388,9 +393,10 @@ class ProductController extends Controller
 
         $productData = [
             ...$validated,
-            'store_id' => $store->id,
-            'slug' => Str::slug($validated['name']) . '-' . Str::random(6),
-            'images' => $images,
+            'store_id'     => $store->id,
+            'slug'         => Str::slug($validated['name']) . '-' . Str::random(6),
+            'images'       => $images,
+            'waste_margin' => $validated['waste_margin'] ?? 0,
         ];
         if (Product::hasAvailabilityColumn()) {
             $productData['availability'] = $validated['availability'] ?? 'both';
@@ -423,6 +429,7 @@ class ProductController extends Controller
             'name'                => 'sometimes|string|max:255',
             'description'         => 'nullable|string',
             'price'               => 'sometimes|numeric|min:0',
+            'cost_price'          => 'nullable|numeric|min:0',
             'compare_price'       => 'nullable|numeric|min:0',
             'is_active'           => 'sometimes|boolean',
             'model'               => 'nullable|string|max:255',
@@ -439,6 +446,10 @@ class ProductController extends Controller
             'availability'        => 'nullable|in:virtual_store,pos,both',
             'selling_modes'       => 'nullable|array',
             'selling_modes.*'     => 'in:weight,unit',
+            'is_weighable'        => 'nullable|boolean',
+            'weight_unit'         => 'nullable|in:g,kg,l,ml,un',
+            'waste_margin'        => 'nullable|numeric|min:0|max:100',
+            'reason'              => 'nullable|string|max:255',
         ]);
 
         // Handle image uploads
@@ -452,6 +463,23 @@ class ProductController extends Controller
         unset($validated['minimum_stock']);
         if (!Product::hasAvailabilityColumn()) {
             unset($validated['availability']);
+        }
+
+        // Registar histórico de alterações de preço
+        $priceFields = ['price', 'cost_price', 'compare_price'];
+        $reason = $validated['reason'] ?? null;
+        unset($validated['reason']);
+        foreach ($priceFields as $field) {
+            if (isset($validated[$field]) && (float) $validated[$field] !== (float) $product->$field) {
+                PriceHistory::create([
+                    'product_id' => $product->id,
+                    'changed_by' => $request->user()->id,
+                    'field'      => $field,
+                    'old_value'  => $product->$field,
+                    'new_value'  => $validated[$field],
+                    'reason'     => $reason,
+                ]);
+            }
         }
 
         $product->update($validated);
@@ -537,6 +565,23 @@ class ProductController extends Controller
                 'minimum_stock' => $product->stock?->minimum_stock ?? 5,
             ],
             'movements' => $movements,
+        ]);
+    }
+
+    // Histórico de alterações de preço
+    public function priceHistory(Product $product): JsonResponse
+    {
+        $this->authorize('update', $product);
+
+        $history = PriceHistory::where('product_id', $product->id)
+            ->with('changedBy:id,name')
+            ->latest()
+            ->take(100)
+            ->get();
+
+        return response()->json([
+            'product' => ['id' => $product->id, 'name' => $product->name],
+            'history' => $history,
         ]);
     }
 

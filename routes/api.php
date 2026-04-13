@@ -192,6 +192,7 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
             Route::delete('products/{product}', [ProductController::class, 'destroyProduct']);
             Route::post('products/{product}/stock', [ProductController::class, 'updateStock']);
             Route::get('products/{product}/stock/movements', [ProductController::class, 'stockMovements']);
+            Route::get('products/{product}/price-history',  [ProductController::class, 'priceHistory']);
             Route::post('products/fetch-image', [ProductController::class, 'fetchAutoImage']);
 
             // Pedidos da loja
@@ -279,10 +280,12 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
     Route::prefix('pos')->group(function () {
         Route::get('products',        [PosController::class, 'products']);
         Route::post('sync',           [PosController::class, 'sync'])->middleware('throttle:pos-sync');
+        Route::delete('sales/{sale}', [PosController::class, 'deleteSale']);
         Route::get('stock',           [PosController::class, 'stock']);
         Route::post('stock/movement', [PosController::class, 'stockMovement']);
         Route::get('stock/history',   [PosController::class, 'stockHistory']);
         Route::get('reports',         [PosController::class, 'reports']);
+        Route::get('daily-cash',      [PosController::class, 'dailyCash']);
         Route::post('sync-products',  [PosController::class, 'syncProducts']);
         Route::get('employees',                              [PosController::class, 'employees']);
         Route::post('employees',                             [PosController::class, 'addEmployee']);

@@ -130,6 +130,92 @@
         </div>
       </div>
 
+      <!-- Invoice Customization (2K+ tier) -->
+      <div v-if="storeData?.can_customize_invoice" class="card-african p-5 space-y-4">
+        <div class="flex items-center gap-2 mb-3">
+          <h2 class="text-bc-gold font-semibold">Personalizar Facturas 🧾</h2>
+          <span class="text-xs bg-bc-gold/20 text-bc-gold px-2 py-1 rounded">Premium</span>
+        </div>
+        <p class="text-bc-muted text-xs">Personalize como suas facturas aparecem no Sistema POS.</p>
+
+        <!-- Show Logo Toggle -->
+        <label class="flex items-center gap-3 p-3 rounded-lg bg-bc-surface-2 cursor-pointer hover:bg-bc-surface-2/80 transition">
+          <input v-model="form.invoice_show_logo" type="checkbox" class="checkbox" />
+          <span class="text-sm">Mostrar logo da loja na factura</span>
+        </label>
+
+        <!-- Header Text -->
+        <div>
+          <label class="text-sm font-medium text-bc-gold block mb-2">Texto do Cabeçalho (opcional)</label>
+          <input 
+            v-model="form.invoice_header_text" 
+            type="text" 
+            placeholder="Ex: Bem-vindo à nossa loja!"
+            class="input-african"
+            maxlength="100"
+          />
+          <p class="text-xs text-bc-muted mt-1">{{ form.invoice_header_text?.length || 0 }}/100</p>
+        </div>
+
+        <!-- Footer Text -->
+        <div>
+          <label class="text-sm font-medium text-bc-gold block mb-2">Texto do Rodapé (opcional)</label>
+          <textarea 
+            v-model="form.invoice_footer_text" 
+            placeholder="Ex: Obrigado pela sua compra!&#10;Visite-nos em: www.sualoja.com"
+            rows="3" 
+            class="input-african resize-none"
+            maxlength="200"
+          ></textarea>
+          <p class="text-xs text-bc-muted mt-1">{{ form.invoice_footer_text?.length || 0 }}/200</p>
+        </div>
+
+        <!-- Format Selection -->
+        <div>
+          <label class="text-sm font-medium text-bc-gold block mb-2">Formato de Papel</label>
+          <div class="grid grid-cols-3 gap-2">
+            <label class="flex items-center gap-2 p-2 rounded-lg border border-bc-gold/20 cursor-pointer hover:border-bc-gold/60 transition" :class="{ 'bg-bc-gold/10 border-bc-gold': form.invoice_format === '80mm' }">
+              <input type="radio" v-model="form.invoice_format" value="80mm" />
+              <span class="text-sm">80mm</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg border border-bc-gold/20 cursor-pointer hover:border-bc-gold/60 transition" :class="{ 'bg-bc-gold/10 border-bc-gold': form.invoice_format === '100mm' }">
+              <input type="radio" v-model="form.invoice_format" value="100mm" />
+              <span class="text-sm">100mm</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg border border-bc-gold/20 cursor-pointer hover:border-bc-gold/60 transition" :class="{ 'bg-bc-gold/10 border-bc-gold': form.invoice_format === 'A4' }">
+              <input type="radio" v-model="form.invoice_format" value="A4" />
+              <span class="text-sm">A4</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Preview -->
+        <div class="bg-bc-surface-2 rounded-lg p-4 space-y-2 text-xs">
+          <p class="text-bc-muted font-medium">📋 Pré-visualização:</p>
+          <div :style="{ width: form.invoice_format === '80mm' ? '80mm' : form.invoice_format === '100mm' ? '100mm' : '100%', margin: '0 auto' }" class="bg-white text-black p-3 rounded border border-bc-gold/20">
+            <div v-if="form.invoice_show_logo && storeData?.logo" class="text-center mb-2">
+              <AppImg :src="currentLogo.startsWith('http') ? currentLogo : `/storage/${currentLogo}`" class="w-12 h-12 mx-auto rounded" />
+            </div>
+            <div v-if="form.invoice_header_text" class="text-center text-xs mb-2 border-b pb-1">{{ form.invoice_header_text }}</div>
+            <div class="text-center text-xs mb-2">
+              <p class="font-bold">{{ storeData?.name }}</p>
+              <p class="text-gray-600">{{ storeData?.phone }}</p>
+            </div>
+            <div class="border-t border-b py-2 text-xs mb-2">
+              <p class="flex justify-between"><span>Produto</span><span>Total</span></p>
+              <p class="flex justify-between"><span>Item 1 × 1</span><span>500.00</span></p>
+              <p class="flex justify-between font-bold mt-1"><span>TOTAL</span><span>500.00</span></p>
+            </div>
+            <div v-if="form.invoice_footer_text" class="text-center text-xs text-gray-600 border-t pt-2 whitespace-pre-line">{{ form.invoice_footer_text }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="storeData && !storeData.can_customize_invoice" class="card-african p-5 bg-bc-surface-2 border border-bc-gold/20">
+        <p class="text-bc-muted text-sm">🔒 Personalização de facturas disponível apenas para planos Premium (2K+).</p>
+        <a href="/store/visibility" class="text-bc-gold text-sm font-medium hover:underline">Ver planos →</a>
+      </div>
+
       <!-- Webhook de Stock -->
       <div class="card-african p-5">
         <h2 class="text-bc-gold font-semibold mb-2">Webhook de Stock</h2>
@@ -181,6 +267,10 @@ const mapContainer  = ref(null)
 const form = reactive({
   name: '', description: '', phone: '', whatsapp: '',
   address: '', latitude: null, longitude: null,
+  invoice_show_logo: true,
+  invoice_header_text: '',
+  invoice_footer_text: '',
+  invoice_format: '80mm',
 })
 
 // Instâncias Google Maps
@@ -360,6 +450,12 @@ async function save() {
     if (form.longitude) fd.append('longitude', form.longitude)
     if (logoFile.value)   fd.append('logo',   logoFile.value)
     if (bannerFile.value) fd.append('banner', bannerFile.value)
+    
+    // Invoice customization fields
+    fd.append('invoice_show_logo', form.invoice_show_logo ? 1 : 0)
+    fd.append('invoice_header_text', form.invoice_header_text ?? '')
+    fd.append('invoice_footer_text', form.invoice_footer_text ?? '')
+    fd.append('invoice_format', form.invoice_format ?? '80mm')
 
     if (authStore.user?.role === 'admin' && storeData.value?.id) {
       // Admin updating store
@@ -398,6 +494,10 @@ onMounted(async () => {
       address:     data.address     ?? '',
       latitude:    data.latitude    ?? null,
       longitude:   data.longitude   ?? null,
+      invoice_show_logo:   data.invoice_show_logo ?? true,
+      invoice_header_text: data.invoice_header_text ?? '',
+      invoice_footer_text: data.invoice_footer_text ?? '',
+      invoice_format:      data.invoice_format ?? '80mm',
     })
   } finally {
     loading.value = false

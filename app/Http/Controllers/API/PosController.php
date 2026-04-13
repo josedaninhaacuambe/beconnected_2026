@@ -404,6 +404,89 @@ class PosController extends Controller
         ]);
     }
 
+    // ─── Fecho de caixa do dia ─────────────────────────────────────────────────
+    public function dailyCash(Request $request): JsonResponse
+    {
+        $this->requirePosPermission($request, 'fazer_vendas');
+        $store = $this->resolveStore($request);
+        $user  = $request->user();
+
+        $date = $request->date
+            ? now()->parse($request->date)->toDateString()
+            : now()->toDateString();
+
+        $from = now()->parse($date)->startOfDay();
+        $to   = now()->parse($date)->endOfDay();
+
+        // Donos e gerentes vêem todos os vendedores; vendedores só vêem as suas próprias vendas
+        $isOwnerOrManager = in_array($user->role, ['store_owner', 'admin'])
+            || StoreEmployee::where('user_id', $user->id)
+                ->where('is_active', true)
+                ->whereIn('role', ['manager'])
+                ->exists();
+
+        $query = PosSale::where('store_id', $store->id)
+            ->whereBetween('sale_at', [$from, $to])
+            ->with(['items', 'user:id,name'])
+            ->orderBy('sale_at');
+
+        if (!$isOwnerOrManager) {
+            $query->where('user_id', $user->id);
+        }
+
+        // Filtro por vendedor (para gerente/dono)
+        if ($request->seller_id && $isOwnerOrManager) {
+            $query->where('user_id', $request->seller_id);
+        }
+
+        $sales = $query->get();
+
+        // Por método de pagamento
+        $byPayment = $sales->groupBy('payment_method')
+            ->map(fn($g) => [
+                'method' => $g->first()->payment_method,
+                'total'  => round($g->sum('total'), 2),
+                'count'  => $g->count(),
+            ])->values();
+
+        // Por vendedor (apenas para owner/manager)
+        $bySeller = [];
+        if ($isOwnerOrManager) {
+            $bySeller = $sales->groupBy('user_id')
+                ->map(fn($g) => [
+                    'user_id' => $g->first()->user_id,
+                    'name'    => $g->first()->user?->name ?? 'Desconhecido',
+                    'total'   => round($g->sum('total'), 2),
+                    'sales'   => $g->count(),
+                ])->values();
+        }
+
+        // Lista de vendedores disponíveis para filtro
+        $sellers = [];
+        if ($isOwnerOrManager) {
+            $sellers = PosSale::where('store_id', $store->id)
+                ->whereBetween('sale_at', [$from, $to])
+                ->with('user:id,name')
+                ->get(['user_id'])
+                ->unique('user_id')
+                ->map(fn($s) => ['id' => $s->user_id, 'name' => $s->user?->name])
+                ->values();
+        }
+
+        return response()->json([
+            'date'           => $date,
+            'is_owner_or_manager' => $isOwnerOrManager,
+            'sales'          => $sales,
+            'total_sales'    => $sales->count(),
+            'total_revenue'  => round($sales->sum('total'), 2),
+            'total_discount' => round($sales->sum('discount'), 2),
+            'total_vat'      => round($sales->sum('vat_amount'), 2),
+            'by_payment'     => $byPayment,
+            'by_seller'      => $bySeller,
+            'sellers'        => $sellers,
+        ]);
+    }
+
     // ─── Listar stock da loja ──────────────────────────────────────────────────
     public function stock(Request $request): JsonResponse
     {
@@ -706,5 +789,89 @@ class PosController extends Controller
         Cache::forget("user_me_{$employee->user_id}");
 
         return response()->json(['message' => 'Senha redefinida com sucesso.']);
+    }
+
+    // ─── Deletar venda (apenas dono da loja) ───────────────────────────────────
+    // Reverte stock, decrementa total_sold dos produtos e remove a venda
+    public function deleteSale(Request $request, PosSale $sale): JsonResponse
+    {
+        $store = $this->resolveStore($request);
+        $user  = $request->user();
+
+        // Apenas dono da loja ou admin podem deletar vendas
+        abort_unless(in_array($user->role, ['store_owner', 'admin']) || ($user->role === 'customer' && $this->userCanDeleteSales($request)), 
+            403, 'Apenas o dono da loja pode deletar vendas.');
+
+        // Verificar que a venda pertence à loja do utilizador
+        abort_if($sale->store_id !== $store->id, 403, 'Venda não encontrada.');
+
+        try {
+            DB::transaction(function () use ($sale) {
+                // Reverter stock e total_sold para cada item
+                foreach ($sale->items as $item) {
+                    if (!empty($item->product_id)) {
+                        $stock = ProductStock::where('product_id', $item->product_id)->first();
+                        if ($stock) {
+                            $before = $stock->quantity;
+                            $stock->increment('quantity', $item->quantity);
+
+                            // Registar movimento de stock de reversão
+                            StockMovement::create([
+                                'product_id'      => $item->product_id,
+                                'type'            => 'in',
+                                'quantity'        => $item->quantity,
+                                'quantity_before' => $before,
+                                'quantity_after'  => $before + $item->quantity,
+                                'reason'          => 'Reversão - Venda #' . $sale->id . ' deletada',
+                                'user_id'         => auth()->id(),
+                            ]);
+                        }
+
+                        // Decrementar total_sold do produto
+                        Product::where('id', $item->product_id)
+                            ->decrement('total_sold', $item->quantity']);
+                    }
+                }
+
+                // Deletar itens da venda
+                $sale->items()->delete();
+
+                // Deletar a venda
+                $sale->delete();
+            });
+
+            // Invalidar caches
+            Cache::forget("pos_products_{$store->id}");
+            Cache::forget('products_flash');
+            Cache::forget('products_trending');
+
+            return response()->json([
+                'message' => 'Venda deletada com sucesso. Stock revertido.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Erro ao deletar venda: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    // ─── Verificar se utilizador pode deletar vendas ───────────────────────────
+    private function userCanDeleteSales(Request $request): bool
+    {
+        $user = $request->user();
+        if (in_array($user->role, ['store_owner', 'admin'])) {
+            return true;
+        }
+
+        $emp = StoreEmployee::where('user_id', $user->id)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$emp) {
+            return false;
+        }
+
+        $permissions = $emp->permissions ?? StoreEmployee::defaultPermissions($emp->role);
+        return in_array('deletar_venda', $permissions);
     }
 }

@@ -230,6 +230,7 @@
                 <th class="pb-2">Pagamento</th>
                 <th class="pb-2">IVA</th>
                 <th class="pb-2 text-right">Total</th>
+                <th class="pb-2 text-center">Acções</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-50">
@@ -249,9 +250,20 @@
                   <span v-else class="text-gray-300">—</span>
                 </td>
                 <td class="py-2 text-xs font-bold text-right" style="color:#F07820;">{{ fmt(row.total) }}</td>
+                <td class="py-2 text-center">
+                  <button 
+                    v-if="row.canal === 'POS'"
+                    @click="deleteSale(row.id, row.customer)"
+                    :disabled="deleting === row.id"
+                    class="text-xs px-2 py-1 rounded text-red-600 hover:bg-red-50 transition disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+                    title="Apagar venda">
+                    {{ deleting === row.id ? '⏳' : '🗑️' }}
+                  </button>
+                  <span v-else class="text-gray-300">—</span>
+                </td>
               </tr>
               <tr v-if="!unifiedSales.length">
-                <td colspan="7" class="text-center py-8 text-gray-400 text-sm">Sem vendas no período.</td>
+                <td colspan="8" class="text-center py-8 text-gray-400 text-sm">Sem vendas no período.</td>
               </tr>
             </tbody>
           </table>
@@ -277,6 +289,7 @@ const loading = ref(false)
 const loadingPeriods = ref(true)
 const canal   = ref('all')
 const periods = ref({}) // today, week, month, year, custom
+const deleting = ref(null) // Rastreia qual venda está sendo deletada
 
 const periodCards = [
   { key: 'today', label: 'Hoje' },
@@ -408,4 +421,30 @@ async function loadPeriods() {
 }
 
 onMounted(loadPeriods)
+
+// Deletar uma venda (apenas POS)
+async function deleteSale(rowId, customerName) {
+  // Extrair o ID real removendo o prefixo 'pos_'
+  const saleId = rowId.replace('pos_', '')
+  const customerDisplay = customerName ? ` de ${customerName}` : ''
+  
+  // Confirmação do utilizador
+  if (!confirm(`Tem a certeza que pretende apagar esta venda${customerDisplay}? O stock será revertido automaticamente.`)) {
+    return
+  }
+  
+  deleting.value = rowId
+  try {
+    await axios.delete(`/pos/sales/${saleId}`)
+    // Recarregar dados após deletar com sucesso
+    await load()
+    // Mostrar mensagem de sucesso
+    alert('Venda deletada com sucesso! Stock revertido.')
+  } catch (err) {
+    const msg = err.response?.data?.message || 'Erro ao deletar venda'
+    alert(msg)
+  } finally {
+    deleting.value = null
+  }
+}
 </script>

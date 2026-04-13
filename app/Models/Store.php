@@ -19,6 +19,7 @@ class Store extends Model
         'latitude', 'longitude', 'status', 'is_featured',
         'visibility_position', 'visibility_expires_at',
         'accepts_delivery', 'estimated_delivery_minutes',
+        'invoice_show_logo', 'invoice_header_text', 'invoice_footer_text', 'invoice_format',
     ];
 
     protected function casts(): array
@@ -26,6 +27,7 @@ class Store extends Model
         return [
             'is_featured' => 'boolean',
             'accepts_delivery' => 'boolean',
+            'invoice_show_logo' => 'boolean',
             'visibility_expires_at' => 'datetime',
             'rating' => 'float',
         ];
@@ -156,6 +158,12 @@ class Store extends Model
     }
 
     public function canCustomizeProfile(): bool
+    {
+        $plan = $this->getActiveVisibilityPlan();
+        return in_array($plan?->price, [2000, 15000]);
+    }
+
+    public function canCustomizeInvoice(): bool
     {
         $plan = $this->getActiveVisibilityPlan();
         return in_array($plan?->price, [2000, 15000]);

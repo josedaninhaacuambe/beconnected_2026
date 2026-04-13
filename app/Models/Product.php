@@ -18,13 +18,14 @@ class Product extends Model
         'store_id', 'product_category_id', 'store_section_id', 'brand_id', 'name', 'slug',
         'description', 'price', 'cost_price', 'compare_price', 'flash_price', 'flash_until',
         'sku', 'barcode', 'model', 'images', 'attributes', 'is_active', 'is_featured',
-        'total_sold', 'is_weighable', 'weight_unit', 'availability', 'selling_modes',
+        'total_sold', 'is_weighable', 'weight_unit', 'waste_margin', 'availability', 'selling_modes',
     ];
 
     protected $casts = [
         'price' => 'float',
         'cost_price' => 'float',
-        'is_weighable' => 'boolean',
+        'is_weighable'  => 'boolean',
+        'waste_margin'  => 'float',
         'compare_price' => 'float',
         'flash_price' => 'float',
         'flash_until' => 'datetime',
