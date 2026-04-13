@@ -6,6 +6,9 @@
 
 cd /var/www
 
+# Remover ficheiro hot do Vite para forçar modo produção (usa public/build/)
+rm -f public/hot
+
 # Iniciar Octane em background
 php artisan octane:start \
   --server=roadrunner \
