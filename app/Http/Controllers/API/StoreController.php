@@ -390,7 +390,7 @@ class StoreController extends Controller
     public function categories(): JsonResponse
     {
         $data = Cache::remember('store_categories', 3600, fn () =>
-            StoreCategory::where('is_active', true)->get()
+            StoreCategory::where('is_active', true)->get()->toArray()
         );
         return response()->json($data);
     }
