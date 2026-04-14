@@ -278,7 +278,12 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
     // Acessível a owners e funcionários activos
     // =============================================
     Route::prefix('pos')->group(function () {
-        Route::get('products',        [PosController::class, 'products']);
+        Route::get('products',                           [PosController::class, 'products']);
+        Route::get('products/manage',                    [PosController::class, 'allStoreProducts']);
+        Route::put('products/{product}',                 [PosController::class, 'updatePosProduct']);
+        Route::delete('products/{product}',              [PosController::class, 'deactivatePosProduct']);
+        Route::get('products/{product}/history',         [PosController::class, 'posProductHistory']);
+        Route::get('categories',                         [PosController::class, 'categories']);
         Route::post('sync',           [PosController::class, 'sync'])->middleware('throttle:pos-sync');
         Route::delete('sales/{sale}', [PosController::class, 'deleteSale']);
         Route::get('stock',           [PosController::class, 'stock']);

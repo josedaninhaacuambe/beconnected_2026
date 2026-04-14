@@ -887,4 +887,171 @@ class PosController extends Controller
         $permissions = $emp->permissions ?? StoreEmployee::defaultPermissions($emp->role);
         return in_array('deletar_venda', $permissions);
     }
+
+    // ─── Categorias da loja (para filtro na gestão de produtos) ───────────────
+    public function categories(Request $request): JsonResponse
+    {
+        $this->requirePosPermission($request, 'fazer_vendas');
+        $store = $this->resolveStore($request);
+
+        $categoryIds = $store->products()
+            ->where('is_active', true)
+            ->whereNotNull('product_category_id')
+            ->pluck('product_category_id')
+            ->unique();
+
+        $cats = \App\Models\ProductCategory::whereIn('id', $categoryIds)
+            ->orderBy('name')
+            ->get(['id', 'name', 'parent_id']);
+
+        return response()->json($cats);
+    }
+
+    // ─── Todos os produtos da loja (activos + inactivos) para gestão ──────────
+    public function allStoreProducts(Request $request): JsonResponse
+    {
+        $this->requirePosPermission($request, 'fazer_vendas');
+        $store = $this->resolveStore($request);
+
+        $fields = [
+            'id', 'name', 'price', 'cost_price', 'sku', 'barcode', 'images',
+            'is_weighable', 'weight_unit', 'product_category_id', 'is_active',
+            'description', 'availability', 'selling_modes',
+        ];
+
+        $products = $store->products()
+            ->with('stock')
+            ->orderBy('name')
+            ->get($fields)
+            ->map(function ($p) {
+                $images = $p->images ?? [];
+                if (is_string($images)) $images = json_decode($images, true) ?? [];
+                $p->images = $images;
+                $p->category_id = $p->product_category_id ?? null;
+                return $p;
+            });
+
+        return response()->json($products);
+    }
+
+    // ─── Actualizar produto via POS (owner/manager) ────────────────────────────
+    public function updatePosProduct(Request $request, Product $product): JsonResponse
+    {
+        $this->requirePosPermission($request, 'fazer_vendas');
+        $store = $this->resolveStore($request);
+
+        // Garante que o produto pertence à loja
+        abort_unless($product->store_id === $store->id, 403, 'Produto não pertence à sua loja.');
+
+        $user = $request->user();
+        // Apenas owner/manager podem editar
+        if (!in_array($user->role, ['store_owner', 'admin'])) {
+            $emp = StoreEmployee::where('user_id', $user->id)->where('is_active', true)->first();
+            abort_unless($emp && in_array($emp->role, ['manager']), 403, 'Sem permissão para editar produtos.');
+        }
+
+        $data = $request->validate([
+            'name'               => 'sometimes|string|max:255',
+            'price'              => 'sometimes|numeric|min:0',
+            'cost_price'         => 'sometimes|numeric|min:0',
+            'sku'                => 'sometimes|nullable|string|max:100',
+            'barcode'            => 'sometimes|nullable|string|max:100',
+            'description'        => 'sometimes|nullable|string',
+            'product_category_id'=> 'sometimes|nullable|integer',
+            'is_weighable'       => 'sometimes|boolean',
+            'weight_unit'        => 'sometimes|string|in:kg,g,l,ml,un',
+            'availability'       => 'sometimes|string|in:pos,virtual_store,both',
+            'selling_modes'      => 'sometimes|array',
+            'is_active'          => 'sometimes|boolean',
+            'reason'             => 'sometimes|nullable|string|max:255',
+        ]);
+
+        // Registar histórico de alterações de preço
+        foreach (['price', 'cost_price'] as $field) {
+            if (isset($data[$field]) && (float)$data[$field] !== (float)$product->$field) {
+                \App\Models\PriceHistory::create([
+                    'product_id' => $product->id,
+                    'changed_by' => $user->id,
+                    'field'      => $field,
+                    'old_value'  => $product->$field,
+                    'new_value'  => $data[$field],
+                    'reason'     => $data['reason'] ?? null,
+                ]);
+            }
+        }
+
+        // Registar outras alterações no histórico
+        $trackedFields = ['name', 'availability', 'is_active'];
+        foreach ($trackedFields as $field) {
+            if (isset($data[$field]) && $data[$field] != $product->$field) {
+                \App\Models\PriceHistory::create([
+                    'product_id' => $product->id,
+                    'changed_by' => $user->id,
+                    'field'      => $field,
+                    'old_value'  => (string)($product->$field ?? ''),
+                    'new_value'  => (string)$data[$field],
+                    'reason'     => $data['reason'] ?? null,
+                ]);
+            }
+        }
+
+        unset($data['reason']);
+        $product->update($data);
+
+        // Invalidar cache de produtos POS
+        Cache::forget("pos_products_{$store->id}");
+
+        return response()->json([
+            'message' => 'Produto actualizado.',
+            'product' => $product->fresh(['stock']),
+        ]);
+    }
+
+    // ─── Remover produto do POS (owner/manager) — regista no histórico ─────────
+    public function deactivatePosProduct(Request $request, Product $product): JsonResponse
+    {
+        $this->requirePosPermission($request, 'fazer_vendas');
+        $store = $this->resolveStore($request);
+
+        abort_unless($product->store_id === $store->id, 403, 'Produto não pertence à sua loja.');
+
+        $user = $request->user();
+        if (!in_array($user->role, ['store_owner', 'admin'])) {
+            $emp = StoreEmployee::where('user_id', $user->id)->where('is_active', true)->first();
+            abort_unless($emp && in_array($emp->role, ['manager']), 403, 'Sem permissão para remover produtos.');
+        }
+
+        $reason = $request->input('reason', 'Removido via POS');
+
+        \App\Models\PriceHistory::create([
+            'product_id' => $product->id,
+            'changed_by' => $user->id,
+            'field'      => 'is_active',
+            'old_value'  => '1',
+            'new_value'  => '0',
+            'reason'     => $reason,
+        ]);
+
+        $product->update(['is_active' => false]);
+        Cache::forget("pos_products_{$store->id}");
+
+        return response()->json(['message' => 'Produto removido do POS.']);
+    }
+
+    // ─── Histórico de alterações de um produto (owner/manager) ────────────────
+    public function posProductHistory(Request $request, Product $product): JsonResponse
+    {
+        $this->requirePosPermission($request, 'fazer_vendas');
+        $store = $this->resolveStore($request);
+
+        abort_unless($product->store_id === $store->id, 403, 'Produto não pertence à sua loja.');
+
+        $history = \App\Models\PriceHistory::where('product_id', $product->id)
+            ->with('changedBy:id,name')
+            ->latest()
+            ->take(50)
+            ->get();
+
+        return response()->json($history);
+    }
 }
