@@ -157,7 +157,7 @@
       </div>
 
       <!-- Categorias -->
-      <div v-if="categories.length > 0" class="px-3 py-2 border-b border-gray-200 bg-white overflow-x-auto hidden lg:block">
+      <div v-if="categories.length > 0" class="px-3 py-2 border-b border-gray-200 bg-white overflow-x-auto">
         <div class="flex gap-2 whitespace-nowrap">
           <button
             @click="selectedCategory = null; filterProducts()"
@@ -938,8 +938,8 @@ async function loadProducts() {
 
 async function loadCategories() {
   try {
-    const { data } = await axios.get('/api/store/categories')
-    categories.value = data?.data || data || []
+    const { data } = await axios.get('/pos/categories')
+    categories.value = data || []
   } catch {
     categories.value = []
   }

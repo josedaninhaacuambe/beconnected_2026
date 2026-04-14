@@ -28,14 +28,36 @@ RUN docker-php-ext-install \
 # Instalar extensão Redis
 RUN pecl install redis && docker-php-ext-enable redis
 
+# Instalar Node.js e npm
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs
+
 # Instalar Composer
 COPY --from=composer:2.7 /usr/bin/composer /usr/bin/composer
 
-# Script de arranque: inicia Octane, aquece workers, mantém em foreground
+# Copiar ficheiros da aplicação (antes de instalar dependências)
+COPY . /var/www
+
+# Instalar dependências npm como root (antes de mudar para utilizador www)
+WORKDIR /var/www
+RUN npm install --legacy-peer-deps
+
+# Criar utilizador não-root (mesmo UID que o host para evitar problemas de permissão)
+RUN groupadd -g 1000 www && useradd -u 1000 -ms /bin/bash -g www www
+
+# Ajustar permissões para o utilizador www
+RUN chown -R www:www /var/www
+
+# Script de arranque: inicia Octane e Vite, aquece workers, mantém em foreground
 # Escrito como root antes de mudar para utilizador www
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'cd /var/www' >> /usr/local/bin/start.sh && \
-    echo 'php artisan octane:start --server=roadrunner --host=0.0.0.0 --port=8080 --workers=auto --max-requests=1000 &' >> /usr/local/bin/start.sh && \
+    echo 'echo "[start] Starting Vite dev server as root..."' >> /usr/local/bin/start.sh && \
+    echo 'npm run dev -- --host 0.0.0.0 --port 5173 &' >> /usr/local/bin/start.sh && \
+    echo 'VITE_PID=$!' >> /usr/local/bin/start.sh && \
+    echo 'echo "[start] Waiting for Vite..."' >> /usr/local/bin/start.sh && \
+    echo 'sleep 5' >> /usr/local/bin/start.sh && \
+    echo 'su -c "php artisan octane:start --server=roadrunner --host=0.0.0.0 --port=8080 --workers=auto --max-requests=1000" www &' >> /usr/local/bin/start.sh && \
     echo 'OCTANE_PID=$!' >> /usr/local/bin/start.sh && \
     echo 'echo "[start] Waiting for Octane..."' >> /usr/local/bin/start.sh && \
     echo 'for s in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do' >> /usr/local/bin/start.sh && \
@@ -52,16 +74,6 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'echo "[start] All workers warmed. Production ready."' >> /usr/local/bin/start.sh && \
     echo 'wait $OCTANE_PID' >> /usr/local/bin/start.sh && \
     chmod +x /usr/local/bin/start.sh
-
-# Criar utilizador não-root (mesmo UID que o host para evitar problemas de permissão)
-RUN groupadd -g 1000 www && useradd -u 1000 -ms /bin/bash -g www www
-
-# Copiar ficheiros da aplicação
-COPY --chown=www:www . /var/www
-
-USER www
-
-WORKDIR /var/www
 
 EXPOSE 8080
 
