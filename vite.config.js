@@ -22,6 +22,7 @@ export default defineConfig(({ mode }) => {
                 port: 8000,
                 clientPort: 8000,
                 protocol: 'ws',
+                path: '/@vite-hmr/',
             },
             watch: { ignored: ['**/storage/framework/views/**'] },
         },
