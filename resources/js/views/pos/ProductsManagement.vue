@@ -64,7 +64,7 @@
             <!-- Imagem -->
             <div class="w-full h-28 bg-gray-100 relative overflow-hidden">
               <AppImg
-                :src="p.images?.[0] ? (p.images[0].startsWith('http') ? p.images[0] : '/storage/' + p.images[0]) : ''"
+                :src="p.images?.[0] && !p.images[0].startsWith('http') ? '/storage/' + p.images[0] : ''"
                 type="product" class="w-full h-full object-cover" />
               <span v-if="!p.is_active"
                 class="absolute inset-0 flex items-center justify-center bg-red-50/80 text-red-600 text-xs font-bold">
@@ -573,8 +573,8 @@ function openCreate() {
 function openEdit(p) {
   formId.value = p.id
   imgFile.value = null
-  imgPreview.value = p.images?.[0]
-    ? (p.images[0].startsWith('http') ? p.images[0] : '/storage/' + p.images[0])
+  imgPreview.value = p.images?.[0] && !p.images[0].startsWith('http')
+    ? '/storage/' + p.images[0]
     : null
   formError.value = ''
   form.value = {
