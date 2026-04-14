@@ -2,6 +2,14 @@
   <div class="overflow-y-auto h-full p-4">
     <div class="max-w-2xl mx-auto space-y-4">
 
+      <!-- Banner offline -->
+      <div v-if="!isOnline" class="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl">
+        <span>📵</span>
+        <span>Modo offline — as alterações serão sincronizadas quando houver ligação
+          <span v-if="pendingEmployeeCount > 0">({{ pendingEmployeeCount }} pendente{{ pendingEmployeeCount > 1 ? 's' : '' }})</span>
+        </span>
+      </div>
+
       <!-- Adicionar / Criar funcionário -->
       <div class="bg-white rounded-xl border border-gray-100 p-5">
         <h2 class="font-bold text-base text-gray-800 mb-4">➕ Funcionário</h2>
@@ -316,6 +324,13 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import axios from 'axios'
+import {
+  useOfflinePos,
+  cacheEmployees, getCachedEmployees,
+  savePendingEmployeeOp, getPendingEmployeeOps,
+} from '@/composables/useOfflinePos'
+
+const { isOnline, pendingEmployeeCount, refreshPendingCount } = useOfflinePos()
 
 const employees  = ref([])
 const loading    = ref(true)
@@ -341,25 +356,34 @@ function toggleCreatePerm(key) {
 }
 
 async function createAccount() {
-  createError.value = ''
+  createError.value   = ''
   createSuccess.value = ''
   createLoading.value = true
+  const payload = {
+    name: createForm.name, email: createForm.email,
+    password: createForm.password, role: createForm.role,
+    permissions: createForm.permissions,
+  }
   try {
-    await axios.post('/pos/employees/create-account', {
-      name:        createForm.name,
-      email:       createForm.email,
-      password:    createForm.password,
-      role:        createForm.role,
-      permissions: createForm.permissions,
-    })
-    createSuccess.value = `Conta criada! ${createForm.name} já pode entrar com ${createForm.email}`
+    if (!isOnline.value) {
+      await savePendingEmployeeOp({
+        local_id: `emp_create_${Date.now()}`,
+        op_type:  'create_account',
+        payload,
+        created_at: new Date().toISOString(),
+      })
+      await refreshPendingCount()
+      createSuccess.value = `💾 Offline — conta de ${createForm.name} guardada. Será criada quando houver ligação.`
+    } else {
+      await axios.post('/pos/employees/create-account', payload)
+      createSuccess.value = `Conta criada! ${createForm.name} já pode entrar com ${createForm.email}`
+      await loadEmployees()
+    }
     Object.assign(createForm, { name: '', email: '', password: '', role: '', permissions: [] })
     showCreatePass.value = false
-    await loadEmployees()
   } catch (e) {
     createError.value = e.response?.data?.errors?.email?.[0]
-      ?? e.response?.data?.message
-      ?? 'Erro ao criar conta.'
+      ?? e.response?.data?.message ?? 'Erro ao criar conta.'
   } finally {
     createLoading.value = false
   }
@@ -382,18 +406,27 @@ function togglePermission(key) {
 }
 
 async function addEmployee() {
-  addError.value = ''
+  addError.value   = ''
   addSuccess.value = ''
   addLoading.value = true
+  const payload = { email: form.email, role: form.role, permissions: form.permissions }
   try {
-    await axios.post('/pos/employees', {
-      email:       form.email,
-      role:        form.role,
-      permissions: form.permissions,
-    })
-    addSuccess.value = 'Funcionário adicionado com sucesso!'
-    Object.assign(form, { email: '', role: '', permissions: [] })
-    await loadEmployees()
+    if (!isOnline.value) {
+      await savePendingEmployeeOp({
+        local_id: `emp_add_${Date.now()}`,
+        op_type:  'add',
+        payload,
+        created_at: new Date().toISOString(),
+      })
+      await refreshPendingCount()
+      addSuccess.value = `💾 Offline — funcionário (${form.email}) guardado. Será adicionado quando houver ligação.`
+      Object.assign(form, { email: '', role: '', permissions: [] })
+    } else {
+      await axios.post('/pos/employees', payload)
+      addSuccess.value = 'Funcionário adicionado com sucesso!'
+      Object.assign(form, { email: '', role: '', permissions: [] })
+      await loadEmployees()
+    }
   } catch (e) {
     addError.value = e.response?.data?.errors?.email?.[0]
       ?? e.response?.data?.message
@@ -432,15 +465,28 @@ function toggleEditPermission(empId, key) {
 }
 async function saveEdit(emp) {
   editErrors[emp.id] = ''
-  savingId.value = emp.id
+  savingId.value     = emp.id
+  const payload = { id: emp.id, role: editForms[emp.id].role, permissions: editForms[emp.id].permissions }
   try {
-    const { data } = await axios.put(`/pos/employees/${emp.id}`, {
-      role:        editForms[emp.id].role,
-      permissions: editForms[emp.id].permissions,
-    })
-    const idx = employees.value.findIndex(e => e.id === emp.id)
-    if (idx >= 0) employees.value[idx] = { ...employees.value[idx], ...data.employee }
-    editingId.value = null
+    if (!isOnline.value) {
+      await savePendingEmployeeOp({
+        local_id: `emp_update_${emp.id}_${Date.now()}`,
+        op_type:  'update',
+        payload,
+        created_at: new Date().toISOString(),
+      })
+      await refreshPendingCount()
+      // Actualizar lista local optimisticamente
+      const idx = employees.value.findIndex(e => e.id === emp.id)
+      if (idx >= 0) employees.value[idx] = { ...employees.value[idx], role: payload.role, permissions: payload.permissions }
+      await cacheEmployees(employees.value)
+      editingId.value = null
+    } else {
+      const { data } = await axios.put(`/pos/employees/${emp.id}`, payload)
+      const idx = employees.value.findIndex(e => e.id === emp.id)
+      if (idx >= 0) employees.value[idx] = { ...employees.value[idx], ...data.employee }
+      editingId.value = null
+    }
   } catch (e) {
     editErrors[emp.id] = e.response?.data?.message ?? 'Erro ao guardar.'
   } finally {
@@ -465,9 +511,20 @@ async function resetPassword(emp) {
   resetPassSuccess[emp.id] = ''
   resetPassLoading[emp.id] = true
   try {
-    await axios.put(`/pos/employees/${emp.id}/reset-password`, { password: pass })
-    resetPassSuccess[emp.id] = 'Senha redefinida com sucesso.'
-    resetPassForms[emp.id]   = ''
+    if (!isOnline.value) {
+      await savePendingEmployeeOp({
+        local_id: `emp_resetpw_${emp.id}_${Date.now()}`,
+        op_type:  'reset_password',
+        payload:  { id: emp.id, password: pass },
+        created_at: new Date().toISOString(),
+      })
+      await refreshPendingCount()
+      resetPassSuccess[emp.id] = '💾 Offline — redefinição guardada. Será aplicada quando houver ligação.'
+    } else {
+      await axios.put(`/pos/employees/${emp.id}/reset-password`, { password: pass })
+      resetPassSuccess[emp.id] = 'Senha redefinida com sucesso.'
+    }
+    resetPassForms[emp.id] = ''
   } catch (e) {
     resetPassErrors[emp.id] = e.response?.data?.message ?? 'Erro ao redefinir senha.'
   } finally {
@@ -477,6 +534,18 @@ async function resetPassword(emp) {
 
 async function removeEmployee(emp) {
   if (!confirm(`Remover ${emp.user?.name} da equipa?`)) return
+  if (!isOnline.value) {
+    await savePendingEmployeeOp({
+      local_id: `emp_remove_${emp.id}_${Date.now()}`,
+      op_type:  'remove',
+      payload:  { id: emp.id },
+      created_at: new Date().toISOString(),
+    })
+    await refreshPendingCount()
+    employees.value = employees.value.filter(e => e.id !== emp.id)
+    await cacheEmployees(employees.value)
+    return
+  }
   await axios.delete(`/pos/employees/${emp.id}`)
   await loadEmployees()
 }
@@ -523,12 +592,25 @@ function permBadge(perm) {
 
 async function loadEmployees() {
   loading.value = true
-  try {
-    const { data } = await axios.get('/pos/employees')
-    employees.value = data
-  } finally {
-    loading.value = false
+
+  // Mostrar cache imediatamente
+  const cached = await getCachedEmployees()
+  if (cached) {
+    employees.value = cached.value
+    loading.value   = false
   }
+
+  if (isOnline.value) {
+    try {
+      const { data } = await axios.get('/pos/employees')
+      employees.value = data
+      await cacheEmployees(data)
+    } catch {
+      // mantém cache
+    }
+  }
+
+  loading.value = false
 }
 
 onMounted(loadEmployees)

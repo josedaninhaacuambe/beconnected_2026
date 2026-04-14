@@ -552,6 +552,7 @@ import { useAuthStore } from '@/stores/auth'
 import {
   useOfflinePos, cacheProducts, getCachedProducts,
   savePendingSale, getPendingProducts,
+  cacheCategories, getCachedCategories,
 } from '@/composables/useOfflinePos'
 
 const auth = useAuthStore()
@@ -937,11 +938,20 @@ async function loadProducts() {
 }
 
 async function loadCategories() {
-  try {
-    const { data } = await axios.get('/pos/categories')
-    categories.value = data || []
-  } catch {
-    categories.value = []
+  // Mostrar cache imediatamente
+  const cached = await getCachedCategories()
+  if (cached?.value?.length) categories.value = cached.value
+
+  if (isOnline.value) {
+    try {
+      const { data } = await axios.get('/pos/categories')
+      if (data?.length) {
+        categories.value = data
+        await cacheCategories(data)
+      }
+    } catch {
+      // mantém cache
+    }
   }
 }
 

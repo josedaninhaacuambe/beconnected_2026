@@ -56,15 +56,43 @@ export default defineConfig(({ mode }) => {
                 workbox: {
                     skipWaiting: true,
                     clientsClaim: true,
+                    // Interceta pedidos de navegação (HTML) e serve do cache
+                    // quando offline — permite que o SPA carregue sem internet.
                     navigateFallback: null,
-                    globPatterns: ['**/*.{js,css,ico,png,svg}'],
+                    globPatterns: ['**/*.{js,css,ico,png,svg,woff,woff2}'],
                     runtimeCaching: [
+                        // ── Páginas HTML (navegação SPA) ─────────────────────────────────
+                        {
+                            urlPattern: ({ request }) => request.mode === 'navigate',
+                            handler: 'NetworkFirst',
+                            options: {
+                                cacheName: 'pages-cache',
+                                networkTimeoutSeconds: 4,
+                                expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 },
+                                cacheableResponse: { statuses: [200] },
+                            },
+                        },
+                        // ── API POS: endpoints de leitura frequente ───────────────────────
+                        // StaleWhileRevalidate: serve imediatamente do cache,
+                        // actualiza em background.
+                        {
+                            urlPattern: /\/api\/pos\/(products|categories|stock|employees|reports|daily-cash|stock\/history).*/i,
+                            handler: 'StaleWhileRevalidate',
+                            options: {
+                                cacheName: 'pos-api-cache',
+                                expiration: { maxEntries: 60, maxAgeSeconds: 60 * 30 },
+                                cacheableResponse: { statuses: [200] },
+                            },
+                        },
+                        // ── API geral: NetworkFirst com fallback ──────────────────────────
                         {
                             urlPattern: /\/api\/.*/i,
                             handler: 'NetworkFirst',
                             options: {
                                 cacheName: 'api-cache',
+                                networkTimeoutSeconds: 6,
                                 expiration: { maxEntries: 100, maxAgeSeconds: 60 * 5 },
+                                cacheableResponse: { statuses: [200] },
                             },
                         },
                     ],

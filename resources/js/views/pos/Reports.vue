@@ -1,6 +1,16 @@
 <template>
   <div class="overflow-y-auto h-full p-4 space-y-4">
 
+    <!-- Banner offline -->
+    <div v-if="!isOnline" class="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl">
+      <span>📵</span>
+      <span>Modo offline{{ isFromCache ? ` — dados guardados ${cacheAge}` : ' — sem dados em cache para este período' }}</span>
+    </div>
+    <div v-else-if="isFromCache" class="flex items-center gap-2 px-4 py-2 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-xl">
+      <span>🔄</span>
+      <span>A actualizar… (cache {{ cacheAge }})</span>
+    </div>
+
     <!-- ── Cards de período fixo (sempre visíveis) ────────────────────────── -->
     <div v-if="loadingPeriods" class="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <div v-for="i in 4" :key="i" class="skeleton h-32 rounded-xl"></div>
@@ -281,6 +291,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
+import { useOfflinePos, cacheReports, getCachedReports, fmtCacheAge } from '@/composables/useOfflinePos'
+
+const { isOnline } = useOfflinePos()
 
 const from   = ref(new Date(new Date().setDate(1)).toISOString().slice(0, 10))
 const to     = ref(new Date().toISOString().slice(0, 10))
@@ -288,8 +301,10 @@ const data   = ref(null)
 const loading = ref(false)
 const loadingPeriods = ref(true)
 const canal   = ref('all')
-const periods = ref({}) // today, week, month, year, custom
-const deleting = ref(null) // Rastreia qual venda está sendo deletada
+const periods = ref({})
+const deleting = ref(null)
+const isFromCache = ref(false)
+const cacheAge    = ref('')
 
 const periodCards = [
   { key: 'today', label: 'Hoje' },
@@ -390,34 +405,66 @@ function quickRange(range) {
 }
 
 async function load() {
-  loading.value = true
-  try {
-    const { data: d } = await axios.get('/pos/reports', { params: { from: from.value, to: to.value } })
-    data.value    = d
-    periods.value = d.periods ?? {}
-  } finally {
-    loading.value = false
+  loading.value     = true
+  isFromCache.value = false
+  cacheAge.value    = ''
+
+  // Mostrar cache imediatamente enquanto tenta rede
+  const cached = await getCachedReports(from.value, to.value)
+  if (cached) {
+    data.value        = cached.value
+    periods.value     = cached.value.periods ?? {}
+    isFromCache.value = true
+    cacheAge.value    = fmtCacheAge(cached.saved_at)
+    loading.value     = false
   }
+
+  if (isOnline.value) {
+    try {
+      const { data: d } = await axios.get('/pos/reports', { params: { from: from.value, to: to.value } })
+      data.value        = d
+      periods.value     = d.periods ?? {}
+      isFromCache.value = false
+      cacheAge.value    = ''
+      await cacheReports(from.value, to.value, d)
+    } catch {
+      // mantém cache se falhar
+    }
+  }
+
+  loading.value = false
 }
 
-// Carregar apenas os sumários de período ao montar (sem detalhe)
+// Carregar os sumários de período ao montar
 async function loadPeriods() {
   loadingPeriods.value = true
-  try {
-    // Usa o endpoint de relatório com range do ano completo para obter os periods
-    const today = new Date().toISOString().slice(0, 10)
-    const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10)
-    const { data: d } = await axios.get('/pos/reports', { params: { from: yearStart, to: today } })
-    periods.value = d.periods ?? {}
-    // Também carrega o relatório do mês corrente por defeito
-    data.value = d
-    from.value = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10)
-    to.value   = today
-  } catch {
-    // silencioso
-  } finally {
-    loadingPeriods.value = false
+  const today     = new Date().toISOString().slice(0, 10)
+  const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10)
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10)
+
+  // Mostrar cache dos cards de período imediatamente
+  const cachedYear = await getCachedReports(yearStart, today)
+  if (cachedYear) {
+    periods.value = cachedYear.value.periods ?? {}
+    data.value    = cachedYear.value
+    from.value    = monthStart
+    to.value      = today
   }
+
+  if (isOnline.value) {
+    try {
+      const { data: d } = await axios.get('/pos/reports', { params: { from: yearStart, to: today } })
+      periods.value = d.periods ?? {}
+      data.value    = d
+      from.value    = monthStart
+      to.value      = today
+      await cacheReports(yearStart, today, d)
+    } catch {
+      // mantém cache
+    }
+  }
+
+  loadingPeriods.value = false
 }
 
 onMounted(loadPeriods)

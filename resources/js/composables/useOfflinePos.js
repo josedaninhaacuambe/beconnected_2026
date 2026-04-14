@@ -1,13 +1,17 @@
 /**
  * POS Offline — IndexedDB + Sync
- * Guarda vendas e produtos localmente quando offline.
- * Sincroniza automaticamente quando online.
+ * Guarda vendas, produtos, movimentos de stock e operações de equipa
+ * localmente quando offline. Sincroniza automaticamente quando online.
+ *
+ * v4: adiciona stores para cache de categorias, relatórios, fecho de
+ *     caixa, histórico de stock, lista de funcionários e operações de
+ *     equipa pendentes (offline).
  */
 import { ref, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 
 const DB_NAME    = 'beconnect_pos'
-const DB_VERSION = 3  // v3: adicionar pending_stock_movements
+const DB_VERSION = 4
 let db = null
 
 // ── Abrir / inicializar IndexedDB ──────────────────────────────────────────
@@ -17,6 +21,8 @@ async function openDB() {
     const req = indexedDB.open(DB_NAME, DB_VERSION)
     req.onupgradeneeded = (e) => {
       const d = e.target.result
+
+      // ── v1 ───────────────────────────────────────────────────────────────
       if (!d.objectStoreNames.contains('pending_sales')) {
         d.createObjectStore('pending_sales', { keyPath: 'local_id' })
       }
@@ -30,9 +36,36 @@ async function openDB() {
       if (!d.objectStoreNames.contains('pos_session')) {
         d.createObjectStore('pos_session', { keyPath: 'key' })
       }
-      // v3: movimentos de stock feitos offline aguardando sync
+
+      // ── v3 ───────────────────────────────────────────────────────────────
       if (!d.objectStoreNames.contains('pending_stock_movements')) {
         d.createObjectStore('pending_stock_movements', { keyPath: 'local_id' })
+      }
+
+      // ── v4 ───────────────────────────────────────────────────────────────
+      // Cache de categorias (keyPath: 'key' — valor único 'all')
+      if (!d.objectStoreNames.contains('categories_cache')) {
+        d.createObjectStore('categories_cache', { keyPath: 'key' })
+      }
+      // Cache de fecho de caixa por data (keyPath: 'key' — ex: '2026-04-14')
+      if (!d.objectStoreNames.contains('daily_cash_cache')) {
+        d.createObjectStore('daily_cash_cache', { keyPath: 'key' })
+      }
+      // Cache de relatórios por range (keyPath: 'key' — ex: '2026-04-01|2026-04-14')
+      if (!d.objectStoreNames.contains('reports_cache')) {
+        d.createObjectStore('reports_cache', { keyPath: 'key' })
+      }
+      // Cache do histórico de movimentos de stock
+      if (!d.objectStoreNames.contains('stock_history_cache')) {
+        d.createObjectStore('stock_history_cache', { keyPath: 'key' })
+      }
+      // Cache da lista de funcionários
+      if (!d.objectStoreNames.contains('employees_cache')) {
+        d.createObjectStore('employees_cache', { keyPath: 'key' })
+      }
+      // Operações de equipa feitas offline (add, edit, remove, reset pw)
+      if (!d.objectStoreNames.contains('pending_employee_ops')) {
+        d.createObjectStore('pending_employee_ops', { keyPath: 'local_id' })
       }
     }
     req.onsuccess  = (e) => { db = e.target.result; resolve(db) }
@@ -42,6 +75,25 @@ async function openDB() {
 
 function txStore(storeName, mode = 'readonly') {
   return db.transaction(storeName, mode).objectStore(storeName)
+}
+
+// ── Helper genérico: guardar + ler um registo por chave ────────────────────
+async function cacheSet(storeName, key, value) {
+  await openDB()
+  return new Promise((resolve, reject) => {
+    const req = txStore(storeName, 'readwrite').put({ key, value, saved_at: Date.now() })
+    req.onsuccess = () => resolve()
+    req.onerror   = (e) => reject(e.target.error)
+  })
+}
+
+async function cacheGet(storeName, key) {
+  await openDB()
+  return new Promise((resolve, reject) => {
+    const req = txStore(storeName).get(key)
+    req.onsuccess = (e) => resolve(e.target.result ?? null)   // { key, value, saved_at }
+    req.onerror   = (e) => reject(e.target.error)
+  })
 }
 
 // ── Vendas pendentes (offline) ─────────────────────────────────────────────
@@ -138,21 +190,16 @@ export async function updateCachedProduct(product) {
   })
 }
 
-// ── Cache de produtos ──────────────────────────────────────────────────────
+// ── Cache de produtos (terminal) ───────────────────────────────────────────
 export async function cacheProducts(products) {
-  const db = await openDB()
+  const d = await openDB()
   return new Promise((resolve, reject) => {
-    const tx = db.transaction('products_cache', 'readwrite')
+    const tx    = d.transaction('products_cache', 'readwrite')
     const store = tx.objectStore('products_cache')
-
-    products.forEach(p => {
-      const serializedProduct = JSON.parse(JSON.stringify(p))
-      store.put(serializedProduct)
-    })
-
+    products.forEach(p => store.put(JSON.parse(JSON.stringify(p))))
     tx.oncomplete = () => resolve()
-    tx.onerror = (event) => reject(event.target.error)
-    tx.onabort = (event) => reject(event.target.error)
+    tx.onerror    = (ev) => reject(ev.target.error)
+    tx.onabort    = (ev) => reject(ev.target.error)
   })
 }
 
@@ -161,6 +208,74 @@ export async function getCachedProducts() {
   return new Promise((resolve, reject) => {
     const req = txStore('products_cache').getAll()
     req.onsuccess = (e) => resolve(e.target.result)
+    req.onerror   = (e) => reject(e.target.error)
+  })
+}
+
+// ── Cache de categorias ────────────────────────────────────────────────────
+export async function cacheCategories(cats) {
+  return cacheSet('categories_cache', 'all', cats)
+}
+export async function getCachedCategories() {
+  return cacheGet('categories_cache', 'all')   // { key, value: [...], saved_at }
+}
+
+// ── Cache de fecho de caixa (por data) ────────────────────────────────────
+export async function cacheDailyCash(date, data) {
+  return cacheSet('daily_cash_cache', date, data)
+}
+export async function getCachedDailyCash(date) {
+  return cacheGet('daily_cash_cache', date)
+}
+
+// ── Cache de relatórios (por range from|to) ────────────────────────────────
+export async function cacheReports(from, to, data) {
+  return cacheSet('reports_cache', `${from}|${to}`, data)
+}
+export async function getCachedReports(from, to) {
+  return cacheGet('reports_cache', `${from}|${to}`)
+}
+
+// ── Cache do histórico de stock ────────────────────────────────────────────
+export async function cacheStockHistory(movements) {
+  return cacheSet('stock_history_cache', 'all', movements)
+}
+export async function getCachedStockHistory() {
+  return cacheGet('stock_history_cache', 'all')
+}
+
+// ── Cache de funcionários ──────────────────────────────────────────────────
+export async function cacheEmployees(employees) {
+  return cacheSet('employees_cache', 'all', employees)
+}
+export async function getCachedEmployees() {
+  return cacheGet('employees_cache', 'all')
+}
+
+// ── Operações de equipa pendentes offline ──────────────────────────────────
+export async function savePendingEmployeeOp(op) {
+  await openDB()
+  return new Promise((resolve, reject) => {
+    const req = txStore('pending_employee_ops', 'readwrite').put(op)
+    req.onsuccess = () => resolve()
+    req.onerror   = (e) => reject(e.target.error)
+  })
+}
+
+export async function getPendingEmployeeOps() {
+  await openDB()
+  return new Promise((resolve, reject) => {
+    const req = txStore('pending_employee_ops').getAll()
+    req.onsuccess = (e) => resolve(e.target.result)
+    req.onerror   = (e) => reject(e.target.error)
+  })
+}
+
+export async function deletePendingEmployeeOp(local_id) {
+  await openDB()
+  return new Promise((resolve, reject) => {
+    const req = txStore('pending_employee_ops', 'readwrite').delete(local_id)
+    req.onsuccess = () => resolve()
     req.onerror   = (e) => reject(e.target.error)
   })
 }
@@ -191,14 +306,12 @@ export async function syncPendingProducts() {
 
   const { data } = await axios.post('/pos/sync-products', { products: pending })
 
-  // Actualizar a cache local com os IDs do servidor
   if (data.id_map) {
     const cached = await getCachedProducts()
-    const store = (await openDB()).transaction('products_cache', 'readwrite').objectStore('products_cache')
+    const store  = (await openDB()).transaction('products_cache', 'readwrite').objectStore('products_cache')
     for (const prod of pending) {
-      const serverId = data.id_map[prod.local_id]
+      const serverId  = data.id_map[prod.local_id]
       if (serverId) {
-        // Remover a versão local (com ID negativo) e adicionar com ID real
         const localProd = cached.find(p => p.local_id === prod.local_id)
         if (localProd) {
           store.delete(localProd.id)
@@ -231,7 +344,7 @@ export async function syncPendingMovements() {
       })
       await deletePendingMovement(mov.local_id)
       synced++
-    } catch (e) {
+    } catch {
       errors.push(mov.local_id)
     }
   }
@@ -251,30 +364,69 @@ export async function syncPendingSales() {
   return data
 }
 
+// ── Sincronização de operações de equipa pendentes ─────────────────────────
+export async function syncPendingEmployeeOps() {
+  const pending = await getPendingEmployeeOps()
+  if (!pending.length) return { synced: 0 }
+
+  let synced = 0
+  for (const op of pending) {
+    try {
+      if (op.op_type === 'create_account') {
+        await axios.post('/pos/employees/create-account', op.payload)
+      } else if (op.op_type === 'add') {
+        await axios.post('/pos/employees', op.payload)
+      } else if (op.op_type === 'update') {
+        await axios.put(`/pos/employees/${op.payload.id}`, op.payload)
+      } else if (op.op_type === 'remove') {
+        await axios.delete(`/pos/employees/${op.payload.id}`)
+      } else if (op.op_type === 'reset_password') {
+        await axios.put(`/pos/employees/${op.payload.id}/reset-password`, { password: op.payload.password })
+      }
+      await deletePendingEmployeeOp(op.local_id)
+      synced++
+    } catch {
+      // mantém na fila, tentará novamente
+    }
+  }
+  return { synced }
+}
+
+// ── Helper: formatar timestamp de cache ────────────────────────────────────
+export function fmtCacheAge(savedAt) {
+  if (!savedAt) return ''
+  const diff = Math.floor((Date.now() - savedAt) / 1000)
+  if (diff < 60)   return 'há menos de 1 min'
+  if (diff < 3600) return `há ${Math.floor(diff / 60)} min`
+  return `há ${Math.floor(diff / 3600)}h`
+}
+
 // ── Composable Vue ─────────────────────────────────────────────────────────
 export function useOfflinePos() {
-  const isOnline           = ref(navigator.onLine)
-  const pendingCount       = ref(0)
-  const pendingProductCount= ref(0)
-  const syncing            = ref(false)
-  const syncMessage        = ref('')
+  const isOnline            = ref(navigator.onLine)
+  const pendingCount        = ref(0)
+  const pendingProductCount = ref(0)
+  const pendingEmployeeCount= ref(0)
+  const syncing             = ref(false)
+  const syncMessage         = ref('')
 
   async function refreshPendingCount() {
-    const [sales, products, movements] = await Promise.all([
-      getPendingSales(), getPendingProducts(), getPendingMovements(),
+    const [sales, products, movements, empOps] = await Promise.all([
+      getPendingSales(), getPendingProducts(), getPendingMovements(), getPendingEmployeeOps(),
     ])
-    pendingCount.value        = sales.length + movements.length
-    pendingProductCount.value = products.length
+    pendingCount.value         = sales.length + movements.length
+    pendingProductCount.value  = products.length
+    pendingEmployeeCount.value = empOps.length
   }
 
   async function trySyncNow() {
     if (!isOnline.value || syncing.value) return
-    const [sales, products, movements] = await Promise.all([
-      getPendingSales(), getPendingProducts(), getPendingMovements(),
+    const [sales, products, movements, empOps] = await Promise.all([
+      getPendingSales(), getPendingProducts(), getPendingMovements(), getPendingEmployeeOps(),
     ])
-    if (!sales.length && !products.length && !movements.length) return
+    if (!sales.length && !products.length && !movements.length && !empOps.length) return
 
-    syncing.value = true
+    syncing.value     = true
     syncMessage.value = ''
     try {
       let msg = ''
@@ -288,7 +440,11 @@ export function useOfflinePos() {
       }
       if (sales.length) {
         const r = await syncPendingSales()
-        if (r.synced > 0) msg += `${r.synced} venda(s) sincronizada(s).`
+        if (r.synced > 0) msg += `${r.synced} venda(s) sincronizada(s). `
+      }
+      if (empOps.length) {
+        const r = await syncPendingEmployeeOps()
+        if (r.synced > 0) msg += `${r.synced} operação(ões) de equipa sincronizada(s).`
       }
       syncMessage.value = msg ? `✅ ${msg.trim()}` : ''
       await refreshPendingCount()
@@ -317,7 +473,7 @@ export function useOfflinePos() {
   })
 
   return {
-    isOnline, pendingCount, pendingProductCount,
+    isOnline, pendingCount, pendingProductCount, pendingEmployeeCount,
     syncing, syncMessage, trySyncNow, refreshPendingCount,
   }
 }

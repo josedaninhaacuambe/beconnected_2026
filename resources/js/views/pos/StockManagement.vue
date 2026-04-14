@@ -118,10 +118,13 @@
           <div class="border-t border-gray-200 my-3"></div>
         </div>
 
-        <!-- Histórico online -->
-        <div v-if="!isOnline && !loadingHistory" class="text-center py-8 text-gray-400">
+        <!-- Aviso offline com cache -->
+        <div v-if="!isOnline && !loadingHistory && !movements.length" class="text-center py-8 text-gray-400">
           <span class="text-3xl block mb-2">📵</span>
-          <p class="text-sm">Histórico disponível quando online</p>
+          <p class="text-sm">Sem histórico em cache. Ligue-se para carregar.</p>
+        </div>
+        <div v-else-if="!isOnline && movements.length" class="flex items-center gap-2 px-3 py-2 mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl">
+          <span>📵</span><span>Histórico offline — última sincronização guardada localmente</span>
         </div>
 
         <div v-else-if="loadingHistory" class="space-y-2">
@@ -203,6 +206,7 @@ import {
   useOfflinePos,
   getCachedProducts, updateCachedProduct,
   savePendingMovement, getPendingMovements,
+  cacheStockHistory, getCachedStockHistory, fmtCacheAge,
 } from '@/composables/useOfflinePos'
 
 const { isOnline, trySyncNow, refreshPendingCount } = useOfflinePos()
@@ -392,11 +396,24 @@ async function confirmMovement() {
 }
 
 async function loadHistory() {
-  if (!isOnline.value) return
   loadingHistory.value = true
+
+  // Mostrar cache offline imediatamente
+  if (!isOnline.value) {
+    const cached = await getCachedStockHistory()
+    if (cached) movements.value = cached.value
+    loadingHistory.value = false
+    return
+  }
+
+  // Mostrar cache enquanto carrega da rede
+  const cached = await getCachedStockHistory()
+  if (cached) movements.value = cached.value
+
   try {
     const { data } = await axios.get('/pos/stock/history')
     movements.value = data.data
+    await cacheStockHistory(data.data)
   } finally {
     loadingHistory.value = false
   }

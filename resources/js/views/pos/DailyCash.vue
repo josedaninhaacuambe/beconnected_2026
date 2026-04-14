@@ -1,6 +1,16 @@
 <template>
   <div class="h-full overflow-y-auto p-4 space-y-4 pb-20 sm:pb-4" style="background:#F4F6F8;">
 
+    <!-- Banner offline -->
+    <div v-if="!isOnline" class="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl">
+      <span>📵</span>
+      <span>Modo offline{{ isFromCache ? ` — dados guardados ${cacheAge}` : ' — sem dados para esta data' }}</span>
+    </div>
+    <div v-else-if="isFromCache" class="flex items-center gap-2 px-4 py-2 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-xl">
+      <span>🔄</span>
+      <span>A actualizar… (cache {{ cacheAge }})</span>
+    </div>
+
     <!-- Cabeçalho -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       <div>
@@ -228,12 +238,17 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import { useOfflinePos, cacheDailyCash, getCachedDailyCash, fmtCacheAge } from '@/composables/useOfflinePos'
 
-const loading       = ref(true)
-const data          = ref(null)
-const selectedDate  = ref(new Date().toISOString().slice(0, 10))
+const { isOnline } = useOfflinePos()
+
+const loading        = ref(true)
+const data           = ref(null)
+const cacheAge       = ref('')
+const isFromCache    = ref(false)
+const selectedDate   = ref(new Date().toISOString().slice(0, 10))
 const selectedSeller = ref(null)
-const expandedSale  = ref(null)
+const expandedSale   = ref(null)
 
 const _fmt = new Intl.NumberFormat('pt-MZ', { style: 'currency', currency: 'MZN' })
 function fmt(v) { return _fmt.format(v ?? 0) }
@@ -251,18 +266,34 @@ function toggleSale(id) {
 }
 
 async function load() {
-  loading.value = true
-  data.value    = null
-  try {
-    const params = { date: selectedDate.value }
-    if (selectedSeller.value) params.seller_id = selectedSeller.value
-    const { data: res } = await axios.get('/pos/daily-cash', { params })
-    data.value = res
-  } catch (e) {
-    console.error(e)
-  } finally {
-    loading.value = false
+  loading.value  = true
+  isFromCache.value = false
+  cacheAge.value    = ''
+
+  // 1. Mostrar cache imediatamente enquanto tenta a rede
+  const cached = await getCachedDailyCash(selectedDate.value)
+  if (cached) {
+    data.value        = cached.value
+    isFromCache.value = true
+    cacheAge.value    = fmtCacheAge(cached.saved_at)
+    loading.value     = false
   }
+
+  if (isOnline.value) {
+    try {
+      const params = { date: selectedDate.value }
+      if (selectedSeller.value) params.seller_id = selectedSeller.value
+      const { data: res } = await axios.get('/pos/daily-cash', { params })
+      data.value        = res
+      isFromCache.value = false
+      cacheAge.value    = ''
+      await cacheDailyCash(selectedDate.value, res)
+    } catch (e) {
+      if (!data.value) console.error('Fecho de caixa indisponível:', e)
+    }
+  }
+
+  loading.value = false
 }
 
 function printCashClose() {

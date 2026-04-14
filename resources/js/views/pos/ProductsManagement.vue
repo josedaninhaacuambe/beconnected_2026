@@ -1,6 +1,15 @@
 <template>
   <div class="flex h-full flex-col bg-gray-50 overflow-hidden">
 
+    <!-- Banner offline -->
+    <div v-if="!isOnline" class="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-amber-800 bg-amber-50 border-b border-amber-200">
+      <span>📵</span>
+      <span>Modo offline — edições e novos produtos serão sincronizados quando houver ligação</span>
+      <span v-if="pendingProductCount > 0" class="ml-auto bg-amber-200 text-amber-800 rounded-full px-2 py-0.5">
+        {{ pendingProductCount }} pendente{{ pendingProductCount > 1 ? 's' : '' }}
+      </span>
+    </div>
+
     <!-- ── Header ─────────────────────────────────────────────────────────────── -->
     <div class="flex-shrink-0 px-4 py-3 bg-white border-b border-gray-200 flex flex-wrap items-center gap-3">
       <h2 class="font-bold text-gray-800 text-sm">📦 Gestão de Produtos</h2>
@@ -329,8 +338,15 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import AppImg from '@/components/AppImg.vue'
+import {
+  useOfflinePos,
+  savePendingProduct, getPendingProducts,
+  cacheCategories, getCachedCategories,
+} from '@/composables/useOfflinePos'
 
 const auth = useAuthStore()
+const { isOnline, pendingProductCount, refreshPendingCount } = useOfflinePos()
+const offlineProducts = ref([]) // produtos criados offline ainda não sincronizados
 
 // ── State ──────────────────────────────────────────────────────────────────────
 const products      = ref([])
@@ -382,7 +398,8 @@ const canManage = computed(() => {
 
 // ── Filtro + paginação ─────────────────────────────────────────────────────────
 const filtered = computed(() => {
-  let list = products.value
+  // Produtos do servidor + produtos criados offline ainda pendentes
+  let list = [...products.value, ...offlineProducts.value]
 
   if (filterStatus.value === 'active')   list = list.filter(p => p.is_active)
   if (filterStatus.value === 'inactive') list = list.filter(p => !p.is_active)
@@ -433,19 +450,36 @@ function formatVal(field, val) {
 // ── Carregar dados ─────────────────────────────────────────────────────────────
 async function load() {
   loading.value = true
-  try {
-    // Usa endpoint dedicado para gestão (inclui produtos inactivos + mais campos)
-    const [pRes, cRes] = await Promise.all([
-      axios.get('/pos/products/manage'),
-      axios.get('/pos/categories'),
-    ])
-    products.value  = pRes.data || []
-    categories.value = cRes.data || []
-  } catch (e) {
-    console.error('Erro ao carregar produtos:', e.response?.data ?? e.message)
-  } finally {
-    loading.value = false
+
+  // Mostrar cache imediatamente (categorias + produtos offline pendentes)
+  const [cachedCats, pendingProds] = await Promise.all([
+    getCachedCategories(),
+    getPendingProducts(),
+  ])
+  if (cachedCats)      categories.value = cachedCats.value
+  offlineProducts.value = pendingProds.map(p => ({
+    ...p, id: p.local_id, is_active: true, _offline: true,
+    stock: { quantity: p.stock_quantity ?? 0 },
+  }))
+
+  if (isOnline.value) {
+    try {
+      const [pRes, cRes] = await Promise.all([
+        axios.get('/pos/products/manage'),
+        axios.get('/pos/categories'),
+      ])
+      products.value   = pRes.data || []
+      categories.value = cRes.data || []
+      await cacheCategories(cRes.data || [])
+    } catch (e) {
+      console.error('Erro ao carregar produtos:', e.response?.data ?? e.message)
+    }
+  } else if (!products.value.length) {
+    // Offline sem dados do servidor: mostrar só os pendentes
+    products.value = []
   }
+
+  loading.value = false
 }
 
 // ── Histórico ──────────────────────────────────────────────────────────────────
@@ -589,8 +623,14 @@ async function saveProduct() {
       if (idx !== -1) Object.assign(products.value[idx], form.value)
       // Limpa histórico em cache para forçar reload
       delete histories[formId.value]
+    } else if (!isOnline.value) {
+      // Offline: guardar na fila (sem imagem — sincronizar depois)
+      const localId = `prod_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+      await savePendingProduct({ local_id: localId, ...form.value, created_at: new Date().toISOString() })
+      await refreshPendingCount()
+      await load() // actualiza a lista com offlineProducts
     } else {
-      // Criar via store endpoint (owner/admin)
+      // Online: criar via store endpoint (owner/admin)
       const fd = new FormData()
       Object.entries(form.value).forEach(([k, v]) => {
         if (v !== null && v !== undefined && v !== '') {
