@@ -24,6 +24,7 @@ const routes = [
     { path: '/registar', name: 'register', component: () => import('../views/auth/Register.vue') },
     { path: '/auth/google/success', name: 'google-success', component: () => import('../views/auth/Login.vue') },
     { path: '/escolher-acesso', name: 'pos-access-choice', component: () => import('../views/auth/PosAccessChoice.vue'), meta: { requiresAuth: true } },
+    { path: '/escolher-loja', name: 'store-picker', component: () => import('../views/auth/StorePicker.vue'), meta: { requiresAuth: true } },
 
     // Redireccionamentos de URLs antigas
     { path: '/login', redirect: '/entrar' },
@@ -45,6 +46,9 @@ const routes = [
 
     // Redireccionamentos de URLs antigas do checkout
     { path: '/conta/checkout', redirect: '/conta/finalizar-compra' },
+
+    // ─── Registo de nova loja (dono com multi-loja) ──────────
+    { path: '/loja/nova', name: 'store-new', component: () => import('../views/store/NewStore.vue'), meta: { requiresAuth: true, role: 'store_owner' } },
 
     // ─── Painel do dono de loja ──────────────────────────────
     {

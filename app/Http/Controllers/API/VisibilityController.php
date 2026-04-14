@@ -8,12 +8,15 @@ use App\Models\Store;
 use App\Models\StoreVisibilityPurchase;
 use App\Models\VisibilityPlan;
 use App\Services\PaymentService;
+use App\Traits\ResolvesOwnerStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class VisibilityController extends Controller
 {
+    use ResolvesOwnerStore;
+
     public function __construct(private PaymentService $paymentService) {}
 
     public function plans(): JsonResponse
@@ -29,7 +32,7 @@ class VisibilityController extends Controller
             'payment_phone' => 'required|string|max:20',
         ]);
 
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveOwnerStore($request);
         $plan = VisibilityPlan::findOrFail($validated['visibility_plan_id']);
 
         return DB::transaction(function () use ($validated, $store, $plan, $request) {

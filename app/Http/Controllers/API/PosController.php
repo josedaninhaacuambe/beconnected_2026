@@ -8,8 +8,10 @@ use App\Models\PosSaleItem;
 use App\Models\Product;
 use App\Models\ProductStock;
 use App\Models\StockMovement;
+use App\Models\Store;
 use App\Models\StoreOrder;
 use App\Models\StoreEmployee;
+use App\Traits\ResolvesOwnerStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -19,12 +21,32 @@ use Illuminate\Support\Str;
 
 class PosController extends Controller
 {
+    use ResolvesOwnerStore;
+
     // Resolve a loja do utilizador (dono ou funcionário activo)
+    // Donos de loja com múltiplas lojas: usa X-Store-Id header para seleccionar.
     private function resolveStore(Request $request)
     {
         $user = $request->user();
 
-        // 1) Se for funcionário POS, usa a loja do employee activo primeiro.
+        // 1) Se for dono de loja, respeita o header X-Store-Id (multi-loja)
+        if (in_array($user->role, ['store_owner', 'admin'])) {
+            $storeId = $request->header('X-Store-Id') ?? $request->input('store_id');
+            if ($storeId) {
+                if ($user->role === 'admin') {
+                    return Store::findOrFail($storeId);
+                }
+                return Store::where('id', $storeId)
+                    ->where('user_id', $user->id)
+                    ->firstOrFail();
+            }
+            // Sem header: usa a primeira loja
+            $store = $user->stores()->first() ?? $user->store;
+            abort_if(!$store, 403, 'Sem acesso a nenhuma loja.');
+            return $store;
+        }
+
+        // 2) Se for funcionário POS, usa a loja do employee activo.
         if ($user->pos_employee?->store) {
             return $user->pos_employee->store;
         }
@@ -39,14 +61,7 @@ class PosController extends Controller
             return $employee->store;
         }
 
-        // 2) Se for dono de loja, usa a loja do relacionamento directo.
-        $store = $user->store;
-        if (!$store && method_exists($user, 'stores')) {
-            $store = $user->stores()->first();
-        }
-
-        abort_if(!$store, 403, 'Sem acesso a nenhuma loja.');
-        return $store;
+        abort(403, 'Sem acesso a nenhuma loja.');
     }
 
     // Verifica se o utilizador tem uma permissão POS específica

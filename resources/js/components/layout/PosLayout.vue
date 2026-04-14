@@ -4,10 +4,35 @@
     <header class="flex items-center justify-between px-4 py-2.5 shadow-sm flex-shrink-0" style="background:#1C2B3C;">
       <!-- Logo + Loja -->
       <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm" style="background:#F07820; color:white;">BC</div>
-        <div>
-          <p class="text-white font-bold text-sm leading-none">{{ storeName }}</p>
-          <p class="text-white/50 text-xs">POS · {{ roleLabel }}</p>
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm flex-shrink-0" style="background:#F07820; color:white;">BC</div>
+        <div class="relative">
+          <button
+            v-if="multiStore"
+            @click="showStoreSel = !showStoreSel"
+            class="flex items-center gap-1 hover:opacity-80 transition text-left"
+          >
+            <div>
+              <p class="text-white font-bold text-sm leading-none">{{ storeName }}</p>
+              <p class="text-white/50 text-xs">POS · {{ roleLabel }} ⌄</p>
+            </div>
+          </button>
+          <div v-else>
+            <p class="text-white font-bold text-sm leading-none">{{ storeName }}</p>
+            <p class="text-white/50 text-xs">POS · {{ roleLabel }}</p>
+          </div>
+          <!-- Dropdown de lojas -->
+          <div v-if="showStoreSel" class="absolute left-0 top-full mt-2 w-52 rounded-xl shadow-xl z-50 overflow-hidden border border-white/20" style="background:#1C2B3C;">
+            <button
+              v-for="store in auth.allStores"
+              :key="store.id"
+              @click="switchStore(store)"
+              class="w-full text-left px-4 py-2.5 text-xs transition flex items-center gap-2"
+              :class="store.id === auth.activeStoreId ? 'text-bc-gold font-bold' : 'text-white/70 hover:bg-white/10'"
+            >
+              <span>{{ store.id === auth.activeStoreId ? '✓' : '○' }}</span>
+              <span class="truncate">{{ store.name }}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -145,7 +170,16 @@ const showMenu = ref(false)
 
 const { isOnline, pendingCount, syncing, syncMessage, trySyncNow } = useOfflinePos()
 
-const storeName = computed(() => auth.user?.store?.name ?? auth.user?.name ?? 'Loja')
+// Multi-loja
+const multiStore   = computed(() => auth.allStores.length > 1)
+const showStoreSel = ref(false)
+function switchStore(store) {
+  auth.setActiveStore(store)
+  showStoreSel.value = false
+  router.go(0)
+}
+
+const storeName = computed(() => auth.activeStore?.name ?? auth.user?.store?.name ?? auth.user?.name ?? 'Loja')
 const initial   = computed(() => (auth.user?.name ?? 'U')[0].toUpperCase())
 
 const roleLabel = computed(() => ({

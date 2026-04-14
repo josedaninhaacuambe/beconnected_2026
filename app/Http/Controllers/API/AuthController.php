@@ -204,6 +204,17 @@ class AuthController extends Controller
         $userData = $user->toArray();
         unset($userData['active_pos_employee']);
 
+        // Todas as lojas do dono (suporte multi-loja)
+        if ($user->role === 'store_owner') {
+            $userData['stores'] = $user->stores()
+                ->select('id', 'name', 'slug', 'status', 'logo')
+                ->orderBy('id')
+                ->get()
+                ->toArray();
+        } else {
+            $userData['stores'] = [];
+        }
+
         $userData['pos_employee'] = null;
         if ($posEmployee = $user->activePosEmployee) {
             $employeeData = $posEmployee->toArray();

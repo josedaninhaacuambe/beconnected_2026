@@ -8,6 +8,7 @@ use App\Models\Store;
 use App\Models\StockImport;
 use App\Models\User;
 use App\Services\StockImportService;
+use App\Traits\ResolvesOwnerStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -16,6 +17,7 @@ use Illuminate\Support\Str;
 
 class StockImportController extends Controller
 {
+    use ResolvesOwnerStore;
     public function __construct(private StockImportService $importService) {}
 
     /**
@@ -32,11 +34,11 @@ class StockImportController extends Controller
             if ($storeId) {
                 return Store::findOrFail($storeId);
             }
-            // Admin sem store_id — usa a primeira loja activa como fallback
             return Store::where('status', 'active')->firstOrFail();
         }
 
-        return Store::where('user_id', $user->id)->firstOrFail();
+        // Para donos de loja, usa X-Store-Id header (suporte multi-loja)
+        return $this->resolveOwnerStore($request);
     }
 
     /**

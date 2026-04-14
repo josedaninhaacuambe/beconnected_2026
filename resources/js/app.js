@@ -19,11 +19,16 @@ if (typeof window !== 'undefined') {
 axios.defaults.baseURL = import.meta.env.VITE_API_URL || '/api'
 axios.defaults.headers.common['Accept'] = 'application/json'
 
-// Interceptor para token
+// Interceptor para token e loja activa (multi-loja)
 axios.interceptors.request.use((config) => {
     const token = localStorage.getItem('bc_token')
     if (token) {
         config.headers.Authorization = `Bearer ${token}`
+    }
+    // Envia a loja activa seleccionada pelo dono — lida no backend via X-Store-Id
+    const storeId = localStorage.getItem('bc_active_store_id')
+    if (storeId) {
+        config.headers['X-Store-Id'] = storeId
     }
     return config
 })

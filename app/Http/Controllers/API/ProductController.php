@@ -12,6 +12,7 @@ use App\Models\ProductStock;
 use App\Models\Store;
 use App\Services\ProductImageService;
 use App\Services\Search\ProductSearchService;
+use App\Traits\ResolvesOwnerStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -20,6 +21,7 @@ use Illuminate\Support\Str;
 
 class ProductController extends Controller
 {
+    use ResolvesOwnerStore;
     // Pesquisa global de produtos (SEM PREÇO - preço só é visível dentro da loja)
     public function search(Request $request): JsonResponse
     {
@@ -314,7 +316,7 @@ class ProductController extends Controller
         $store = null;
 
         if ($user->isStoreOwner() || $user->isAdmin()) {
-            $store = Store::where('user_id', $user->id)->firstOrFail();
+            $store = $this->resolveOwnerStore($request);
         } elseif ($employee = $user->activePosEmployee) {
             $store = $employee->store;
             abort_unless($store, 404);
@@ -342,7 +344,7 @@ class ProductController extends Controller
 
     public function storeProduct(Request $request): JsonResponse
     {
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveOwnerStore($request);
 
         $validated = $request->validate([
             'product_category_id' => 'required|exists:product_categories,id',

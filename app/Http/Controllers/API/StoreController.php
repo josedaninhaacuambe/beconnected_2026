@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\Store;
 use App\Models\StoreCategory;
+use App\Traits\ResolvesOwnerStore;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,6 +14,7 @@ use Illuminate\Support\Str;
 
 class StoreController extends Controller
 {
+    use ResolvesOwnerStore;
     // ─── Scan & Go: pesquisa produto pelo código de barras ─────────────────
     public function scanBarcode(Request $request, string $slug): JsonResponse
     {
@@ -214,14 +216,6 @@ class StoreController extends Controller
             ], 403);
         }
 
-        // Obrigatoriedade: usuário não pode ter mais de uma loja
-        $existingStore = Store::where('user_id', $user->id)->first();
-        if ($existingStore) {
-            return response()->json([
-                'message' => 'Você já possui uma loja cadastrada. Cada proprietário pode ter apenas uma loja.',
-            ], 422);
-        }
-
         $this->authorize('create', Store::class);
 
         $validated = $request->validate([
@@ -256,6 +250,9 @@ class StoreController extends Controller
         }
 
         $store = Store::create($validated);
+
+        // Invalidar cache do utilizador para que /auth/me devolva a nova lista de lojas
+        Cache::forget("user_me_{$user->id}");
 
         return response()->json($store->load(['category', 'province', 'city']), 201);
     }
@@ -315,13 +312,8 @@ class StoreController extends Controller
             $store = Store::findOrFail($validated['store_id']);
             unset($validated['store_id']);
         } else {
-            // Dono da loja actualiza a sua própria loja
-            $store = Store::where('user_id', $user->id)->first();
-            if (!$store) {
-                return response()->json([
-                    'message' => 'Nenhuma loja encontrada para o proprietário atual. Verifique a associação entre usuário e loja.',
-                ], 404);
-            }
+            // Dono da loja actualiza a loja activa (suporta multi-loja via X-Store-Id)
+            $store = $this->resolveOwnerStore($request);
 
             $validated = $request->validate([
                 'name' => 'sometimes|string|max:255',
@@ -352,7 +344,7 @@ class StoreController extends Controller
     // Dashboard do dono da loja
     public function dashboard(Request $request): JsonResponse
     {
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveOwnerStore($request);
 
         // Cache dashboard stats for 60s — 7 queries → 1 DB round-trip (aggregation)
         $stats = Cache::remember("store_dashboard_{$store->id}", 60, function () use ($store) {
@@ -414,22 +406,25 @@ class StoreController extends Controller
                     ->findOrFail($request->input('store_id'));
             } else {
                 $store = Store::with(['category', 'province', 'city', 'neighborhood'])
-                    ->where('user_id', $user->id)
+                    ->where('id', $this->resolveOwnerStore($request)->id)
                     ->firstOrFail();
             }
 
             return response()->json($store);
-        } catch (ModelNotFoundException $exception) {
+        } catch (ModelNotFoundException) {
             return response()->json([
-                'message' => 'Nenhuma loja encontrada para o utilizador atual. Verifique se a loja está associada ao seu utilizador.',
-                'debug' => [
-                    'user_id' => $user->id,
-                    'user_role' => $user->role,
-                    'user_name' => $user->name,
-                    'has_store_relationship' => $user->store() ? 'yes' : 'no',
-                    'store_count_for_user' => Store::where('user_id', $user->id)->count(),
-                ]
+                'message' => 'Nenhuma loja encontrada. Verifique se a loja está associada à sua conta.',
             ], 404);
         }
+    }
+
+    // Todas as lojas do dono autenticado
+    public function myStores(Request $request): JsonResponse
+    {
+        $stores = Store::with(['category', 'province', 'city'])
+            ->where('user_id', $request->user()->id)
+            ->get();
+
+        return response()->json($stores);
     }
 }

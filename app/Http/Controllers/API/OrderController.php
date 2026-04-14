@@ -10,6 +10,7 @@ use App\Models\Order;
 use App\Models\StoreOrder;
 use App\Services\DeliveryService;
 use App\Services\PaymentService;
+use App\Traits\ResolvesOwnerStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -18,6 +19,8 @@ use Illuminate\Support\Str;
 
 class OrderController extends Controller
 {
+    use ResolvesOwnerStore;
+
     public function __construct(
         private PaymentService $paymentService,
         private DeliveryService $deliveryService,
@@ -172,7 +175,7 @@ class OrderController extends Controller
 
     public function storeOrders(Request $request): JsonResponse
     {
-        $store = \App\Models\Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveOwnerStore($request);
 
         $orders = StoreOrder::with(['order.user', 'items.product'])
             ->where('store_id', $store->id)
@@ -185,7 +188,7 @@ class OrderController extends Controller
 
     public function updateStoreOrderStatus(Request $request, StoreOrder $storeOrder): JsonResponse
     {
-        $store = \App\Models\Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveOwnerStore($request);
 
         if ($storeOrder->store_id !== $store->id) {
             return response()->json(['message' => 'Não autorizado.'], 403);

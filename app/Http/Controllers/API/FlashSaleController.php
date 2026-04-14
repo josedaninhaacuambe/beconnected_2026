@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\Store;
 use App\Models\StoreNotification;
 use App\Models\User;
+use App\Traits\ResolvesOwnerStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -14,12 +15,13 @@ use Illuminate\Support\Facades\DB;
 
 class FlashSaleController extends Controller
 {
+    use ResolvesOwnerStore;
     /**
      * Listar queimas activas do dono da loja
      */
     public function index(Request $request): JsonResponse
     {
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveOwnerStore($request);
 
         $products = Product::with(['stock'])
             ->where('store_id', $store->id)
@@ -38,7 +40,7 @@ class FlashSaleController extends Controller
      */
     public function launch(Request $request): JsonResponse
     {
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveOwnerStore($request);
 
         $validated = $request->validate([
             'product_id'  => 'required|exists:products,id',
@@ -79,7 +81,7 @@ class FlashSaleController extends Controller
      */
     public function cancel(Request $request, Product $product): JsonResponse
     {
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveOwnerStore($request);
 
         if ($product->store_id !== $store->id) {
             return response()->json(['message' => 'Não autorizado.'], 403);
@@ -96,7 +98,7 @@ class FlashSaleController extends Controller
      */
     public function eligibleProducts(Request $request): JsonResponse
     {
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveOwnerStore($request);
 
         $products = Product::with(['stock', 'brand'])
             ->where('store_id', $store->id)

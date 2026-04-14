@@ -5,11 +5,13 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\Store;
 use App\Models\StoreSection;
+use App\Traits\ResolvesOwnerStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class StoreSectionController extends Controller
 {
+    use ResolvesOwnerStore;
     // Listagem pública das secções de uma loja
     public function publicIndex(string $storeSlug): JsonResponse
     {
@@ -27,7 +29,7 @@ class StoreSectionController extends Controller
     // Listar secções da minha loja (dono autenticado)
     public function index(Request $request): JsonResponse
     {
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveOwnerStore($request);
 
         $sections = StoreSection::where('store_id', $store->id)
             ->withCount('products')
@@ -40,7 +42,7 @@ class StoreSectionController extends Controller
     // Criar secção
     public function store(Request $request): JsonResponse
     {
-        $storeModel = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $storeModel = $this->resolveOwnerStore($request);
 
         $validated = $request->validate([
             'name' => 'required|string|max:100',
@@ -61,7 +63,7 @@ class StoreSectionController extends Controller
     // Actualizar secção
     public function update(Request $request, StoreSection $section): JsonResponse
     {
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveOwnerStore($request);
         abort_if($section->store_id !== $store->id, 403);
 
         $validated = $request->validate([
@@ -79,7 +81,7 @@ class StoreSectionController extends Controller
     // Eliminar secção
     public function destroy(Request $request, StoreSection $section): JsonResponse
     {
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveOwnerStore($request);
         abort_if($section->store_id !== $store->id, 403);
 
         // Desassociar produtos desta secção
@@ -93,7 +95,7 @@ class StoreSectionController extends Controller
     public function reorder(Request $request): JsonResponse
     {
         $request->validate(['order' => 'required|array', 'order.*.id' => 'required|integer', 'order.*.sort_order' => 'required|integer']);
-        $store = Store::where('user_id', $request->user()->id)->firstOrFail();
+        $store = $this->resolveOwnerStore($request);
 
         foreach ($request->order as $item) {
             StoreSection::where('id', $item['id'])->where('store_id', $store->id)

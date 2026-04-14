@@ -182,6 +182,7 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
 
         Route::middleware('role:store_owner,admin')->group(function () {
             Route::get('/', [StoreController::class, 'myStore']);
+            Route::get('all', [StoreController::class, 'myStores']);   // lista todas as lojas do dono
             Route::post('/', [StoreController::class, 'store']);
             Route::post('update', [StoreController::class, 'updateMyStore']);
             Route::get('dashboard', [StoreController::class, 'dashboard']);

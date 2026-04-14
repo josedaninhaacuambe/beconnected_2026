@@ -11,6 +11,32 @@
           <span class="text-white font-bold text-lg">BECONNECT</span>
         </RouterLink>
         <p class="text-blue-100 text-xs">Painel da Loja</p>
+
+        <!-- Selector de loja (multi-loja) -->
+        <div v-if="multiStore" class="mt-3 relative">
+          <button
+            @click="showStoreSel = !showStoreSel"
+            class="w-full flex items-center justify-between bg-white/10 hover:bg-white/20 rounded-lg px-3 py-2 text-white text-xs transition"
+          >
+            <span class="truncate font-semibold">🏪 {{ currentStore?.name ?? 'Seleccionar loja' }}</span>
+            <span class="ml-1 flex-shrink-0">⌄</span>
+          </button>
+          <div v-if="showStoreSel" class="absolute left-0 right-0 top-full mt-1 bg-bc-navy border border-white/20 rounded-xl shadow-xl z-50 overflow-hidden">
+            <button
+              v-for="store in auth.allStores"
+              :key="store.id"
+              @click="switchStore(store)"
+              class="w-full text-left px-3 py-2.5 text-xs transition flex items-center gap-2"
+              :class="store.id === currentStore?.id ? 'bg-bc-gold/20 text-bc-gold font-bold' : 'text-white/70 hover:bg-white/10'"
+            >
+              <span>{{ store.id === currentStore?.id ? '✓' : '○' }}</span>
+              <span class="truncate">{{ store.name }}</span>
+            </button>
+            <RouterLink to="/loja/nova" class="block px-3 py-2 text-xs text-white/40 hover:text-bc-gold border-t border-white/10">
+              + Nova loja
+            </RouterLink>
+          </div>
+        </div>
       </div>
 
       <nav class="flex-1 p-4 space-y-1">
@@ -20,7 +46,10 @@
         </RouterLink>
       </nav>
 
-      <div class="p-4 border-t border-gray-200">
+      <div class="p-4 border-t border-gray-200 space-y-2">
+        <RouterLink to="/loja/nova" class="flex items-center gap-2 text-gray-500 hover:text-bc-gold text-sm">
+          <span>➕</span> Nova Loja
+        </RouterLink>
         <RouterLink to="/" class="flex items-center gap-2 text-gray-500 hover:text-bc-gold text-sm">
           <span>🏠</span> Ir para o site
         </RouterLink>
@@ -54,9 +83,25 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
 const mobileMenuOpen = ref(false)
+const auth   = useAuthStore()
+const router = useRouter()
+
+// Multi-loja: mostra o selector se o dono tiver mais do que uma loja
+const multiStore    = computed(() => auth.allStores.length > 1)
+const currentStore  = computed(() => auth.activeStore)
+const showStoreSel  = ref(false)
+
+function switchStore(store) {
+  auth.setActiveStore(store)
+  showStoreSel.value = false
+  // Recarrega a página para reflectir os dados da nova loja
+  router.go(0)
+}
 
 const navItems = [
   { to: '/loja', icon: '📊', label: 'Dashboard' },

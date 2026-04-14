@@ -78,6 +78,7 @@ function formatPrice(v) {
 
 onMounted(async () => {
   const { data } = await axios.get('/store/dashboard')
+  // O backend usa X-Store-Id para determinar qual loja — interceptor já envia o header
   dashData.value = data
 })
 </script>
