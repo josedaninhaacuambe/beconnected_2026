@@ -1,58 +1,53 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center p-4" style="background:#0F1923;">
-    <div class="w-full max-w-lg">
-      <!-- Header -->
-      <div class="mb-6 flex items-center gap-3">
-        <RouterLink to="/loja" class="text-white/50 hover:text-white transition text-sm">← Voltar</RouterLink>
-        <h1 class="text-white font-black text-xl">Registar Nova Loja</h1>
-      </div>
+  <div class="p-6 max-w-lg mx-auto pb-mobile">
+    <!-- Header -->
+    <div class="mb-6 flex items-center gap-3">
+      <RouterLink to="/loja" class="text-bc-muted hover:text-bc-gold transition text-sm">← Voltar</RouterLink>
+      <h1 class="text-bc-light font-black text-xl">Registar Nova Loja</h1>
+    </div>
 
-      <form @submit.prevent="submit" class="space-y-4">
+    <form @submit.prevent="submit" class="space-y-4">
         <!-- Nome -->
         <div>
-          <label class="text-white/70 text-sm block mb-1">Nome da loja *</label>
-          <input v-model="form.name" type="text" placeholder="Ex: Boutique da Maria" required
-            class="w-full bg-white/5 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-bc-gold" />
+          <label class="text-bc-muted text-sm block mb-1">Nome da loja *</label>
+          <input v-model="form.name" type="text" placeholder="Ex: Boutique da Maria" required class="input-african" />
         </div>
 
         <!-- Categoria -->
         <div>
-          <label class="text-white/70 text-sm block mb-1">Categoria *</label>
-          <select v-model="form.store_category_id" required
-            class="w-full bg-white/5 border border-white/20 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-bc-gold">
-            <option value="" disabled>Seleccionar categoria</option>
+          <label class="text-bc-muted text-sm block mb-1">Categoria *</label>
+          <select v-model="form.store_category_id" required :disabled="loadingMeta"
+            class="input-african disabled:opacity-50">
+            <option value="" disabled>{{ loadingMeta ? 'A carregar...' : categories.length ? 'Seleccionar categoria' : 'Sem categorias — recarrega a página' }}</option>
             <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
           </select>
         </div>
 
         <!-- Descrição -->
         <div>
-          <label class="text-white/70 text-sm block mb-1">Descrição</label>
+          <label class="text-bc-muted text-sm block mb-1">Descrição</label>
           <textarea v-model="form.description" rows="3" placeholder="Descreve a tua loja..."
-            class="w-full bg-white/5 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-bc-gold resize-none"></textarea>
+            class="input-african resize-none"></textarea>
         </div>
 
         <!-- Telefone -->
         <div>
-          <label class="text-white/70 text-sm block mb-1">Telefone</label>
-          <input v-model="form.phone" type="tel" placeholder="+258 84 000 0000"
-            class="w-full bg-white/5 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-bc-gold" />
+          <label class="text-bc-muted text-sm block mb-1">Telefone</label>
+          <input v-model="form.phone" type="tel" placeholder="+258 84 000 0000" class="input-african" />
         </div>
 
         <!-- Província + Cidade -->
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="text-white/70 text-sm block mb-1">Província *</label>
-            <select v-model="form.province_id" @change="loadCities" required
-              class="w-full bg-white/5 border border-white/20 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-bc-gold">
+            <label class="text-bc-muted text-sm block mb-1">Província *</label>
+            <select v-model="form.province_id" @change="loadCities" required class="input-african">
               <option value="" disabled>Seleccionar</option>
               <option v-for="p in provinces" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
           </div>
           <div>
-            <label class="text-white/70 text-sm block mb-1">Cidade *</label>
-            <select v-model="form.city_id" required :disabled="!cities.length"
-              class="w-full bg-white/5 border border-white/20 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-bc-gold disabled:opacity-40">
+            <label class="text-bc-muted text-sm block mb-1">Cidade *</label>
+            <select v-model="form.city_id" required :disabled="!cities.length" class="input-african disabled:opacity-40">
               <option value="" disabled>Seleccionar</option>
               <option v-for="c in cities" :key="c.id" :value="c.id">{{ c.name }}</option>
             </select>
@@ -61,18 +56,18 @@
 
         <!-- Logo -->
         <div>
-          <label class="text-white/70 text-sm block mb-1">Logo da loja</label>
+          <label class="text-bc-muted text-sm block mb-1">Logo da loja</label>
           <div
-            class="flex items-center gap-4 p-4 border-2 border-dashed border-white/20 rounded-xl cursor-pointer hover:border-bc-gold/60 transition"
+            class="flex items-center gap-4 p-4 border-2 border-dashed border-bc-gold/30 rounded-xl cursor-pointer hover:border-bc-gold/60 transition"
             @click="$refs.logoRef.click()"
           >
-            <div class="w-14 h-14 rounded-xl overflow-hidden bg-white/10 flex items-center justify-center flex-shrink-0">
+            <div class="w-14 h-14 rounded-xl overflow-hidden bg-bc-surface-2 flex items-center justify-center flex-shrink-0">
               <img v-if="logoPreview" :src="logoPreview" class="w-full h-full object-cover" />
-              <span v-else class="text-white/30 text-2xl">🏪</span>
+              <span v-else class="text-bc-muted text-2xl">🏪</span>
             </div>
             <div>
-              <p class="text-white/60 text-sm">{{ logoFile ? logoFile.name : 'Clica para adicionar logo' }}</p>
-              <p class="text-white/30 text-xs">JPG, PNG · máx. 2MB</p>
+              <p class="text-bc-muted text-sm">{{ logoFile ? logoFile.name : 'Clica para adicionar logo' }}</p>
+              <p class="text-bc-muted text-xs opacity-60">JPG, PNG · máx. 2MB</p>
             </div>
           </div>
           <input ref="logoRef" type="file" accept="image/*" class="hidden" @change="onLogo" />
@@ -82,7 +77,7 @@
         <p v-if="error" class="text-red-400 text-sm bg-red-400/10 rounded-xl px-4 py-3">{{ error }}</p>
 
         <!-- Nota sobre aprovação -->
-        <p class="text-white/40 text-xs text-center">
+        <p class="text-bc-muted text-xs text-center">
           A nova loja ficará pendente de aprovação pela administração antes de ser publicada.
         </p>
 
@@ -94,7 +89,6 @@
           {{ loading ? 'A registar...' : 'Registar Loja' }}
         </button>
       </form>
-    </div>
   </div>
 </template>
 
@@ -107,13 +101,14 @@ import axios from 'axios'
 const auth   = useAuthStore()
 const router = useRouter()
 
-const loading    = ref(false)
-const error      = ref('')
-const categories = ref([])
-const provinces  = ref([])
-const cities     = ref([])
-const logoFile   = ref(null)
-const logoPreview = ref('')
+const loading      = ref(false)
+const loadingMeta  = ref(true)
+const error        = ref('')
+const categories   = ref([])
+const provinces    = ref([])
+const cities       = ref([])
+const logoFile     = ref(null)
+const logoPreview  = ref('')
 
 const form = reactive({
   name: '',
@@ -125,12 +120,19 @@ const form = reactive({
 })
 
 onMounted(async () => {
-  const [cats, provs] = await Promise.all([
-    axios.get('/store-categories'),
-    axios.get('/locations/provinces'),
-  ])
-  categories.value = cats.data
-  provinces.value  = provs.data
+  try {
+    const [cats, provs] = await Promise.all([
+      axios.get('/store-categories'),
+      axios.get('/locations/provinces'),
+    ])
+    categories.value = Array.isArray(cats.data) ? cats.data : (cats.data?.data ?? [])
+    provinces.value  = Array.isArray(provs.data) ? provs.data : (provs.data?.data ?? [])
+  } catch (e) {
+    error.value = 'Erro ao carregar categorias. Recarrega a página e tenta novamente.'
+    console.error('[NewStore] falha ao carregar meta:', e)
+  } finally {
+    loadingMeta.value = false
+  }
 })
 
 async function loadCities() {

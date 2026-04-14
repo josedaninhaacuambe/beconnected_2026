@@ -47,9 +47,6 @@ const routes = [
     // Redireccionamentos de URLs antigas do checkout
     { path: '/conta/checkout', redirect: '/conta/finalizar-compra' },
 
-    // ─── Registo de nova loja (dono com multi-loja) ──────────
-    { path: '/loja/nova', name: 'store-new', component: () => import('../views/store/NewStore.vue'), meta: { requiresAuth: true, role: 'store_owner' } },
-
     // ─── Painel do dono de loja ──────────────────────────────
     {
         path: '/loja',
@@ -57,6 +54,7 @@ const routes = [
         meta: { requiresAuth: true, role: 'store_owner' },
         children: [
             { path: '', name: 'store-dashboard', component: () => import('../views/store/Dashboard.vue') },
+            { path: 'nova', name: 'store-new', component: () => import('../views/store/NewStore.vue') },
             { path: 'produtos', name: 'store-products', component: () => import('../views/store/Products.vue') },
             { path: 'produtos/novo', name: 'store-product-create', component: () => import('../views/store/ProductForm.vue') },
             // URL limpa: usa slug do produto em vez do ID numérico
