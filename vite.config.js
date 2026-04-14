@@ -56,9 +56,17 @@ export default defineConfig(({ mode }) => {
                 workbox: {
                     skipWaiting: true,
                     clientsClaim: true,
-                    // Interceta pedidos de navegação (HTML) e serve do cache
-                    // quando offline — permite que o SPA carregue sem internet.
-                    navigateFallback: null,
+                    // Fallback de navegação: quando offline e a rota não está em cache,
+                    // serve o HTML raiz (/) que carrega o SPA Vue — o router trata do resto.
+                    navigateFallback: '/',
+                    navigateFallbackDenylist: [
+                        /^\/api\//,
+                        /^\/storage\//,
+                        /^\/sanctum\//,
+                        /^\/telescope\//,
+                        /^\/horizon\//,
+                        /\.[a-z0-9]+$/i,  // ficheiros com extensão (assets)
+                    ],
                     globPatterns: ['**/*.{js,css,ico,png,svg,woff,woff2}'],
                     runtimeCaching: [
                         // ── Páginas HTML (navegação SPA) ─────────────────────────────────

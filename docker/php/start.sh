@@ -9,6 +9,10 @@ cd /var/www
 # Remover ficheiro hot do Vite para forçar modo produção (usa public/build/)
 rm -f public/hot
 
+# Guardar contra recriação do ficheiro hot (ex: npm run dev na máquina host).
+# Um loop em background elimina-o a cada 30 segundos enquanto o container correr.
+(while true; do rm -f public/hot; sleep 30; done) &
+
 # Iniciar Octane em background
 php artisan octane:start \
   --server=roadrunner \
