@@ -10,6 +10,12 @@
         <p class="text-bc-muted text-sm">Mercado Virtual de Moçambique</p>
       </div>
 
+      <!-- Aviso offline: sem sessão guardada, não é possível entrar -->
+      <div v-if="isOffline" class="mb-4 rounded-xl p-4 text-center" style="background:#1a2a1a; border:1px solid #4ade80;">
+        <p class="text-green-400 font-semibold text-sm mb-1">📵 Sem ligação à internet</p>
+        <p class="text-green-300/70 text-xs">Para usar o POS offline, abre primeiro com internet e instala a app no dispositivo.</p>
+      </div>
+
       <div class="card-african p-6">
         <h2 class="text-bc-light font-semibold text-lg mb-5 text-center">Entrar na conta</h2>
 
@@ -85,8 +91,20 @@ const loading       = ref(false)
 const googleLoading = ref(false)
 const error         = ref('')
 const showPassword  = ref(false)
+const isOffline     = ref(!navigator.onLine)
 const form          = reactive({ email: '', password: '' })
 
+window.addEventListener('online',  () => { isOffline.value = false })
+window.addEventListener('offline', () => { isOffline.value = true  })
+
+
+// Se offline mas com sessão guardada → redirecionar sem passar pelo login
+onMounted(() => {
+  if (!navigator.onLine && authStore.isAuthenticated) {
+    const dest = authStore.postLoginRedirect(authStore.user)
+    router.replace(route.query.redirect || dest)
+  }
+})
 
 // Apanhar token do Google OAuth callback
 onMounted(async () => {

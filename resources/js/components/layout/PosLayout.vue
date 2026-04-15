@@ -89,6 +89,23 @@
       </div>
     </header>
 
+    <!-- Banner de instalação PWA — só aparece se a app não estiver instalada -->
+    <div
+      v-if="pwaInstallable && !pwaDismissed"
+      class="flex items-center justify-between gap-3 px-4 py-2 text-xs font-medium"
+      style="background:#0f4c75; color:white;"
+    >
+      <span>📲 Instala a app para usar o POS <strong>sem internet</strong>, mesmo com o computador desligado.</span>
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <button
+          @click="installPwa"
+          class="px-3 py-1 rounded-lg font-bold text-xs"
+          style="background:#F07820; color:white;"
+        >Instalar</button>
+        <button @click="pwaDismissed = true" class="text-white/50 hover:text-white text-base leading-none">✕</button>
+      </div>
+    </div>
+
     <!-- Mobile nav → Footer em mobile -->
     <nav class="sm:hidden flex border-t fixed bottom-0 left-0 right-0 z-50" style="background:#1C2B3C;">
       <RouterLink
@@ -157,7 +174,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useOfflinePos, prefetchPosData } from '@/composables/useOfflinePos'
@@ -176,6 +193,36 @@ function runPrefetch() { prefetchPosData(auth.activeStoreId) }
 onMounted(runPrefetch)
 watch(isOnline, (online) => { if (online) runPrefetch() })
 watch(() => auth.activeStoreId, runPrefetch)
+
+// ── Instalação PWA ────────────────────────────────────────────────────────
+// Captura o evento do browser para mostrar o nosso próprio botão de instalação.
+// Só aparece se a app não estiver já instalada (standalone) e o browser suportar.
+const pwaInstallPrompt = ref(null)
+const pwaInstallable   = ref(false)
+const pwaDismissed     = ref(localStorage.getItem('pwa_install_dismissed') === '1'
+                          || window.matchMedia('(display-mode: standalone)').matches)
+
+function onBeforeInstallPrompt(e) {
+  e.preventDefault()
+  pwaInstallPrompt.value = e
+  pwaInstallable.value   = true
+}
+
+async function installPwa() {
+  if (!pwaInstallPrompt.value) return
+  pwaInstallPrompt.value.prompt()
+  const { outcome } = await pwaInstallPrompt.value.userChoice
+  if (outcome === 'accepted') {
+    pwaInstallable.value = false
+    localStorage.setItem('pwa_install_dismissed', '1')
+  }
+  pwaInstallPrompt.value = null
+}
+
+watch(pwaDismissed, (v) => { if (v) localStorage.setItem('pwa_install_dismissed', '1') })
+
+onMounted(() => window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt))
+onUnmounted(() => window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt))
 
 // Multi-loja
 const multiStore   = computed(() => auth.allStores.length > 1)

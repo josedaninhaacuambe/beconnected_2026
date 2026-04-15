@@ -76,8 +76,11 @@ export const useAuthStore = defineStore('auth', () => {
             if (data.role === 'store_owner' && data.stores?.length && !activeStoreId.value) {
                 setActiveStore(data.stores[0])
             }
-        } catch {
-            logout()
+        } catch (e) {
+            // 401 → token inválido/expirado: forçar logout
+            // Qualquer outro erro (sem internet, timeout, 500) → manter sessão
+            // com os dados em cache do localStorage para que o POS funcione offline
+            if (e.response?.status === 401) logout()
         }
     }
 
