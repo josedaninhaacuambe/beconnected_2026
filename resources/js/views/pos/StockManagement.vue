@@ -422,8 +422,8 @@ async function loadHistory() {
 async function loadProducts() {
   loading.value = true
 
-  // 1. Mostrar cache imediatamente
-  const cached = await getCachedProducts()
+  // 1. Mostrar cache imediatamente — filtrada pela loja activa
+  const cached = await getCachedProducts(auth.activeStoreId)
   if (cached.length) {
     products.value = cached
     loading.value  = false

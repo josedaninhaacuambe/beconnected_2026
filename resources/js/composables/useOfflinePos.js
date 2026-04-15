@@ -190,23 +190,26 @@ export async function updateCachedProduct(product) {
   })
 }
 
-// ── Cache de produtos (terminal) ───────────────────────────────────────────
-export async function cacheProducts(products) {
+// ── Cache de produtos (terminal) — isolada por loja ───────────────────────
+export async function cacheProducts(products, storeId) {
   const d = await openDB()
   return new Promise((resolve, reject) => {
     const tx    = d.transaction('products_cache', 'readwrite')
     const store = tx.objectStore('products_cache')
-    products.forEach(p => store.put(JSON.parse(JSON.stringify(p))))
+    // Stampamos cada produto com store_id para que getCachedProducts() possa filtrar
+    products.forEach(p => store.put(JSON.parse(JSON.stringify({ ...p, store_id: storeId }))))
     tx.oncomplete = () => resolve()
     tx.onerror    = (ev) => reject(ev.target.error)
     tx.onabort    = (ev) => reject(ev.target.error)
   })
 }
 
-export async function getCachedProducts() {
-  await openDB()
+export async function getCachedProducts(storeId) {
+  const d = await openDB()
   return new Promise((resolve, reject) => {
-    const req = txStore('products_cache').getAll()
+    // Filtra pelo índice store_id para não misturar produtos de lojas diferentes
+    const idx = d.transaction('products_cache').objectStore('products_cache').index('store_id')
+    const req = idx.getAll(IDBKeyRange.only(storeId))
     req.onsuccess = (e) => resolve(e.target.result)
     req.onerror   = (e) => reject(e.target.error)
   })

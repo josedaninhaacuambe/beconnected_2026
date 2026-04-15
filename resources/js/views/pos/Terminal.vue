@@ -834,7 +834,7 @@ async function finalizeSale() {
     }
     filtered.value = [...allProducts.value]
     // Actualizar cache com novo stock
-    cacheProducts(allProducts.value)
+    cacheProducts(allProducts.value, auth.activeStoreId)
   }
 }
 
@@ -888,9 +888,10 @@ function printReceipt() {
 
 async function loadProducts() {
   loadingProducts.value = true
+  const storeId = auth.activeStoreId
 
-  // 1. Mostrar cache imediatamente (sem esperar servidor)
-  const cached = await getCachedProducts()
+  // 1. Mostrar cache imediatamente (sem esperar servidor) — filtrada por loja
+  const cached = await getCachedProducts(storeId)
   if (cached.length) {
     allProducts.value = cached
     filtered.value = cached
@@ -906,7 +907,7 @@ async function loadProducts() {
         if (data && data.length > 0) {
           allProducts.value = data
           filtered.value = data
-          await cacheProducts(data)
+          await cacheProducts(data, storeId)
           break // sucesso — sair do loop
         } else if (!cached.length && attempt === 1) {
           // Sem cache local e API retornou vazio em ambas as tentativas → loja sem produtos
