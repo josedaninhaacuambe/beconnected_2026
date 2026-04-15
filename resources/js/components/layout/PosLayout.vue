@@ -157,10 +157,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { useOfflinePos } from '@/composables/useOfflinePos'
+import { useOfflinePos, prefetchPosData } from '@/composables/useOfflinePos'
 import axios from 'axios'
 
 const auth    = useAuthStore()
@@ -169,6 +169,13 @@ const router  = useRouter()
 const showMenu = ref(false)
 
 const { isOnline, pendingCount, syncing, syncMessage, trySyncNow } = useOfflinePos()
+
+// Pré-carregar todos os dados POS para IndexedDB sempre que online,
+// garantindo funcionamento offline em todos os ecrãs sem visita prévia.
+function runPrefetch() { prefetchPosData(auth.activeStoreId) }
+onMounted(runPrefetch)
+watch(isOnline, (online) => { if (online) runPrefetch() })
+watch(() => auth.activeStoreId, runPrefetch)
 
 // Multi-loja
 const multiStore   = computed(() => auth.allStores.length > 1)

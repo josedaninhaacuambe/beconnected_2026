@@ -247,12 +247,12 @@ export async function getCachedStockHistory() {
   return cacheGet('stock_history_cache', 'all')
 }
 
-// ── Cache de funcionários ──────────────────────────────────────────────────
-export async function cacheEmployees(employees) {
-  return cacheSet('employees_cache', 'all', employees)
+// ── Cache de funcionários — isolada por loja ───────────────────────────────
+export async function cacheEmployees(employees, storeId) {
+  return cacheSet('employees_cache', `store_${storeId}`, employees)
 }
-export async function getCachedEmployees() {
-  return cacheGet('employees_cache', 'all')
+export async function getCachedEmployees(storeId) {
+  return cacheGet('employees_cache', `store_${storeId}`)
 }
 
 // ── Operações de equipa pendentes offline ──────────────────────────────────
@@ -393,6 +393,28 @@ export async function syncPendingEmployeeOps() {
     }
   }
   return { synced }
+}
+
+// ── Pré-carga de todos os dados POS para IndexedDB ─────────────────────────
+// Chamado no mount do PosLayout e quando a ligação volta.
+// Garante que TODOS os ecrãs do POS funcionam offline mesmo sem ter sido
+// visitados anteriormente nesta sessão.
+export async function prefetchPosData(storeId) {
+  if (!navigator.onLine || !storeId) return
+  try {
+    const [productsRes, employeesRes] = await Promise.allSettled([
+      axios.get('/pos/products'),
+      axios.get('/pos/employees'),
+    ])
+    if (productsRes.status === 'fulfilled' && productsRes.value.data?.length) {
+      await cacheProducts(productsRes.value.data, storeId)
+    }
+    if (employeesRes.status === 'fulfilled' && Array.isArray(employeesRes.value.data)) {
+      await cacheEmployees(employeesRes.value.data, storeId)
+    }
+  } catch {
+    // falha silenciosa — cache existente mantém-se
+  }
 }
 
 // ── Helper: formatar timestamp de cache ────────────────────────────────────

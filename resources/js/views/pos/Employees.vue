@@ -327,7 +327,7 @@ import axios from 'axios'
 import {
   useOfflinePos,
   cacheEmployees, getCachedEmployees,
-  savePendingEmployeeOp, getPendingEmployeeOps,
+  savePendingEmployeeOp,
 } from '@/composables/useOfflinePos'
 
 const { isOnline, pendingEmployeeCount, refreshPendingCount } = useOfflinePos()
@@ -593,8 +593,8 @@ function permBadge(perm) {
 async function loadEmployees() {
   loading.value = true
 
-  // Mostrar cache imediatamente
-  const cached = await getCachedEmployees()
+  // Mostrar cache imediatamente — filtrada pela loja activa
+  const cached = await getCachedEmployees(auth.activeStoreId)
   if (cached) {
     employees.value = cached.value
     loading.value   = false
@@ -604,7 +604,7 @@ async function loadEmployees() {
     try {
       const { data } = await axios.get('/pos/employees')
       employees.value = data
-      await cacheEmployees(data)
+      await cacheEmployees(data, auth.activeStoreId)
     } catch {
       // mantém cache
     }
