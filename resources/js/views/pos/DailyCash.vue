@@ -116,27 +116,32 @@
         </div>
 
         <div v-for="(sale, idx) in data.sales" :key="sale.id"
-          class="border-b border-gray-50 last:border-0">
+          class="border-b border-gray-50 last:border-0"
+          :class="sale.status === 'voided' ? 'opacity-60' : ''">
 
           <!-- Cabeçalho da venda -->
           <button class="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition"
             @click="toggleSale(sale.id)">
             <div class="flex items-center gap-3">
               <div class="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black text-white flex-shrink-0"
-                style="background:#1C2B3C;">{{ idx + 1 }}</div>
+                :style="sale.status === 'voided' ? 'background:#9ca3af' : 'background:#1C2B3C'">{{ idx + 1 }}</div>
               <div class="text-left">
-                <p class="text-sm font-bold text-gray-800">
+                <p class="text-sm font-bold text-gray-800 flex items-center gap-2">
                   {{ formatTime(sale.sale_at) }}
-                  <span v-if="sale.customer_name" class="text-gray-500 font-normal"> · {{ sale.customer_name }}</span>
+                  <span v-if="sale.status === 'voided'" class="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">ANULADA</span>
+                  <span v-if="sale.customer_name" class="text-gray-500 font-normal text-xs"> · {{ sale.customer_name }}</span>
                 </p>
                 <p class="text-xs text-gray-400">
                   {{ payIcon(sale.payment_method) }} {{ sale.payment_method }}
                   <span v-if="sale.user?.name && data.is_owner_or_manager"> · {{ sale.user.name }}</span>
                 </p>
+                <p v-if="sale.status === 'voided'" class="text-xs text-red-400 mt-0.5">
+                  ↩ {{ sale.void_reason }} <span class="text-gray-400">— {{ sale.voided_by?.name }}</span>
+                </p>
               </div>
             </div>
             <div class="text-right flex-shrink-0">
-              <p class="text-sm font-black" style="color:#F07820;">{{ fmt(sale.total) }}</p>
+              <p class="text-sm font-black" :class="sale.status === 'voided' ? 'line-through text-gray-400' : ''" :style="sale.status !== 'voided' ? 'color:#F07820' : ''">{{ fmt(sale.total) }}</p>
               <p class="text-xs" :class="expandedSale === sale.id ? 'text-bc-gold' : 'text-gray-400'">
                 {{ sale.items?.length }} item{{ sale.items?.length !== 1 ? 's' : '' }}
                 {{ expandedSale === sale.id ? '▲' : '▼' }}
@@ -191,6 +196,43 @@
                 </div>
               </div>
             </div>
+
+            <!-- Botão anular (apenas dono/gerente, só vendas activas) -->
+            <div v-if="data.is_owner_or_manager && sale.status !== 'voided'" class="mt-3">
+              <button @click="openVoidModal(sale)"
+                class="w-full py-2 rounded-xl border border-red-200 text-xs font-bold text-red-500 hover:bg-red-50 transition">
+                ↩ Anular Venda
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal de anulação -->
+      <div v-if="showVoidModal" class="fixed inset-0 z-50 flex items-center justify-center px-4" style="background:rgba(0,0,0,.45);">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-black text-gray-800">Anular Venda</h3>
+            <button @click="showVoidModal = false" class="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+          </div>
+          <p class="text-xs text-gray-500">Esta acção não pode ser revertida. O stock será restaurado e a venda ficará marcada como <strong class="text-red-500">ANULADA</strong> no histórico.</p>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Motivo da anulação <span class="text-red-400">*</span></label>
+            <textarea v-model="voidReason" rows="3" maxlength="500"
+              placeholder="Descreva o motivo (mín. 5 caracteres)…"
+              class="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-red-300 resize-none"></textarea>
+            <p class="text-[10px] text-gray-400 text-right mt-0.5">{{ voidReason.length }}/500</p>
+          </div>
+          <div class="flex gap-2">
+            <button @click="showVoidModal = false"
+              class="flex-1 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition">
+              Cancelar
+            </button>
+            <button @click="confirmVoid" :disabled="voidReason.trim().length < 5 || voidLoading"
+              class="flex-1 py-2 rounded-xl text-xs font-bold text-white transition disabled:opacity-40"
+              style="background:#ef4444;">
+              {{ voidLoading ? 'A anular…' : 'Confirmar Anulação' }}
+            </button>
           </div>
         </div>
       </div>
@@ -249,6 +291,10 @@ const isFromCache    = ref(false)
 const selectedDate   = ref(new Date().toISOString().slice(0, 10))
 const selectedSeller = ref(null)
 const expandedSale   = ref(null)
+const showVoidModal  = ref(false)
+const voidReason     = ref('')
+const voidTarget     = ref(null)
+const voidLoading    = ref(false)
 
 const _fmt = new Intl.NumberFormat('pt-MZ', { style: 'currency', currency: 'MZN' })
 function fmt(v) { return _fmt.format(v ?? 0) }
@@ -263,6 +309,34 @@ function payIcon(method) {
 
 function toggleSale(id) {
   expandedSale.value = expandedSale.value === id ? null : id
+}
+
+function openVoidModal(sale) {
+  voidTarget.value    = sale
+  voidReason.value    = ''
+  showVoidModal.value = true
+}
+
+async function confirmVoid() {
+  if (!voidTarget.value || voidReason.value.trim().length < 5) return
+  voidLoading.value = true
+  try {
+    await axios.post(`/pos/sales/${voidTarget.value.id}/void`, { reason: voidReason.value.trim() })
+    // Update the sale in-place so the list reflects the void immediately
+    const sale = data.value.sales.find(s => s.id === voidTarget.value.id)
+    if (sale) {
+      sale.status     = 'voided'
+      sale.void_reason = voidReason.value.trim()
+      sale.voided_by  = { name: 'Você' }
+    }
+    showVoidModal.value = false
+    // Reload to get accurate totals from server
+    await load()
+  } catch (e) {
+    alert(e.response?.data?.message ?? 'Erro ao anular venda.')
+  } finally {
+    voidLoading.value = false
+  }
 }
 
 async function load() {

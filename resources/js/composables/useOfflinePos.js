@@ -6,12 +6,14 @@
  * v4: adiciona stores para cache de categorias, relatórios, fecho de
  *     caixa, histórico de stock, lista de funcionários e operações de
  *     equipa pendentes (offline).
+ * v5: manage_products_cache — cache da listagem de gestão de produtos
+ *     (/pos/products/manage) isolada por loja.
  */
 import { ref, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 
 const DB_NAME    = 'beconnect_pos'
-const DB_VERSION = 4
+const DB_VERSION = 5
 let db = null
 
 // ── Abrir / inicializar IndexedDB ──────────────────────────────────────────
@@ -66,6 +68,12 @@ async function openDB() {
       // Operações de equipa feitas offline (add, edit, remove, reset pw)
       if (!d.objectStoreNames.contains('pending_employee_ops')) {
         d.createObjectStore('pending_employee_ops', { keyPath: 'local_id' })
+      }
+
+      // ── v5 ───────────────────────────────────────────────────────────────
+      // Cache da gestão de produtos por loja (keyPath: 'key' — ex: 'store_1')
+      if (!d.objectStoreNames.contains('manage_products_cache')) {
+        d.createObjectStore('manage_products_cache', { keyPath: 'key' })
       }
     }
     req.onsuccess  = (e) => { db = e.target.result; resolve(db) }
@@ -255,6 +263,14 @@ export async function getCachedEmployees(storeId) {
   return cacheGet('employees_cache', `store_${storeId}`)
 }
 
+// ── Cache de gestão de produtos — isolada por loja ────────────────────────
+export async function cacheManageProducts(products, storeId) {
+  return cacheSet('manage_products_cache', `store_${storeId}`, products)
+}
+export async function getCachedManageProducts(storeId) {
+  return cacheGet('manage_products_cache', `store_${storeId}`)
+}
+
 // ── Operações de equipa pendentes offline ──────────────────────────────────
 export async function savePendingEmployeeOp(op) {
   await openDB()
@@ -402,12 +418,16 @@ export async function syncPendingEmployeeOps() {
 export async function prefetchPosData(storeId) {
   if (!navigator.onLine || !storeId) return
   try {
-    const [productsRes, employeesRes] = await Promise.allSettled([
+    const [productsRes, manageProductsRes, employeesRes] = await Promise.allSettled([
       axios.get('/pos/products'),
+      axios.get('/pos/products/manage'),
       axios.get('/pos/employees'),
     ])
     if (productsRes.status === 'fulfilled' && productsRes.value.data?.length) {
       await cacheProducts(productsRes.value.data, storeId)
+    }
+    if (manageProductsRes.status === 'fulfilled' && Array.isArray(manageProductsRes.value.data)) {
+      await cacheManageProducts(manageProductsRes.value.data, storeId)
     }
     if (employeesRes.status === 'fulfilled' && Array.isArray(employeesRes.value.data)) {
       await cacheEmployees(employeesRes.value.data, storeId)

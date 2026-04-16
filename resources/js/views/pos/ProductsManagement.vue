@@ -342,6 +342,7 @@ import {
   useOfflinePos,
   savePendingProduct, getPendingProducts,
   cacheCategories, getCachedCategories,
+  cacheManageProducts, getCachedManageProducts,
 } from '@/composables/useOfflinePos'
 
 const auth = useAuthStore()
@@ -452,11 +453,13 @@ async function load() {
   loading.value = true
 
   // Mostrar cache imediatamente (categorias + produtos offline pendentes)
-  const [cachedCats, pendingProds] = await Promise.all([
+  const [cachedCats, cachedManage, pendingProds] = await Promise.all([
     getCachedCategories(),
+    getCachedManageProducts(auth.activeStoreId),
     getPendingProducts(),
   ])
-  if (cachedCats)      categories.value = cachedCats.value
+  if (cachedCats)    categories.value = cachedCats.value
+  if (cachedManage)  products.value   = cachedManage.value
   offlineProducts.value = pendingProds.map(p => ({
     ...p, id: p.local_id, is_active: true, _offline: true,
     stock: { quantity: p.stock_quantity ?? 0 },
@@ -470,13 +473,13 @@ async function load() {
       ])
       products.value   = pRes.data || []
       categories.value = cRes.data || []
-      await cacheCategories(cRes.data || [])
+      await Promise.all([
+        cacheCategories(cRes.data || []),
+        cacheManageProducts(pRes.data || [], auth.activeStoreId),
+      ])
     } catch (e) {
       console.error('Erro ao carregar produtos:', e.response?.data ?? e.message)
     }
-  } else if (!products.value.length) {
-    // Offline sem dados do servidor: mostrar só os pendentes
-    products.value = []
   }
 
   loading.value = false

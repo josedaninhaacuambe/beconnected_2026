@@ -469,18 +469,21 @@ class PosController extends Controller
 
         $sales = $query->get();
 
-        // Por método de pagamento
-        $byPayment = $sales->groupBy('payment_method')
+        // Vendas efectivas (excluir anuladas dos totais)
+        $activeSales = $sales->where('status', '!=', 'voided');
+
+        // Por método de pagamento (só vendas activas)
+        $byPayment = $activeSales->groupBy('payment_method')
             ->map(fn($g) => [
                 'method' => $g->first()->payment_method,
                 'total'  => round($g->sum('total'), 2),
                 'count'  => $g->count(),
             ])->values();
 
-        // Por vendedor (apenas para owner/manager)
+        // Por vendedor (apenas para owner/manager, só vendas activas)
         $bySeller = [];
         if ($isOwnerOrManager) {
-            $bySeller = $sales->groupBy('user_id')
+            $bySeller = $activeSales->groupBy('user_id')
                 ->map(fn($g) => [
                     'user_id' => $g->first()->user_id,
                     'name'    => $g->first()->user?->name ?? 'Desconhecido',
@@ -502,16 +505,16 @@ class PosController extends Controller
         }
 
         return response()->json([
-            'date'           => $date,
+            'date'                => $date,
             'is_owner_or_manager' => $isOwnerOrManager,
-            'sales'          => $sales,
-            'total_sales'    => $sales->count(),
-            'total_revenue'  => round($sales->sum('total'), 2),
-            'total_discount' => round($sales->sum('discount'), 2),
-            'total_vat'      => round($sales->sum('vat_amount'), 2),
-            'by_payment'     => $byPayment,
-            'by_seller'      => $bySeller,
-            'sellers'        => $sellers,
+            'sales'               => $sales->load('voidedBy:id,name'),
+            'total_sales'         => $activeSales->count(),
+            'total_revenue'       => round($activeSales->sum('total'), 2),
+            'total_discount'      => round($activeSales->sum('discount'), 2),
+            'total_vat'           => round($activeSales->sum('vat_amount'), 2),
+            'by_payment'          => $byPayment,
+            'by_seller'           => $bySeller,
+            'sellers'             => $sellers,
         ]);
     }
 
@@ -819,22 +822,24 @@ class PosController extends Controller
         return response()->json(['message' => 'Senha redefinida com sucesso.']);
     }
 
-    // ─── Deletar venda (apenas dono da loja) ───────────────────────────────────
-    // Reverte stock, decrementa total_sold dos produtos e remove a venda
-    public function deleteSale(Request $request, PosSale $sale): JsonResponse
+    // ─── Anular venda (apenas dono/admin) ────────────────────────────────────
+    // Marca como anulada com justificativa, reverte stock, mantém o registo histórico.
+    public function voidSale(Request $request, PosSale $sale): JsonResponse
     {
         $store = $this->resolveStore($request);
         $user  = $request->user();
 
-        // Apenas dono da loja ou admin podem deletar vendas
-        abort_unless(in_array($user->role, ['store_owner', 'admin']) || ($user->role === 'customer' && $this->userCanDeleteSales($request)), 
-            403, 'Apenas o dono da loja pode deletar vendas.');
-
-        // Verificar que a venda pertence à loja do utilizador
+        abort_unless(in_array($user->role, ['store_owner', 'admin']), 403,
+            'Apenas o dono da loja pode anular vendas.');
         abort_if($sale->store_id !== $store->id, 403, 'Venda não encontrada.');
+        abort_if($sale->status === 'voided', 422, 'Esta venda já foi anulada.');
+
+        $validated = $request->validate([
+            'reason' => 'required|string|min:5|max:500',
+        ]);
 
         try {
-            DB::transaction(function () use ($sale) {
+            DB::transaction(function () use ($sale, $validated, $user) {
                 // Reverter stock e total_sold para cada item
                 foreach ($sale->items as $item) {
                     if (!empty($item->product_id)) {
@@ -842,44 +847,40 @@ class PosController extends Controller
                         if ($stock) {
                             $before = $stock->quantity;
                             $stock->increment('quantity', $item->quantity);
-
-                            // Registar movimento de stock de reversão
                             StockMovement::create([
                                 'product_id'      => $item->product_id,
                                 'type'            => 'in',
                                 'quantity'        => $item->quantity,
                                 'quantity_before' => $before,
                                 'quantity_after'  => $before + $item->quantity,
-                                'reason'          => 'Reversão - Venda #' . $sale->id . ' deletada',
-                                'user_id'         => auth()->id(),
+                                'reason'          => 'Anulação - Venda #' . $sale->id . ': ' . $validated['reason'],
+                                'user_id'         => $user->id,
                             ]);
                         }
-
-                        // Decrementar total_sold do produto
                         Product::where('id', $item->product_id)
                             ->decrement('total_sold', $item->quantity);
                     }
                 }
 
-                // Deletar itens da venda
-                $sale->items()->delete();
-
-                // Deletar a venda
-                $sale->delete();
+                // Marcar venda como anulada — registo mantém-se para auditoria
+                $sale->update([
+                    'status'     => 'voided',
+                    'void_reason'=> $validated['reason'],
+                    'voided_by'  => $user->id,
+                    'voided_at'  => now(),
+                ]);
             });
 
-            // Invalidar caches
             Cache::forget("pos_products_{$store->id}");
             Cache::forget('products_flash');
             Cache::forget('products_trending');
 
             return response()->json([
-                'message' => 'Venda deletada com sucesso. Stock revertido.',
+                'message' => 'Venda anulada. Stock revertido.',
+                'sale'    => $sale->fresh()->load('items', 'voidedBy'),
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Erro ao deletar venda: ' . $e->getMessage(),
-            ], 500);
+            return response()->json(['message' => 'Erro: ' . $e->getMessage()], 500);
         }
     }
 

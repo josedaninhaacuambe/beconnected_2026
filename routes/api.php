@@ -287,6 +287,7 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
         Route::get('categories',                         [PosController::class, 'categories']);
         Route::post('sync',           [PosController::class, 'sync'])->middleware('throttle:pos-sync');
         Route::delete('sales/{sale}', [PosController::class, 'deleteSale']);
+        Route::post('sales/{sale}/void', [PosController::class, 'voidSale']);
         Route::get('stock',           [PosController::class, 'stock']);
         Route::post('stock/movement', [PosController::class, 'stockMovement']);
         Route::get('stock/history',   [PosController::class, 'stockHistory']);
