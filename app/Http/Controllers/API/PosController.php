@@ -98,17 +98,11 @@ class PosController extends Controller
                 ->map(function ($p) {
                     $images = $p->images ?? [];
                     if (is_string($images)) $images = json_decode($images, true) ?? [];
-                    // Só usar imagem se for um caminho real (não URL placeholder externa)
+                    // Apenas imagens locais (em storage) — URLs externas → null → AppImg usa Produto.png
                     $firstImage = count($images) > 0 ? $images[0] : null;
-                    if ($firstImage && str_starts_with($firstImage, 'http') && (
-                        str_contains($firstImage, 'placeholder') ||
-                        str_contains($firstImage, 'via.placeholder') ||
-                        str_contains($firstImage, 'picsum') ||
-                        str_contains($firstImage, 'lorempixel')
-                    )) {
+                    if ($firstImage && str_starts_with($firstImage, 'http')) {
                         $firstImage = null;
                     }
-                    // Retorna string vazia se não houver imagem válida (AppImg vai usar fallback)
                     $p->image = $firstImage ?? '';
                     $p->category_id = $p->product_category_id ?? null;
                     unset($p->images);
