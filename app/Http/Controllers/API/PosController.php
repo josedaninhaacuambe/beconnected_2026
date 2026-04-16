@@ -90,20 +90,26 @@ class PosController extends Controller
         // Cache por 5 minutos — invalidado ao registar venda/movimento de stock
         $products = Cache::remember("pos_products_{$store->id}", 300, function () use ($store) {
             $fields = ['id', 'name', 'price', 'cost_price', 'sku', 'barcode', 'images', 'is_weighable', 'weight_unit', 'product_category_id'];
-            if (Product::hasAvailabilityColumn()) {
-                $fields[] = 'availability';
-            }
 
             return $store->products()
                 ->with('stock')
                 ->where('is_active', true)
-                ->forPos()
                 ->orderBy('name')
                 ->get($fields)
                 ->map(function ($p) {
                     $images = $p->images ?? [];
                     if (is_string($images)) $images = json_decode($images, true) ?? [];
-                    $p->image = count($images) > 0 ? $images[0] : null;
+                    // Só usar imagem se for um caminho real (não URL placeholder externa)
+                    $firstImage = count($images) > 0 ? $images[0] : null;
+                    if ($firstImage && str_starts_with($firstImage, 'http') && (
+                        str_contains($firstImage, 'placeholder') ||
+                        str_contains($firstImage, 'via.placeholder') ||
+                        str_contains($firstImage, 'picsum') ||
+                        str_contains($firstImage, 'lorempixel')
+                    )) {
+                        $firstImage = null;
+                    }
+                    $p->image = $firstImage;
                     $p->category_id = $p->product_category_id ?? null;
                     unset($p->images);
                     return $p;

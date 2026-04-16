@@ -184,6 +184,12 @@
           <div v-for="i in 8" :key="i" class="skeleton h-28 rounded-xl"></div>
         </div>
 
+        <div v-else-if="loadError" class="flex flex-col items-center justify-center h-full text-red-400 p-4 text-center">
+          <span class="text-4xl mb-2">⚠️</span>
+          <p class="text-sm font-semibold">Erro ao carregar produtos</p>
+          <p class="text-xs mt-1 text-red-300">{{ loadError }}</p>
+          <button @click="loadProducts" class="mt-3 px-4 py-2 rounded-lg text-xs font-bold text-white" style="background:#F07820;">Tentar novamente</button>
+        </div>
         <div v-else-if="!filtered.length" class="flex flex-col items-center justify-center h-full text-gray-400">
           <span class="text-4xl mb-2">📦</span>
           <p class="text-sm">Nenhum produto encontrado</p>
@@ -576,6 +582,7 @@ const customerName = ref('')
 const processing   = ref(false)
 const receipt      = ref(null)
 const loadingProducts = ref(true)
+const loadError = ref('')
 const showMobileCart = ref(false)
 
 // ── Modo scanner ────────────────────────────────────────────────────────────
@@ -888,7 +895,8 @@ function printReceipt() {
 
 async function loadProducts() {
   loadingProducts.value = true
-  const storeId = auth.activeStoreId ?? auth.activeStore?.id
+  loadError.value = ''
+  const storeId = auth.activeStoreId ?? auth.activeStore?.id ?? auth.user?.pos_employee?.store?.id
 
   try {
     // 1. Mostrar cache imediatamente (sem esperar servidor) — filtrada por loja
@@ -906,23 +914,16 @@ async function loadProducts() {
 
     // 2. Actualizar do servidor (sempre — cache é só fallback)
     if (isOnline.value) {
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          if (attempt > 0) await new Promise(r => setTimeout(r, 3000))
-          const { data } = await axios.get('/pos/products')
-          if (data && data.length > 0) {
-            allProducts.value = data
-            filtered.value = data
-            cacheProducts(data, storeId).catch(() => {}) // cache em background, falha silenciosa
-            break
-          } else if (!cached.length && attempt === 1) {
-            allProducts.value = []
-          }
-          if (cached.length && attempt === 0) continue
-          break
-        } catch {
-          break
+      try {
+        const { data } = await axios.get('/pos/products')
+        if (Array.isArray(data)) {
+          allProducts.value = data
+          filtered.value = data
+          if (data.length > 0) cacheProducts(data, storeId).catch(() => {})
         }
+      } catch (err) {
+        const msg = err?.response?.data?.message ?? err?.message ?? 'Erro ao carregar produtos'
+        if (!cached.length) loadError.value = msg
       }
     }
 
