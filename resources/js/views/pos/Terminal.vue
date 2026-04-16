@@ -890,52 +890,61 @@ async function loadProducts() {
   loadingProducts.value = true
   const storeId = auth.activeStoreId ?? auth.activeStore?.id
 
-  // 1. Mostrar cache imediatamente (sem esperar servidor) — filtrada por loja
-  const cached = await getCachedProducts(storeId)
-  if (cached.length) {
-    allProducts.value = cached
-    filtered.value = cached
-    loadingProducts.value = false
-  }
+  try {
+    // 1. Mostrar cache imediatamente (sem esperar servidor) — filtrada por loja
+    let cached = []
+    try {
+      cached = await getCachedProducts(storeId)
+    } catch {
+      cached = []
+    }
+    if (cached.length) {
+      allProducts.value = cached
+      filtered.value = cached
+      loadingProducts.value = false
+    }
 
-  // 2. Actualizar do servidor em background (ou primeiro load se sem cache)
-  if (isOnline.value) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        if (attempt > 0) await new Promise(r => setTimeout(r, 3000)) // retry após 3s
-        const { data } = await axios.get('/pos/products')
-        if (data && data.length > 0) {
-          allProducts.value = data
-          filtered.value = data
-          await cacheProducts(data, storeId)
-          break // sucesso — sair do loop
-        } else if (!cached.length && attempt === 1) {
-          // Sem cache local e API retornou vazio em ambas as tentativas → loja sem produtos
-          allProducts.value = []
+    // 2. Actualizar do servidor (sempre — cache é só fallback)
+    if (isOnline.value) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          if (attempt > 0) await new Promise(r => setTimeout(r, 3000))
+          const { data } = await axios.get('/pos/products')
+          if (data && data.length > 0) {
+            allProducts.value = data
+            filtered.value = data
+            cacheProducts(data, storeId).catch(() => {}) // cache em background, falha silenciosa
+            break
+          } else if (!cached.length && attempt === 1) {
+            allProducts.value = []
+          }
+          if (cached.length && attempt === 0) continue
+          break
+        } catch {
+          break
         }
-        // Se API retornou vazio mas temos cache: mantemos o cache e tentamos novamente
-        if (cached.length && attempt === 0) continue
-        break
-      } catch {
-        break // Mantém cache se servidor falhar
       }
     }
-  }
 
-  // 3. Adicionar produtos offline pendentes ao grid
-  const pending = await getPendingProducts()
-  for (const p of pending) {
-    if (!allProducts.value.find(x => x.local_id === p.local_id)) {
-      allProducts.value.push({
-        id: -Date.now(), local_id: p.local_id, name: p.name, price: p.price,
-        cost_price: p.cost_price, sku: p.sku, is_weighable: p.is_weighable,
-        weight_unit: p.weight_unit, image: null,
-        stock: { quantity: p.initial_stock ?? 0 },
-      })
-    }
+    // 3. Adicionar produtos criados offline ainda pendentes
+    try {
+      const pending = await getPendingProducts()
+      for (const p of pending) {
+        if (!allProducts.value.find(x => x.local_id === p.local_id)) {
+          allProducts.value.push({
+            id: -Date.now(), local_id: p.local_id, name: p.name, price: p.price,
+            cost_price: p.cost_price, sku: p.sku, is_weighable: p.is_weighable,
+            weight_unit: p.weight_unit, image: null,
+            stock: { quantity: p.initial_stock ?? 0 },
+          })
+        }
+      }
+    } catch { /* produtos pendentes indisponíveis — ignorar */ }
+
+    filtered.value = allProducts.value
+  } finally {
+    loadingProducts.value = false
   }
-  filtered.value = allProducts.value
-  loadingProducts.value = false
 }
 
 async function loadCategories() {

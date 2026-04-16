@@ -76,29 +76,47 @@ async function openDB() {
         d.createObjectStore('manage_products_cache', { keyPath: 'key' })
       }
     }
-    req.onsuccess  = (e) => { db = e.target.result; resolve(db) }
-    req.onerror    = (e) => reject(e.target.error)
+    req.onsuccess  = (e) => {
+      db = e.target.result
+      // Fechar a ligação se outra aba pedir upgrade — evita bloquear futuras versões
+      db.onversionchange = () => { db.close(); db = null }
+      resolve(db)
+    }
+    req.onerror   = (e) => reject(e.target.error)
+    // Outra aba tem a DB aberta em versão mais antiga — fechar e resolver sem DB
+    req.onblocked = () => {
+      console.warn('IndexedDB bloqueada por outra aba — a continuar sem cache local')
+      resolve(null)
+    }
   })
 }
 
+// Abre DB tolerante: retorna null se falhar, em vez de lançar excepção
+async function openDBSafe() {
+  try { return await openDB() } catch { return null }
+}
+
 function txStore(storeName, mode = 'readonly') {
+  if (!db) throw new Error('IndexedDB não disponível')
   return db.transaction(storeName, mode).objectStore(storeName)
 }
 
 // ── Helper genérico: guardar + ler um registo por chave ────────────────────
 async function cacheSet(storeName, key, value) {
-  await openDB()
+  const d = await openDBSafe()
+  if (!d) return
   return new Promise((resolve, reject) => {
-    const req = txStore(storeName, 'readwrite').put({ key, value, saved_at: Date.now() })
+    const req = d.transaction(storeName, 'readwrite').objectStore(storeName).put({ key, value, saved_at: Date.now() })
     req.onsuccess = () => resolve()
     req.onerror   = (e) => reject(e.target.error)
   })
 }
 
 async function cacheGet(storeName, key) {
-  await openDB()
+  const d = await openDBSafe()
+  if (!d) return null
   return new Promise((resolve, reject) => {
-    const req = txStore(storeName).get(key)
+    const req = d.transaction(storeName).objectStore(storeName).get(key)
     req.onsuccess = (e) => resolve(e.target.result ?? null)   // { key, value, saved_at }
     req.onerror   = (e) => reject(e.target.error)
   })
@@ -200,7 +218,8 @@ export async function updateCachedProduct(product) {
 
 // ── Cache de produtos (terminal) — isolada por loja ───────────────────────
 export async function cacheProducts(products, storeId) {
-  const d = await openDB()
+  const d = await openDBSafe()
+  if (!d) return
   return new Promise((resolve, reject) => {
     const tx    = d.transaction('products_cache', 'readwrite')
     const store = tx.objectStore('products_cache')
@@ -214,13 +233,14 @@ export async function cacheProducts(products, storeId) {
 
 export async function getCachedProducts(storeId) {
   if (!storeId) return []
-  const d = await openDB()
-  return new Promise((resolve, reject) => {
+  const d = await openDBSafe()
+  if (!d) return []
+  return new Promise((resolve) => {
     // Filtra pelo índice store_id para não misturar produtos de lojas diferentes
     const idx = d.transaction('products_cache').objectStore('products_cache').index('store_id')
     const req = idx.getAll(IDBKeyRange.only(storeId))
     req.onsuccess = (e) => resolve(e.target.result)
-    req.onerror   = (e) => reject(e.target.error)
+    req.onerror   = () => resolve([])
   })
 }
 
