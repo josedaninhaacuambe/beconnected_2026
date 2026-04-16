@@ -213,6 +213,7 @@ export async function cacheProducts(products, storeId) {
 }
 
 export async function getCachedProducts(storeId) {
+  if (!storeId) return []
   const d = await openDB()
   return new Promise((resolve, reject) => {
     // Filtra pelo índice store_id para não misturar produtos de lojas diferentes
@@ -268,6 +269,7 @@ export async function cacheManageProducts(products, storeId) {
   return cacheSet('manage_products_cache', `store_${storeId}`, products)
 }
 export async function getCachedManageProducts(storeId) {
+  if (!storeId) return null
   return cacheGet('manage_products_cache', `store_${storeId}`)
 }
 

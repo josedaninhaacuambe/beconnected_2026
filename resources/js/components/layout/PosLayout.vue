@@ -189,10 +189,12 @@ const { isOnline, pendingCount, syncing, syncMessage, trySyncNow } = useOfflineP
 
 // Pré-carregar todos os dados POS para IndexedDB sempre que online,
 // garantindo funcionamento offline em todos os ecrãs sem visita prévia.
-function runPrefetch() { prefetchPosData(auth.activeStoreId) }
+function resolveStoreId() { return auth.activeStoreId ?? auth.activeStore?.id ?? null }
+function runPrefetch() { prefetchPosData(resolveStoreId()) }
 onMounted(runPrefetch)
 watch(isOnline, (online) => { if (online) runPrefetch() })
 watch(() => auth.activeStoreId, runPrefetch)
+watch(() => auth.activeStore?.id, runPrefetch)
 
 // ── Instalação PWA ────────────────────────────────────────────────────────
 // Captura o evento do browser para mostrar o nosso próprio botão de instalação.

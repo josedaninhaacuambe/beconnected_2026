@@ -834,7 +834,7 @@ async function finalizeSale() {
     }
     filtered.value = [...allProducts.value]
     // Actualizar cache com novo stock
-    cacheProducts(allProducts.value, auth.activeStoreId)
+    cacheProducts(allProducts.value, auth.activeStoreId ?? auth.activeStore?.id)
   }
 }
 
@@ -888,7 +888,7 @@ function printReceipt() {
 
 async function loadProducts() {
   loadingProducts.value = true
-  const storeId = auth.activeStoreId
+  const storeId = auth.activeStoreId ?? auth.activeStore?.id
 
   // 1. Mostrar cache imediatamente (sem esperar servidor) — filtrada por loja
   const cached = await getCachedProducts(storeId)

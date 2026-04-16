@@ -423,7 +423,7 @@ async function loadProducts() {
   loading.value = true
 
   // 1. Mostrar cache imediatamente — filtrada pela loja activa
-  const cached = await getCachedProducts(auth.activeStoreId)
+  const cached = await getCachedProducts(auth.activeStoreId ?? auth.activeStore?.id)
   if (cached.length) {
     products.value = cached
     loading.value  = false

@@ -455,7 +455,7 @@ async function load() {
   // Mostrar cache imediatamente (categorias + produtos offline pendentes)
   const [cachedCats, cachedManage, pendingProds] = await Promise.all([
     getCachedCategories(),
-    getCachedManageProducts(auth.activeStoreId),
+    getCachedManageProducts(auth.activeStoreId ?? auth.activeStore?.id),
     getPendingProducts(),
   ])
   if (cachedCats)    categories.value = cachedCats.value
@@ -475,7 +475,7 @@ async function load() {
       categories.value = cRes.data || []
       await Promise.all([
         cacheCategories(cRes.data || []),
-        cacheManageProducts(pRes.data || [], auth.activeStoreId),
+        cacheManageProducts(pRes.data || [], auth.activeStoreId ?? auth.activeStore?.id),
       ])
     } catch (e) {
       console.error('Erro ao carregar produtos:', e.response?.data ?? e.message)
