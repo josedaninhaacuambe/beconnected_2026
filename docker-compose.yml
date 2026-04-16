@@ -60,6 +60,7 @@ services:
       - "8000:80"
     volumes:
       - ./services/api-gateway/nginx.gateway.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./services/api-gateway/error.html:/etc/nginx/html/error.html:ro
     networks:
       - beconnect
     depends_on:
