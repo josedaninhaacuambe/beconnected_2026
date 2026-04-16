@@ -200,7 +200,7 @@
               :disabled="(p.stock?.quantity ?? 0) <= 0"
             >
               <div class="w-20 h-20 bg-white rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center border border-gray-100">
-                <AppImg :src="p.images?.[0] ? (p.images[0].startsWith('http') ? p.images[0] : '/storage/' + p.images[0]) : ''" type="product" class="w-full h-full object-cover" />
+                <AppImg :src="p.image ? (p.image.startsWith('http') ? p.image : '/storage/' + p.image) : ''" type="product" class="w-full h-full object-cover" />
               </div>
               <div class="flex-1 min-w-0 text-left">
                 <p class="text-sm font-semibold text-gray-800 truncate">{{ p.name }}</p>
@@ -225,7 +225,7 @@
               :disabled="(p.stock?.quantity ?? 0) <= 0"
             >
               <div class="w-full h-16 rounded-lg overflow-hidden bg-gray-100 mb-2 flex items-center justify-center">
-                <AppImg :src="p.images?.[0] ? (p.images[0].startsWith('http') ? p.images[0] : '/storage/' + p.images[0]) : ''" type="product" class="w-full h-full object-cover" />
+                <AppImg :src="p.image ? (p.image.startsWith('http') ? p.image : '/storage/' + p.image) : ''" type="product" class="w-full h-full object-cover" />
               </div>
               <p class="text-xs font-semibold text-gray-800 line-clamp-2 leading-tight mb-1">{{ p.name }}</p>
               <p class="text-sm font-black" style="color:#F07820;">{{ fmt(p.price) }}</p>

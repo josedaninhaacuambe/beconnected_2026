@@ -58,7 +58,11 @@ class Product extends Model
     public function scopeForPos($query)
     {
         if (self::hasAvailabilityColumn()) {
-            return $query->whereIn('availability', ['pos', 'both']);
+            // Inclui: pos, both, e NULL (produtos criados sem definir availability)
+            return $query->where(function ($q) {
+                $q->whereIn('availability', ['pos', 'both'])
+                  ->orWhereNull('availability');
+            });
         }
         // Fallback: show all products (since old logic showed all in POS)
         return $query;
