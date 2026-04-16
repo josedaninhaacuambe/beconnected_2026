@@ -84,7 +84,6 @@ class PosController extends Controller
     // ─── Produtos para o terminal POS ─────────────────────────────────────────
     public function products(Request $request): JsonResponse
     {
-        $this->requirePosPermission($request, 'fazer_vendas');
         $store = $this->resolveStore($request);
 
         // Cache por 5 minutos — invalidado ao registar venda/movimento de stock
@@ -109,7 +108,8 @@ class PosController extends Controller
                     )) {
                         $firstImage = null;
                     }
-                    $p->image = $firstImage;
+                    // Retorna string vazia se não houver imagem válida (AppImg vai usar fallback)
+                    $p->image = $firstImage ?? '';
                     $p->category_id = $p->product_category_id ?? null;
                     unset($p->images);
                     return $p;

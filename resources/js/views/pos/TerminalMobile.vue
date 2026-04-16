@@ -95,17 +95,10 @@
           <div class="flex gap-4">
             <!-- Imagem -->
             <div class="w-24 h-24 bg-bc-dark rounded-xl flex-shrink-0 overflow-hidden flex items-center justify-center shadow-inner">
-              <img
-                v-if="p.images?.[0] && (p.images[0].startsWith('http') || p.images[0] !== 'Produto.png')"
-                :src="p.images[0].startsWith('http') ? p.images[0] : `/storage/${p.images[0]}`"
+              <AppImg
+                :src="p.image ? (p.image.startsWith('http') ? p.image : `/storage/${p.image}`) : ''"
+                type="product"
                 class="w-full h-full object-cover"
-                alt=""
-              />
-              <img
-                v-else
-                :src="productPlaceholder"
-                class="w-full h-full object-cover"
-                alt="Produto padrão"
               />
             </div>
 
@@ -559,8 +552,6 @@ import { useOfflinePos } from '@/composables/useOfflinePos'
 
 const auth = useAuthStore()
 const { isOnline, syncing, trySyncNow } = useOfflinePos()
-
-const productPlaceholder = '/images/Produto.png'
 
 const mode = ref('search') // 'search', 'cart', 'complete'
 const showMenu = ref(false)

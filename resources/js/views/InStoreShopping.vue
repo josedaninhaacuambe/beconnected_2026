@@ -114,10 +114,11 @@
           <div class="flex gap-4">
             <!-- Imagem -->
             <div class="w-20 h-20 rounded-xl overflow-hidden bg-bc-surface-2 flex-shrink-0 flex items-center justify-center">
-              <AppImg v-if="foundProduct.images?.[0]"
-                :src="foundProduct.images[0].startsWith('http') ? foundProduct.images[0] : `/storage/${foundProduct.images[0]}`"
-                class="w-full h-full object-cover" />
-              <span v-else class="text-3xl">📦</span>
+              <AppImg
+                :src="foundProduct.images?.[0] ? (foundProduct.images[0].startsWith('http') ? foundProduct.images[0] : `/storage/${foundProduct.images[0]}`) : ''"
+                type="product"
+                class="w-full h-full object-cover"
+              />
             </div>
             <!-- Info -->
             <div class="flex-1 min-w-0">
@@ -169,10 +170,11 @@
         <div class="divide-y divide-bc-gold/10">
           <div v-for="item in cart" :key="item.product.id" class="flex items-center gap-3 px-4 py-2.5">
             <div class="w-8 h-8 rounded-lg overflow-hidden bg-bc-surface-2 flex-shrink-0 flex items-center justify-center">
-              <AppImg v-if="item.product.images?.[0]"
-                :src="item.product.images[0].startsWith('http') ? item.product.images[0] : `/storage/${item.product.images[0]}`"
-                class="w-full h-full object-cover" />
-              <span v-else class="text-base">📦</span>
+              <AppImg
+                :src="item.product.images?.[0] ? (item.product.images[0].startsWith('http') ? item.product.images[0] : `/storage/${item.product.images[0]}`) : ''"
+                type="product"
+                class="w-full h-full object-cover"
+              />
             </div>
             <div class="flex-1 min-w-0">
               <p class="text-bc-light text-xs font-medium truncate">{{ item.product.name }}</p>
@@ -212,10 +214,11 @@
             </div>
             <div v-for="item in cart" :key="item.product.id" class="flex items-center gap-3 px-5 py-3">
               <div class="w-12 h-12 rounded-xl overflow-hidden bg-bc-surface-2 flex-shrink-0 flex items-center justify-center">
-                <AppImg v-if="item.product.images?.[0]"
-                  :src="item.product.images[0].startsWith('http') ? item.product.images[0] : `/storage/${item.product.images[0]}`"
-                  class="w-full h-full object-cover" />
-                <span v-else class="text-xl">📦</span>
+                <AppImg
+                  :src="item.product.images?.[0] ? (item.product.images[0].startsWith('http') ? item.product.images[0] : `/storage/${item.product.images[0]}`) : ''"
+                  type="product"
+                  class="w-full h-full object-cover"
+                />
               </div>
               <div class="flex-1 min-w-0">
                 <p class="text-bc-light text-sm font-medium leading-tight">{{ item.product.name }}</p>

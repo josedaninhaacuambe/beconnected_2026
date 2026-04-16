@@ -86,9 +86,11 @@
             <!-- Info do produto seleccionado -->
             <div v-if="selectedProduct" class="bg-bc-surface-2 rounded-xl p-3 text-xs">
               <div class="flex items-center gap-3">
-                <AppImg v-if="selectedProduct.images?.[0]"
-                  :src="selectedProduct.images[0].startsWith('http') ? selectedProduct.images[0] : `/storage/${selectedProduct.images[0]}`"
-                  class="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                <AppImg
+                  :src="selectedProduct.images?.[0] ? (selectedProduct.images[0].startsWith('http') ? selectedProduct.images[0] : `/storage/${selectedProduct.images[0]}`) : ''"
+                  type="product"
+                  class="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+                />
                 <div>
                   <p class="text-bc-light font-medium">{{ selectedProduct.name }}</p>
                   <p class="text-bc-muted">Preço normal: <strong class="text-white">{{ formatMZN(selectedProduct.price) }}</strong></p>

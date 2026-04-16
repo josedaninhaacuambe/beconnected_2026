@@ -59,12 +59,11 @@
             <td class="px-4 py-3">
               <div class="flex items-center gap-3">
                 <div class="w-9 h-9 rounded-lg overflow-hidden bg-bc-surface-2 flex-shrink-0 flex items-center justify-center">
-                  <img
-                    v-if="p.images?.[0]"
-                    :src="p.images[0].startsWith('http') ? p.images[0] : `/storage/${p.images[0]}`"
+                  <AppImg
+                    :src="p.images?.[0] ? (p.images[0].startsWith('http') ? p.images[0] : `/storage/${p.images[0]}`) : ''"
+                    type="product"
                     class="w-full h-full object-cover"
                   />
-                  <span v-else class="text-base">📦</span>
                 </div>
                 <div>
                   <p class="text-bc-light font-medium line-clamp-1">{{ p.name }}</p>
