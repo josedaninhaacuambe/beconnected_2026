@@ -547,12 +547,10 @@ class PosController extends Controller
         return response()->json($movements);
     }
 
-    // ─── Funcionários (owner only) ─────────────────────────────────────────────
+    // ─── Funcionários ─────────────────────────────────────────────────────────
     public function employees(Request $request): JsonResponse
     {
-        $user  = $request->user();
-        $store = $user->store;
-        abort_if(!$store, 403);
+        $store = $this->resolveStore($request);
 
         $employees = StoreEmployee::where('store_id', $store->id)
             ->with('user:id,name,email,avatar')
