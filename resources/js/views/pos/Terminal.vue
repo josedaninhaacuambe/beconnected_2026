@@ -18,13 +18,24 @@
           <div v-for="item in cart" :key="item.product_id + item._key" class="flex items-center gap-2 p-2 bg-gray-50 rounded-lg text-xs">
             <div class="flex-1 min-w-0">
               <p class="font-semibold text-gray-800 truncate">{{ item.product_name }}</p>
-              <p class="text-gray-400">{{ fmt(item.unit_price) }}</p>
+              <p class="text-gray-400">
+                <span v-if="item.weight_amount">⚖️ {{ item.weight_amount }}{{ item.weight_unit }} · {{ fmt(item.unit_price) }}/{{ item.weight_unit }}</span>
+                <span v-else-if="item.scale_value">⚖️ valor da balança</span>
+                <span v-else>{{ fmt(item.unit_price) }}</span>
+              </p>
             </div>
-            <div class="flex items-center gap-1 shrink-0">
-              <button @click="changeQty(item, -1)" class="w-5 h-5 rounded bg-gray-200 text-gray-600 text-xs font-bold hover:bg-gray-300">−</button>
-              <span class="w-4 text-center font-bold">{{ item.quantity }}</span>
-              <button @click="changeQty(item, 1)" class="w-5 h-5 rounded text-white text-xs font-bold" style="background:#F07820;">+</button>
-            </div>
+            <!-- Pesável: mostra valor e só ✕ (sem +/−, peso não é incrementável) -->
+            <template v-if="item.weight_amount">
+              <span class="text-xs font-bold text-blue-600">{{ fmt(item.subtotal) }}</span>
+            </template>
+            <!-- Normal: botões +/− -->
+            <template v-else>
+              <div class="flex items-center gap-1 shrink-0">
+                <button @click="changeQty(item, -1)" class="w-5 h-5 rounded bg-gray-200 text-gray-600 text-xs font-bold hover:bg-gray-300">−</button>
+                <span class="w-4 text-center font-bold">{{ item.quantity }}</span>
+                <button @click="changeQty(item, 1)" class="w-5 h-5 rounded text-white text-xs font-bold" style="background:#F07820;">+</button>
+              </div>
+            </template>
             <button @click="removeItem(item)" class="text-red-400 hover:text-red-600">✕</button>
           </div>
         </div>
@@ -202,8 +213,8 @@
               v-for="p in filtered" :key="p.id"
               @click="clickProduct(p)"
               class="w-full flex items-center gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-bc-gold hover:shadow-md transition active:scale-95"
-              :class="(p.stock?.quantity ?? 0) <= 0 ? 'opacity-40 cursor-not-allowed' : ''"
-              :disabled="(p.stock?.quantity ?? 0) <= 0"
+              :class="stockExplicitlyEmpty(p) ? 'opacity-40 cursor-not-allowed' : ''"
+              :disabled="stockExplicitlyEmpty(p)"
             >
               <div class="w-20 h-20 bg-white rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center border border-gray-100">
                 <AppImg :src="p.image ? (p.image.startsWith('http') ? p.image : '/storage/' + p.image) : ''" type="product" class="w-full h-full object-cover" />
@@ -212,10 +223,10 @@
                 <p class="text-sm font-semibold text-gray-800 truncate">{{ p.name }}</p>
                 <p class="text-xs text-gray-500">SKU: {{ p.sku || 'N/A' }}</p>
                 <p class="text-base font-black" style="color:#F07820;">{{ fmt(p.price) }}</p>
-                <span v-if="(p.stock?.quantity ?? 0) <= 0" class="text-xs text-red-500 font-bold">❌ Sem stock</span>
-                <span v-else class="text-xs text-green-600 font-semibold">✓ {{ p.stock?.quantity }} unid.</span>
+                <span v-if="stockExplicitlyEmpty(p)" class="text-xs text-red-500 font-bold">❌ Sem stock</span>
+                <span v-else-if="p.stock?.quantity != null" class="text-xs text-green-600 font-semibold">✓ {{ p.stock.quantity }} unid.</span>
               </div>
-              <button v-if="(p.stock?.quantity ?? 0) > 0" class="flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center text-xl font-bold border-2 transition" style="background:#F07820; color:white; border-color:#F07820;">
+              <button v-if="!stockExplicitlyEmpty(p)" class="flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center text-xl font-bold border-2 transition" style="background:#F07820; color:white; border-color:#F07820;">
                 +
               </button>
             </button>
@@ -227,8 +238,8 @@
               v-for="p in filtered" :key="p.id"
               @click="clickProduct(p)"
               class="relative flex flex-col items-center text-center p-3 bg-white rounded-xl border-2 border-transparent hover:border-bc-gold hover:shadow-md transition active:scale-95"
-              :class="(p.stock?.quantity ?? 0) <= 0 ? 'opacity-40 cursor-not-allowed' : ''"
-              :disabled="(p.stock?.quantity ?? 0) <= 0"
+              :class="stockExplicitlyEmpty(p) ? 'opacity-40 cursor-not-allowed' : ''"
+              :disabled="stockExplicitlyEmpty(p)"
             >
               <div class="w-full h-16 rounded-lg overflow-hidden bg-gray-100 mb-2 flex items-center justify-center">
                 <AppImg :src="p.image ? (p.image.startsWith('http') ? p.image : '/storage/' + p.image) : ''" type="product" class="w-full h-full object-cover" />
@@ -238,11 +249,11 @@
               <span v-if="p.is_weighable" class="text-[9px] bg-blue-100 text-blue-700 font-bold px-1 py-0.5 rounded mt-0.5">
                 ⚖️ por {{ p.weight_unit ?? 'kg' }}
               </span>
-              <span v-if="p.stock && p.stock.quantity <= 5 && p.stock.quantity > 0"
+              <span v-if="p.stock?.quantity != null && p.stock.quantity <= 5 && p.stock.quantity > 0"
                 class="absolute top-1 right-1 text-[9px] bg-yellow-100 text-yellow-700 font-bold px-1 py-0.5 rounded">
                 {{ p.stock.quantity }} restam
               </span>
-              <span v-if="(p.stock?.quantity ?? 0) <= 0"
+              <span v-if="stockExplicitlyEmpty(p)"
                 class="absolute inset-0 flex items-center justify-center bg-white/70 rounded-xl text-xs font-bold text-red-500">
                 Sem stock
               </span>
@@ -286,19 +297,31 @@
           class="flex items-center gap-2 p-2 bg-gray-50 rounded-xl">
           <div class="flex-1 min-w-0">
             <p class="text-xs font-semibold text-gray-800 truncate">{{ item.product_name }}</p>
-            <p class="text-xs text-gray-400 truncate">{{ fmt(item.unit_price) }}
-              <span v-if="item.weight_amount">× {{ item.weight_amount }}{{ item.weight_unit }}</span>
+            <p class="text-xs text-gray-400 truncate">
+              <span v-if="item.weight_amount">⚖️ {{ item.weight_amount }}{{ item.weight_unit }} · {{ fmt(item.unit_price) }}/{{ item.weight_unit }}</span>
+              <span v-else-if="item.scale_value">⚖️ valor da balança</span>
+              <span v-else>{{ fmt(item.unit_price) }}</span>
             </p>
           </div>
-          <div class="flex items-center gap-1 shrink-0">
-            <button @click="changeQty(item, -1)" class="w-6 h-6 rounded-lg bg-gray-200 text-gray-600 text-xs font-bold hover:bg-gray-300 transition">−</button>
-            <span class="w-6 text-center text-xs font-bold">{{ item.quantity }}</span>
-            <button @click="changeQty(item, 1)" class="w-6 h-6 rounded-lg text-white text-xs font-bold transition" style="background:#F07820;">+</button>
-          </div>
-          <div class="flex items-center gap-1 shrink-0">
-            <p class="text-xs font-bold text-gray-800 min-w-[4.5rem] text-right">{{ fmt(item.subtotal) }}</p>
-            <button @click="removeItem(item)" class="text-red-400 hover:text-red-600 text-sm">✕</button>
-          </div>
+          <!-- Pesável: sem +/− (o peso vem da balança, não se incrementa) -->
+          <template v-if="item.weight_amount">
+            <div class="flex items-center gap-1 shrink-0">
+              <p class="text-xs font-bold text-blue-600 min-w-[4.5rem] text-right">{{ fmt(item.subtotal) }}</p>
+              <button @click="removeItem(item)" class="text-red-400 hover:text-red-600 text-sm">✕</button>
+            </div>
+          </template>
+          <!-- Normal: +/− -->
+          <template v-else>
+            <div class="flex items-center gap-1 shrink-0">
+              <button @click="changeQty(item, -1)" class="w-6 h-6 rounded-lg bg-gray-200 text-gray-600 text-xs font-bold hover:bg-gray-300 transition">−</button>
+              <span class="w-6 text-center text-xs font-bold">{{ item.quantity }}</span>
+              <button @click="changeQty(item, 1)" class="w-6 h-6 rounded-lg text-white text-xs font-bold transition" style="background:#F07820;">+</button>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <p class="text-xs font-bold text-gray-800 min-w-[4.5rem] text-right">{{ fmt(item.subtotal) }}</p>
+              <button @click="removeItem(item)" class="text-red-400 hover:text-red-600 text-sm">✕</button>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -393,44 +416,92 @@
       </div>
     </Teleport>
 
-    <!-- ══ MODAL: Produto por peso ════════════════════════════════════════ -->
+    <!-- ══ MODAL: Produto por peso / balança ═══════════════════════════════ -->
     <Teleport to="body">
-      <div v-if="weightProduct" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,0.6)">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-6">
+      <div v-if="weightProduct" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,0.6)"
+        @keydown.enter.prevent="confirmWeight" @keydown.escape="weightProduct = null">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
           <h3 class="font-black text-gray-800 mb-1">⚖️ {{ weightProduct.name }}</h3>
-          <p class="text-sm text-gray-400 mb-4">Preço: {{ fmt(weightProduct.price) }} / {{ weightProduct.weight_unit ?? 'kg' }}</p>
-          <div class="space-y-3">
-            <!-- Unidade de medida -->
-            <div>
-              <label class="text-xs font-semibold text-gray-500">Unidade</label>
-              <div class="flex gap-2 mt-1">
-                <button v-for="u in weightUnits" :key="u"
-                  @click="weightForm.unit = u"
-                  class="flex-1 py-2 rounded-xl border-2 text-sm font-bold transition"
-                  :class="weightForm.unit === u ? 'border-bc-gold text-bc-gold bg-bc-gold/10' : 'border-gray-200 text-gray-500'">
-                  {{ u }}
-                </button>
-              </div>
-            </div>
-            <!-- Quantidade -->
-            <div>
-              <label class="text-xs font-semibold text-gray-500">Quantidade</label>
-              <input v-model.number="weightForm.amount" type="number" step="0.001" min="0.001"
-                placeholder="ex: 0.750"
-                class="w-full border border-gray-200 rounded-xl px-4 py-2.5 mt-1 text-lg font-bold focus:outline-none focus:border-bc-gold text-center" />
-            </div>
-            <!-- Total calculado -->
-            <div class="bg-gray-50 rounded-xl p-3 text-center">
-              <p class="text-xs text-gray-400">Total a cobrar</p>
-              <p class="text-2xl font-black" style="color:#F07820;">{{ fmt(weightTotal) }}</p>
-              <p class="text-xs text-gray-400">{{ weightForm.amount || 0 }} {{ weightForm.unit }} × {{ fmt(weightProduct.price) }}/{{ weightProduct.weight_unit ?? 'kg' }}</p>
-            </div>
+          <p class="text-sm text-gray-400 mb-3">Preço unitário: {{ fmt(weightProduct.price) }} / {{ weightProduct.weight_unit ?? 'kg' }}</p>
+
+          <!-- Toggle: Modo de entrada -->
+          <div class="flex gap-0 mb-4 border border-gray-200 rounded-xl overflow-hidden text-xs">
+            <button @click="weightMode = 'weight'; nextTick(() => weightAmountInput?.focus())"
+              class="flex-1 py-2.5 font-bold transition"
+              :class="weightMode === 'weight' ? 'text-white' : 'bg-white text-gray-500 hover:bg-gray-50'"
+              :style="weightMode === 'weight' ? 'background:#F07820' : ''">
+              ⚖️ Por Peso
+            </button>
+            <button @click="weightMode = 'value'; nextTick(() => weightValueInput?.focus())"
+              class="flex-1 py-2.5 font-bold transition border-l border-gray-200"
+              :class="weightMode === 'value' ? 'text-white' : 'bg-white text-gray-500 hover:bg-gray-50'"
+              :style="weightMode === 'value' ? 'background:#F07820' : ''">
+              💰 Valor da Balança
+            </button>
           </div>
+
+          <div class="space-y-3">
+            <!-- MODO: Por Peso -->
+            <template v-if="weightMode === 'weight'">
+              <!-- Unidade -->
+              <div>
+                <label class="text-xs font-semibold text-gray-500 mb-1 block">Unidade da balança</label>
+                <div class="flex gap-2">
+                  <button v-for="u in weightUnits" :key="u"
+                    @click="weightForm.unit = u"
+                    class="flex-1 py-2 rounded-xl border-2 text-sm font-bold transition"
+                    :class="weightForm.unit === u ? 'border-bc-gold text-bc-gold bg-bc-gold/10' : 'border-gray-200 text-gray-500'">
+                    {{ u }}
+                  </button>
+                </div>
+              </div>
+              <!-- Peso lido na balança -->
+              <div>
+                <label class="text-xs font-semibold text-gray-500 mb-1 block">Peso (lido na balança)</label>
+                <input ref="weightAmountInput" v-model.number="weightForm.amount"
+                  type="number" step="0.001" min="0.001" inputmode="decimal"
+                  placeholder="ex: 1.250"
+                  class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-2xl font-black focus:outline-none focus:border-bc-gold text-center"
+                  @keydown.enter.prevent="confirmWeight" />
+              </div>
+              <!-- Total calculado -->
+              <div class="bg-orange-50 rounded-xl p-3 text-center">
+                <p class="text-xs text-gray-400 mb-1">Total a cobrar</p>
+                <p class="text-3xl font-black" style="color:#F07820;">{{ fmt(weightTotal) }}</p>
+                <p class="text-xs text-gray-400 mt-1">{{ weightForm.amount || 0 }} {{ weightForm.unit }} × {{ fmt(weightProduct.price) }}/{{ weightProduct.weight_unit ?? 'kg' }}</p>
+              </div>
+            </template>
+
+            <!-- MODO: Valor directo da balança -->
+            <template v-else>
+              <div>
+                <label class="text-xs font-semibold text-gray-500 mb-1 block">Valor total mostrado na balança (MZN)</label>
+                <input ref="weightValueInput" v-model.number="weightForm.scaleValue"
+                  type="number" step="0.01" min="0.01" inputmode="decimal"
+                  placeholder="ex: 47.50"
+                  class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-2xl font-black focus:outline-none focus:border-bc-gold text-center"
+                  @keydown.enter.prevent="confirmWeight" />
+              </div>
+              <p class="text-xs text-gray-400 text-center">Digite directamente o valor que a balança apresenta.</p>
+              <!-- Preview -->
+              <div v-if="weightForm.scaleValue" class="bg-orange-50 rounded-xl p-3 text-center">
+                <p class="text-xs text-gray-400 mb-1">Total a cobrar</p>
+                <p class="text-3xl font-black" style="color:#F07820;">{{ fmt(weightForm.scaleValue) }}</p>
+              </div>
+            </template>
+          </div>
+
           <div class="flex gap-3 mt-4">
-            <button @click="weightProduct = null" class="flex-1 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancelar</button>
-            <button @click="confirmWeight" :disabled="!weightForm.amount"
-              class="flex-1 py-2 rounded-xl text-white font-bold text-sm transition disabled:opacity-40"
-              style="background:#F07820;">Adicionar</button>
+            <button @click="weightProduct = null"
+              class="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">
+              Cancelar
+            </button>
+            <button @click="confirmWeight"
+              :disabled="weightMode === 'weight' ? !weightForm.amount : !weightForm.scaleValue"
+              class="flex-1 py-3 rounded-xl text-white font-bold text-sm transition disabled:opacity-40"
+              style="background:#F07820;">
+              ✓ Adicionar
+            </button>
           </div>
         </div>
       </div>
@@ -552,7 +623,7 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted, nextTick } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -614,10 +685,13 @@ function onSearchEnter() {
   }
 }
 
-// ── Produto por peso ────────────────────────────────────────────────────────
-const weightProduct = ref(null)
-const weightForm = reactive({ amount: '', unit: 'kg' })
-const weightUnits = ['g', 'kg', 'l', 'ml']
+// ── Produto por peso / balança ───────────────────────────────────────────────
+const weightProduct    = ref(null)
+const weightMode       = ref('weight')           // 'weight' | 'value'
+const weightForm       = reactive({ amount: '', unit: 'kg', scaleValue: '' })
+const weightUnits      = ['g', 'kg', 'l', 'ml']
+const weightAmountInput = ref(null)
+const weightValueInput  = ref(null)
 
 const weightTotal = computed(() => {
   if (!weightProduct.value || !weightForm.amount) return 0
@@ -630,34 +704,66 @@ const weightTotal = computed(() => {
   return price * amount
 })
 
+// Só bloqueia produto se stock for explicitamente 0 (não quando stock não está registado)
+function stockExplicitlyEmpty(p) {
+  return p.stock != null && typeof p.stock.quantity === 'number' && p.stock.quantity <= 0
+}
+
 function clickProduct(p) {
   if (p.is_weighable) {
     weightProduct.value = p
-    weightForm.amount = ''
-    weightForm.unit = p.weight_unit ?? 'kg'
+    weightMode.value    = 'weight'
+    weightForm.amount   = ''
+    weightForm.unit     = p.weight_unit ?? 'kg'
+    weightForm.scaleValue = ''
+    // Auto-focar no input após render
+    nextTick(() => {
+      weightAmountInput.value?.focus()
+    })
   } else {
     addToCart(p)
   }
 }
 
 function confirmWeight() {
-  if (!weightProduct.value || !weightForm.amount) return
-  const p       = weightProduct.value
-  const price   = parseFloat(p.price)
-  const amount  = parseFloat(weightForm.amount)
-  const key     = `${p.id}_${Date.now()}`
-  cart.value.push({
-    _key:         key,
-    product_id:   p.id,
-    product_name: p.name,
-    product_sku:  p.sku,
-    unit_price:   price,
-    cost_price:   parseFloat(p.cost_price ?? 0),
-    quantity:     1,
-    weight_amount: amount,
-    weight_unit:  weightForm.unit,
-    subtotal:     parseFloat(weightTotal.value.toFixed(2)),
-  })
+  if (!weightProduct.value) return
+  const p   = weightProduct.value
+  const key = `${p.id}_${Date.now()}`
+
+  if (weightMode.value === 'value') {
+    // Modo balança: o valor total vem directamente da balança
+    if (!weightForm.scaleValue) return
+    cart.value.push({
+      _key:          key,
+      product_id:    p.id,
+      product_name:  p.name,
+      product_sku:   p.sku,
+      unit_price:    parseFloat(p.price),
+      cost_price:    parseFloat(p.cost_price ?? 0),
+      quantity:      1,
+      weight_amount: null,         // peso não foi inserido neste modo
+      weight_unit:   weightForm.unit,
+      scale_value:   true,         // flag: total veio da balança
+      subtotal:      parseFloat(parseFloat(weightForm.scaleValue).toFixed(2)),
+    })
+  } else {
+    // Modo peso: calcula total a partir do peso inserido
+    if (!weightForm.amount) return
+    const amount = parseFloat(weightForm.amount)
+    cart.value.push({
+      _key:          key,
+      product_id:    p.id,
+      product_name:  p.name,
+      product_sku:   p.sku,
+      unit_price:    parseFloat(p.price),
+      cost_price:    parseFloat(p.cost_price ?? 0),
+      quantity:      1,
+      weight_amount: amount,
+      weight_unit:   weightForm.unit,
+      scale_value:   false,
+      subtotal:      parseFloat(weightTotal.value.toFixed(2)),
+    })
+  }
   weightProduct.value = null
 }
 
@@ -916,10 +1022,18 @@ async function loadProducts() {
     if (isOnline.value) {
       try {
         const { data } = await axios.get('/pos/products')
-        if (Array.isArray(data)) {
+        if (Array.isArray(data) && data.length > 0) {
+          // Servidor devolveu produtos — actualizar estado e cache
           allProducts.value = data
           filtered.value = data
-          if (data.length > 0) cacheProducts(data, storeId).catch(() => {})
+          cacheProducts(data, storeId).catch(() => {})
+        } else if (Array.isArray(data) && data.length === 0 && cached.length > 0) {
+          // Servidor devolveu lista vazia mas temos cache — manter cache
+          // (pode ser problema transitório de ligação ou warmup do servidor)
+          console.warn('[POS] Servidor devolveu 0 produtos — a usar cache local')
+        } else if (Array.isArray(data) && data.length === 0 && !cached.length) {
+          // Sem produtos no servidor nem em cache — mostrar mensagem ao utilizador
+          loadError.value = 'Nenhum produto encontrado. Adicione produtos à loja primeiro.'
         }
       } catch (err) {
         const msg = err?.response?.data?.message ?? err?.message ?? 'Erro ao carregar produtos'
