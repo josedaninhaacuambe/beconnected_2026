@@ -204,6 +204,7 @@
         <div v-else-if="!filtered.length" class="flex flex-col items-center justify-center h-full text-gray-400">
           <span class="text-4xl mb-2">📦</span>
           <p class="text-sm">Nenhum produto encontrado</p>
+          <button @click="loadProducts" class="mt-3 px-4 py-2 rounded-lg text-xs font-bold text-white" style="background:#F07820;">Recarregar</button>
         </div>
 
         <!-- Mobile: Lista vertical com cards grandes e touch-friendly -->
@@ -1022,21 +1023,25 @@ async function loadProducts() {
     if (isOnline.value) {
       try {
         const { data } = await axios.get('/pos/products')
-        if (Array.isArray(data) && data.length > 0) {
+        const products = Array.isArray(data) ? data : []
+
+        if (products.length > 0) {
           // Servidor devolveu produtos — actualizar estado e cache
-          allProducts.value = data
-          filtered.value = data
-          cacheProducts(data, storeId).catch(() => {})
-        } else if (Array.isArray(data) && data.length === 0 && cached.length > 0) {
+          allProducts.value = products
+          filtered.value = products
+          cacheProducts(products, storeId).catch(() => {})
+        } else if (products.length === 0 && cached.length > 0) {
           // Servidor devolveu lista vazia mas temos cache — manter cache
-          // (pode ser problema transitório de ligação ou warmup do servidor)
           console.warn('[POS] Servidor devolveu 0 produtos — a usar cache local')
-        } else if (Array.isArray(data) && data.length === 0 && !cached.length) {
-          // Sem produtos no servidor nem em cache — mostrar mensagem ao utilizador
-          loadError.value = 'Nenhum produto encontrado. Adicione produtos à loja primeiro.'
+        } else if (products.length === 0 && !cached.length) {
+          // Sem produtos no servidor nem em cache — mostrar erro com detalhe
+          const detail = !Array.isArray(data) ? ' (resposta inesperada do servidor)' : ''
+          loadError.value = 'Nenhum produto encontrado. Adicione produtos à loja primeiro.' + detail
+          console.error('[POS] Resposta da API:', data)
         }
       } catch (err) {
         const msg = err?.response?.data?.message ?? err?.message ?? 'Erro ao carregar produtos'
+        console.error('[POS] Erro ao carregar produtos:', err?.response?.status, msg)
         if (!cached.length) loadError.value = msg
       }
     }

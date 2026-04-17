@@ -87,9 +87,11 @@ class PosController extends Controller
         $store = $this->resolveStore($request);
 
         // Cache por 5 minutos — invalidado ao registar venda/movimento de stock
-        $products = Cache::remember("pos_products_{$store->id}", 300, function () use ($store) {
+        $cacheKey = "pos_products_{$store->id}";
+        $builder  = function () use ($store) {
             $fields = ['id', 'name', 'price', 'cost_price', 'sku', 'barcode', 'images', 'is_weighable', 'weight_unit', 'product_category_id'];
 
+            // Retorna array simples (não Collection Eloquent) — seguro para serialização Redis
             return $store->products()
                 ->with('stock')
                 ->where('is_active', true)
@@ -103,12 +105,35 @@ class PosController extends Controller
                     if ($firstImage && str_starts_with($firstImage, 'http')) {
                         $firstImage = null;
                     }
-                    $p->image = $firstImage ?? '';
-                    $p->category_id = $p->product_category_id ?? null;
-                    unset($p->images);
-                    return $p;
-                });
-        });
+                    return [
+                        'id'            => $p->id,
+                        'name'          => $p->name,
+                        'price'         => $p->price,
+                        'cost_price'    => $p->cost_price,
+                        'sku'           => $p->sku,
+                        'barcode'       => $p->barcode,
+                        'image'         => $firstImage ?? '',
+                        'is_weighable'  => $p->is_weighable,
+                        'weight_unit'   => $p->weight_unit,
+                        'category_id'   => $p->product_category_id ?? null,
+                        'stock'         => $p->stock ? ['quantity' => $p->stock->quantity] : null,
+                    ];
+                })
+                ->values()
+                ->all();
+        };
+
+        try {
+            $products = Cache::remember($cacheKey, 300, $builder);
+            // Se o cache devolveu null (Redis em estado inválido), consultar DB directamente
+            if (!is_array($products)) {
+                Cache::forget($cacheKey);
+                $products = $builder();
+            }
+        } catch (\Throwable $e) {
+            // Redis indisponível — consultar DB directamente sem cache
+            $products = $builder();
+        }
 
         return response()->json($products);
     }

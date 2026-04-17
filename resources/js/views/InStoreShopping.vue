@@ -60,7 +60,7 @@
 
         <!-- Câmara -->
         <div class="relative bg-black" style="aspect-ratio: 4/3; max-height: 300px;">
-          <video ref="videoEl" autoplay playsinline muted class="w-full h-full object-cover"></video>
+          <video ref="videoEl" playsinline muted class="w-full h-full object-cover"></video>
 
           <!-- Overlay de mira -->
           <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -426,6 +426,9 @@ async function startCamera() {
       video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
     })
     videoEl.value.srcObject = stream
+    // Iniciar reprodução manualmente (sem autoplay no elemento) — silencia
+    // o AbortError que ocorre quando o componente desmonta antes do play() terminar
+    videoEl.value.play().catch(() => {})
     cameraActive.value = true
 
     // BarcodeDetector (Chrome 83+ / Android WebView)
