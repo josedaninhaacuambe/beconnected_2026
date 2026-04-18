@@ -89,7 +89,20 @@ class PosController extends Controller
         // Cache por 5 minutos — invalidado ao registar venda/movimento de stock
         $cacheKey = "pos_products_{$store->id}";
         $builder  = function () use ($store) {
-            $fields = ['id', 'name', 'price', 'cost_price', 'sku', 'barcode', 'images', 'is_weighable', 'weight_unit', 'weight_units', 'weight_prices', 'product_category_id'];
+            // Colunas base — sempre existem
+            $fields = ['id', 'name', 'price', 'cost_price', 'sku', 'barcode', 'images', 'product_category_id'];
+
+            // Colunas de peso — só adiciona se a migração já foi executada
+            $productsTable = (new \App\Models\Product)->getTable();
+            $hasWeighable    = \Illuminate\Support\Facades\Schema::hasColumn($productsTable, 'is_weighable');
+            $hasWeightUnits  = \Illuminate\Support\Facades\Schema::hasColumn($productsTable, 'weight_units');
+            $hasWeightPrices = \Illuminate\Support\Facades\Schema::hasColumn($productsTable, 'weight_prices');
+            $hasWeightUnit   = \Illuminate\Support\Facades\Schema::hasColumn($productsTable, 'weight_unit');
+
+            if ($hasWeighable)    $fields[] = 'is_weighable';
+            if ($hasWeightUnit)   $fields[] = 'weight_unit';
+            if ($hasWeightUnits)  $fields[] = 'weight_units';
+            if ($hasWeightPrices) $fields[] = 'weight_prices';
 
             $safeJson = fn($v) => is_array($v) ? $v : (is_string($v) ? (json_decode($v, true) ?? []) : []);
 
@@ -99,7 +112,7 @@ class PosController extends Controller
                 ->where('is_active', true)
                 ->orderBy('name')
                 ->get($fields)
-                ->map(function ($p) use ($safeJson) {
+                ->map(function ($p) use ($safeJson, $hasWeighable, $hasWeightUnit, $hasWeightUnits, $hasWeightPrices) {
                     try {
                         $images = $safeJson($p->getRawOriginal('images'));
                         $firstImage = count($images) > 0 ? $images[0] : null;
@@ -107,13 +120,21 @@ class PosController extends Controller
                             $firstImage = null;
                         }
 
-                        $weightUnits = $safeJson($p->getRawOriginal('weight_units'));
+                        $weightUnit  = $hasWeightUnit  ? $p->weight_unit  : null;
+                        $weightUnits = $hasWeightUnits ? $safeJson($p->getRawOriginal('weight_units')) : [];
                         if (empty($weightUnits)) {
-                            $weightUnits = $p->weight_unit ? [$p->weight_unit] : ['kg'];
+                            $weightUnits = $weightUnit ? [$weightUnit] : ['kg'];
                         }
 
-                        $weightPricesRaw = $p->getRawOriginal('weight_prices');
-                        $weightPrices = $weightPricesRaw ? $safeJson($weightPricesRaw) : null;
+                        $weightPricesRaw = $hasWeightPrices ? $p->getRawOriginal('weight_prices') : null;
+                        $weightPrices    = $weightPricesRaw ? $safeJson($weightPricesRaw) : null;
+
+                        $stockRow = $p->stock;
+                        $weightQty = 0;
+                        if ($stockRow) {
+                            $rawStock  = $stockRow->getAttributes();
+                            $weightQty = isset($rawStock['weight_quantity']) ? (float) $rawStock['weight_quantity'] : 0;
+                        }
 
                         return [
                             'id'            => $p->id,
@@ -123,18 +144,18 @@ class PosController extends Controller
                             'sku'           => $p->sku,
                             'barcode'       => $p->barcode,
                             'image'         => $firstImage ?? '',
-                            'is_weighable'  => (bool) $p->is_weighable,
-                            'weight_unit'   => $p->weight_unit,
+                            'is_weighable'  => $hasWeighable ? (bool) $p->is_weighable : false,
+                            'weight_unit'   => $weightUnit,
                             'weight_units'  => $weightUnits,
                             'weight_prices' => $weightPrices,
                             'category_id'   => $p->product_category_id ?? null,
-                            'stock'         => $p->stock ? [
-                                'quantity'        => $p->stock->quantity,
-                                'weight_quantity' => $p->stock->weight_quantity ?? 0,
+                            'stock'         => $stockRow ? [
+                                'quantity'        => $stockRow->quantity,
+                                'weight_quantity' => $weightQty,
                             ] : null,
                         ];
                     } catch (\Throwable $e) {
-                        \Log::warning("[POS] Produto {$p->id} ignorado por dados inválidos: " . $e->getMessage());
+                        \Log::warning("[POS] Produto {$p->id} ignorado: " . $e->getMessage());
                         return null;
                     }
                 })
@@ -144,14 +165,14 @@ class PosController extends Controller
         };
 
         try {
+            Cache::forget($cacheKey); // garante que não serve cache antigo com estrutura errada
             $products = Cache::remember($cacheKey, 300, $builder);
-            // Se o cache devolveu null (Redis em estado inválido), consultar DB directamente
             if (!is_array($products)) {
                 Cache::forget($cacheKey);
                 $products = $builder();
             }
         } catch (\Throwable $e) {
-            // Redis indisponível — consultar DB directamente sem cache
+            \Log::error('[POS] products() falhou: ' . $e->getMessage());
             $products = $builder();
         }
 
