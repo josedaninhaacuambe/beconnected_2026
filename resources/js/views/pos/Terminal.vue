@@ -421,87 +421,117 @@
     <Teleport to="body">
       <div v-if="weightProduct" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,0.6)"
         @keydown.enter.prevent="confirmWeight" @keydown.escape="weightProduct = null">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-          <h3 class="font-black text-gray-800 mb-1">⚖️ {{ weightProduct.name }}</h3>
-          <p class="text-sm text-gray-400 mb-3">Preço unitário: {{ fmt(weightProduct.price) }} / {{ weightProduct.weight_unit ?? 'kg' }}</p>
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
 
-          <!-- Toggle: Modo de entrada -->
-          <div class="flex gap-0 mb-4 border border-gray-200 rounded-xl overflow-hidden text-xs">
-            <button @click="weightMode = 'weight'; nextTick(() => weightAmountInput?.focus())"
-              class="flex-1 py-2.5 font-bold transition"
-              :class="weightMode === 'weight' ? 'text-white' : 'bg-white text-gray-500 hover:bg-gray-50'"
-              :style="weightMode === 'weight' ? 'background:#F07820' : ''">
-              ⚖️ Por Peso
-            </button>
-            <button @click="weightMode = 'value'; nextTick(() => weightValueInput?.focus())"
-              class="flex-1 py-2.5 font-bold transition border-l border-gray-200"
-              :class="weightMode === 'value' ? 'text-white' : 'bg-white text-gray-500 hover:bg-gray-50'"
-              :style="weightMode === 'value' ? 'background:#F07820' : ''">
-              💰 Valor da Balança
-            </button>
+          <!-- Cabeçalho com nome e preço/unidade -->
+          <div class="px-5 pt-5 pb-3 border-b border-gray-100">
+            <div class="flex items-center gap-2 mb-0.5">
+              <span class="text-2xl">⚖️</span>
+              <h3 class="font-black text-gray-800 text-lg leading-tight">{{ weightProduct.name }}</h3>
+            </div>
+            <p class="text-sm text-gray-400 ml-9">
+              {{ fmt(weightProduct.price) }} por {{ weightProduct.weight_unit ?? 'kg' }}
+            </p>
           </div>
 
-          <div class="space-y-3">
-            <!-- MODO: Por Peso -->
-            <template v-if="weightMode === 'weight'">
-              <!-- Unidade -->
-              <div>
-                <label class="text-xs font-semibold text-gray-500 mb-1 block">Unidade da balança</label>
-                <div class="flex gap-2">
-                  <button v-for="u in weightUnits" :key="u"
-                    @click="weightForm.unit = u"
-                    class="flex-1 py-2 rounded-xl border-2 text-sm font-bold transition"
-                    :class="weightForm.unit === u ? 'border-bc-gold text-bc-gold bg-bc-gold/10' : 'border-gray-200 text-gray-500'">
-                    {{ u }}
-                  </button>
+          <div class="px-5 pt-4 pb-2 space-y-4">
+
+            <!-- PASSO 1: Seleccionar unidade -->
+            <div>
+              <p class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">1. Unidade de medida</p>
+              <div class="flex gap-2 flex-wrap">
+                <button v-for="u in weightUnits" :key="u"
+                  @click="weightForm.unit = u"
+                  class="px-4 py-2 rounded-xl border-2 text-sm font-black transition"
+                  :class="weightForm.unit === u
+                    ? 'border-orange-400 text-orange-500 bg-orange-50'
+                    : 'border-gray-200 text-gray-400 hover:border-gray-300'">
+                  {{ u }}
+                </button>
+              </div>
+            </div>
+
+            <!-- PASSO 2: Modo de entrada — toggle compacto -->
+            <div>
+              <p class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">2. Como queres registar?</p>
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <button
+                  @click="weightMode = 'weight'; nextTick(() => weightAmountInput?.focus())"
+                  :class="['p-3 rounded-xl border-2 text-left transition', weightMode === 'weight'
+                    ? 'border-orange-400 bg-orange-50'
+                    : 'border-gray-200 hover:border-gray-300']">
+                  <p class="text-base mb-0.5">⚖️</p>
+                  <p :class="['font-bold', weightMode==='weight' ? 'text-orange-500' : 'text-gray-600']">Peso lido</p>
+                  <p class="text-gray-400">Escrevo o peso e calcula o valor</p>
+                </button>
+                <button
+                  @click="weightMode = 'value'; nextTick(() => weightValueInput?.focus())"
+                  :class="['p-3 rounded-xl border-2 text-left transition', weightMode === 'value'
+                    ? 'border-orange-400 bg-orange-50'
+                    : 'border-gray-200 hover:border-gray-300']">
+                  <p class="text-base mb-0.5">💰</p>
+                  <p :class="['font-bold', weightMode==='value' ? 'text-orange-500' : 'text-gray-600']">Valor da balança</p>
+                  <p class="text-gray-400">Copio o valor que a balança mostra</p>
+                </button>
+              </div>
+            </div>
+
+            <!-- PASSO 3: Input principal -->
+            <div>
+              <!-- MODO: Por Peso -->
+              <template v-if="weightMode === 'weight'">
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">3. Peso (lido na balança)</p>
+                <div class="relative">
+                  <input ref="weightAmountInput" v-model.number="weightForm.amount"
+                    type="number" step="0.001" min="0.001" inputmode="decimal"
+                    :placeholder="`0.000 ${weightForm.unit}`"
+                    class="w-full border-2 border-gray-200 rounded-xl px-4 py-4 text-3xl font-black focus:outline-none focus:border-orange-400 text-center tracking-tight"
+                    @keydown.enter.prevent="confirmWeight" />
+                  <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">{{ weightForm.unit }}</span>
                 </div>
-              </div>
-              <!-- Peso lido na balança -->
-              <div>
-                <label class="text-xs font-semibold text-gray-500 mb-1 block">Peso (lido na balança)</label>
-                <input ref="weightAmountInput" v-model.number="weightForm.amount"
-                  type="number" step="0.001" min="0.001" inputmode="decimal"
-                  placeholder="ex: 1.250"
-                  class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-2xl font-black focus:outline-none focus:border-bc-gold text-center"
-                  @keydown.enter.prevent="confirmWeight" />
-              </div>
-              <!-- Total calculado -->
-              <div class="bg-orange-50 rounded-xl p-3 text-center">
-                <p class="text-xs text-gray-400 mb-1">Total a cobrar</p>
-                <p class="text-3xl font-black" style="color:#F07820;">{{ fmt(weightTotal) }}</p>
-                <p class="text-xs text-gray-400 mt-1">{{ weightForm.amount || 0 }} {{ weightForm.unit }} × {{ fmt(weightProduct.price) }}/{{ weightProduct.weight_unit ?? 'kg' }}</p>
-              </div>
-            </template>
+                <!-- Total calculado -->
+                <div class="mt-3 rounded-xl p-3 text-center" style="background:#FFF7ED;">
+                  <p class="text-xs text-gray-400">Total a cobrar</p>
+                  <p class="text-4xl font-black mt-0.5" style="color:#F07820;">{{ fmt(weightTotal) }}</p>
+                  <p class="text-xs text-gray-400 mt-1">
+                    {{ weightForm.amount || '0' }} {{ weightForm.unit }} × {{ fmt(weightProduct.price) }}/{{ weightProduct.weight_unit ?? 'kg' }}
+                  </p>
+                </div>
+              </template>
 
-            <!-- MODO: Valor directo da balança -->
-            <template v-else>
-              <div>
-                <label class="text-xs font-semibold text-gray-500 mb-1 block">Valor total mostrado na balança (MZN)</label>
-                <input ref="weightValueInput" v-model.number="weightForm.scaleValue"
-                  type="number" step="0.01" min="0.01" inputmode="decimal"
-                  placeholder="ex: 47.50"
-                  class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-2xl font-black focus:outline-none focus:border-bc-gold text-center"
-                  @keydown.enter.prevent="confirmWeight" />
-              </div>
-              <p class="text-xs text-gray-400 text-center">Digite directamente o valor que a balança apresenta.</p>
-              <!-- Preview -->
-              <div v-if="weightForm.scaleValue" class="bg-orange-50 rounded-xl p-3 text-center">
-                <p class="text-xs text-gray-400 mb-1">Total a cobrar</p>
-                <p class="text-3xl font-black" style="color:#F07820;">{{ fmt(weightForm.scaleValue) }}</p>
-              </div>
-            </template>
+              <!-- MODO: Valor directo da balança -->
+              <template v-else>
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">3. Valor mostrado na balança (MZN)</p>
+                <div class="relative">
+                  <input ref="weightValueInput" v-model.number="weightForm.scaleValue"
+                    type="number" step="0.01" min="0.01" inputmode="decimal"
+                    placeholder="0.00"
+                    class="w-full border-2 border-gray-200 rounded-xl px-4 py-4 text-3xl font-black focus:outline-none focus:border-orange-400 text-center tracking-tight"
+                    @keydown.enter.prevent="confirmWeight" />
+                  <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">MZN</span>
+                </div>
+                <div v-if="weightForm.scaleValue" class="mt-3 rounded-xl p-3 text-center" style="background:#FFF7ED;">
+                  <p class="text-xs text-gray-400">Total a cobrar</p>
+                  <p class="text-4xl font-black mt-0.5" style="color:#F07820;">{{ fmt(weightForm.scaleValue) }}</p>
+                </div>
+                <p v-else class="text-xs text-gray-400 text-center mt-2">
+                  Copia exactamente o valor que aparece no display da balança.
+                </p>
+              </template>
+            </div>
           </div>
 
-          <div class="flex gap-3 mt-4">
+          <!-- Botões -->
+          <div class="flex gap-3 px-5 py-4 border-t border-gray-100 bg-gray-50">
             <button @click="weightProduct = null"
-              class="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">
+              class="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-white transition">
               Cancelar
             </button>
             <button @click="confirmWeight"
               :disabled="weightMode === 'weight' ? !weightForm.amount : !weightForm.scaleValue"
-              class="flex-1 py-3 rounded-xl text-white font-bold text-sm transition disabled:opacity-40"
+              class="flex-1 py-3 rounded-xl text-white font-black text-sm transition disabled:opacity-40 active:scale-95"
               style="background:#F07820;">
-              ✓ Adicionar
+              ✓ Adicionar ao carrinho
             </button>
           </div>
         </div>
