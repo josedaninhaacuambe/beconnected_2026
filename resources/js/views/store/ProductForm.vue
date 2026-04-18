@@ -73,12 +73,23 @@
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="text-bc-muted text-xs mb-1 block">Stock inicial *</label>
-            <input v-model="form.initial_stock" type="number" min="0" placeholder="0" class="input-african" required />
+            <label class="text-bc-muted text-xs mb-1 block">
+              Stock inicial *
+              <span v-if="form.is_weighable" class="text-bc-gold">({{ form.weight_unit }})</span>
+            </label>
+            <input v-model="form.initial_stock" type="number" min="0"
+              :step="form.is_weighable ? '0.001' : '1'"
+              :placeholder="form.is_weighable ? '0.000' : '0'"
+              class="input-african" required />
           </div>
           <div>
-            <label class="text-bc-muted text-xs mb-1 block">Stock mínimo (alerta)</label>
-            <input v-model="form.minimum_stock" type="number" min="0" placeholder="5" class="input-african" />
+            <label class="text-bc-muted text-xs mb-1 block">
+              Stock mínimo (alerta)
+              <span v-if="form.is_weighable" class="text-bc-gold">({{ form.weight_unit }})</span>
+            </label>
+            <input v-model="form.minimum_stock" type="number" min="0"
+              :step="form.is_weighable ? '0.001' : '1'"
+              placeholder="5" class="input-african" />
           </div>
         </div>
       </div>
@@ -119,6 +130,65 @@
           </div>
         </div>
         <input v-model="form.barcode" type="text" placeholder="Código de barras / EAN" class="input-african" />
+      </div>
+
+      <!-- Tipo de produto (UN / KG) -->
+      <div class="card-african p-5 space-y-4">
+        <h2 class="text-bc-gold font-semibold">Tipo de Venda</h2>
+
+        <!-- Toggle UN / KG -->
+        <div class="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            @click="form.is_weighable = false"
+            :class="['flex flex-col items-center gap-1 p-4 rounded-xl border-2 transition',
+              !form.is_weighable ? 'border-bc-gold bg-bc-gold/10 text-bc-gold' : 'border-bc-gold/20 text-bc-muted hover:border-bc-gold/40']"
+          >
+            <span class="text-2xl">📦</span>
+            <span class="text-sm font-bold">Por Unidade (UN)</span>
+            <span class="text-xs">Refrigerante, roupa, etc.</span>
+          </button>
+          <button
+            type="button"
+            @click="form.is_weighable = true"
+            :class="['flex flex-col items-center gap-1 p-4 rounded-xl border-2 transition',
+              form.is_weighable ? 'border-bc-gold bg-bc-gold/10 text-bc-gold' : 'border-bc-gold/20 text-bc-muted hover:border-bc-gold/40']"
+          >
+            <span class="text-2xl">⚖️</span>
+            <span class="text-sm font-bold">Por Peso / Volume (KG)</span>
+            <span class="text-xs">Arroz, carne, líquidos, etc.</span>
+          </button>
+        </div>
+
+        <!-- Unidades disponíveis (só aparece para KG) -->
+        <div v-if="form.is_weighable" class="space-y-2">
+          <label class="text-bc-muted text-xs block">Unidades disponíveis no POS (selecciona uma ou mais)</label>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="u in ALL_WEIGHT_UNITS" :key="u.value"
+              type="button"
+              @click="toggleWeightUnit(u.value)"
+              :class="['px-3 py-1.5 rounded-lg text-sm font-medium border transition',
+                form.weight_units.includes(u.value)
+                  ? 'border-bc-gold bg-bc-gold text-bc-dark'
+                  : 'border-bc-gold/30 text-bc-muted hover:border-bc-gold/60']"
+            >
+              {{ u.label }}
+            </button>
+          </div>
+          <p class="text-bc-muted text-xs">
+            Unidade padrão: <strong class="text-bc-gold">{{ form.weight_unit }}</strong> —
+            o vendedor pode escolher entre as unidades seleccionadas ao fazer a venda.
+          </p>
+        </div>
+
+        <!-- Stock inicial adapta-se ao tipo -->
+        <div v-if="form.is_weighable" class="bg-bc-surface-2/50 rounded-xl p-3">
+          <p class="text-bc-muted text-xs">
+            💡 O preço indicado acima é por <strong class="text-bc-light">{{ form.weight_unit }}</strong>.
+            O stock inicial representa a quantidade disponível em {{ form.weight_unit }}.
+          </p>
+        </div>
       </div>
 
       <!-- Estado e visibilidade -->
@@ -186,6 +256,14 @@ const existingImages = ref([]) // URLs already stored (edit mode)
 const autoImageUrl = ref('')
 const fetchingImage = ref(false)
 
+const ALL_WEIGHT_UNITS = [
+  { value: 'kg',       label: 'kg (quilograma)' },
+  { value: 'g',        label: 'g (grama)' },
+  { value: 'tonelada', label: 'tonelada' },
+  { value: 'l',        label: 'l (litro)' },
+  { value: 'ml',       label: 'ml (mililitro)' },
+]
+
 const form = reactive({
   name: '', sku: '', description: '',
   price: '', compare_price: '',
@@ -195,7 +273,18 @@ const form = reactive({
   is_active: true,
   availability: 'both',
   selling_modes: ['unit'],
+  is_weighable: false,
+  weight_unit: 'kg',
+  weight_units: ['kg'],
 })
+
+function toggleWeightUnit(unit) {
+  const idx = form.weight_units.indexOf(unit)
+  if (idx === -1) form.weight_units.push(unit)
+  else if (form.weight_units.length > 1) form.weight_units.splice(idx, 1)
+  // garantir que weight_unit (unidade padrão) é sempre a primeira seleccionada
+  form.weight_unit = form.weight_units[0]
+}
 
 function onImagesChange(e) {
   Array.from(e.target.files).forEach(addImageFile)
@@ -249,7 +338,15 @@ async function submit() {
     })
     fd.append('is_active', form.is_active ? '1' : '0')
     fd.append('availability', form.availability)
-    form.selling_modes.forEach(mode => fd.append('selling_modes[]', mode))
+    fd.append('is_weighable', form.is_weighable ? '1' : '0')
+    if (form.is_weighable) {
+      fd.append('weight_unit', form.weight_unit)
+      form.weight_units.forEach(u => fd.append('weight_units[]', u))
+      // produto pesável → modo de venda é peso
+      fd.append('selling_modes[]', 'weight')
+    } else {
+      form.selling_modes.forEach(mode => fd.append('selling_modes[]', mode))
+    }
     imageFiles.value.forEach(f => fd.append('images[]', f))
 
     if (isEditing.value) {
@@ -295,9 +392,12 @@ onMounted(async () => {
         product_category_id: p.product_category_id ?? '',
         store_section_id: p.store_section_id ?? '',
         brand_id: p.brand_id ?? '', model: p.model ?? '', barcode: p.barcode ?? '',
-        is_active: p.is_active ?? true,
+        is_active:     p.is_active     ?? true,
         availability:  p.availability  ?? 'both',
         selling_modes: p.selling_modes ?? ['unit'],
+        is_weighable:  p.is_weighable  ?? false,
+        weight_unit:   p.weight_unit   ?? 'kg',
+        weight_units:  p.weight_units?.length ? p.weight_units : (p.weight_unit ? [p.weight_unit] : ['kg']),
       })
       if (p.images?.length) {
         existingImages.value = p.images

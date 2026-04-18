@@ -280,6 +280,7 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
     // =============================================
     Route::prefix('pos')->group(function () {
         Route::get('products',                           [PosController::class, 'products']);
+        Route::post('products',                          [PosController::class, 'createProduct']);
         Route::get('products/manage',                    [PosController::class, 'allStoreProducts']);
         Route::put('products/{product}',                 [PosController::class, 'updatePosProduct']);
         Route::delete('products/{product}',              [PosController::class, 'deactivatePosProduct']);
@@ -288,8 +289,9 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
         Route::post('sync',           [PosController::class, 'sync'])->middleware('throttle:pos-sync');
         Route::delete('sales/{sale}', [PosController::class, 'deleteSale']);
         Route::post('sales/{sale}/void', [PosController::class, 'voidSale']);
-        Route::get('stock',           [PosController::class, 'stock']);
-        Route::post('stock/movement', [PosController::class, 'stockMovement']);
+        Route::get('stock',                    [PosController::class, 'stock']);
+        Route::post('stock/movement',          [PosController::class, 'stockMovement']);
+        Route::post('stock/allocate-weight',   [PosController::class, 'allocateWeightStock']);
         Route::get('stock/history',   [PosController::class, 'stockHistory']);
         Route::get('reports',         [PosController::class, 'reports']);
         Route::get('daily-cash',      [PosController::class, 'dailyCash']);

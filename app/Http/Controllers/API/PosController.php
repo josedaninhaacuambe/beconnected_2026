@@ -89,7 +89,7 @@ class PosController extends Controller
         // Cache por 5 minutos — invalidado ao registar venda/movimento de stock
         $cacheKey = "pos_products_{$store->id}";
         $builder  = function () use ($store) {
-            $fields = ['id', 'name', 'price', 'cost_price', 'sku', 'barcode', 'images', 'is_weighable', 'weight_unit', 'product_category_id'];
+            $fields = ['id', 'name', 'price', 'cost_price', 'sku', 'barcode', 'images', 'is_weighable', 'weight_unit', 'weight_units', 'product_category_id'];
 
             // Retorna array simples (não Collection Eloquent) — seguro para serialização Redis
             return $store->products()
@@ -115,8 +115,12 @@ class PosController extends Controller
                         'image'         => $firstImage ?? '',
                         'is_weighable'  => $p->is_weighable,
                         'weight_unit'   => $p->weight_unit,
+                        'weight_units'  => $p->weight_units ?: ($p->weight_unit ? [$p->weight_unit] : ['kg']),
                         'category_id'   => $p->product_category_id ?? null,
-                        'stock'         => $p->stock ? ['quantity' => $p->stock->quantity] : null,
+                        'stock'         => $p->stock ? [
+                            'quantity'        => $p->stock->quantity,
+                            'weight_quantity' => $p->stock->weight_quantity ?? 0,
+                        ] : null,
                     ];
                 })
                 ->values()
@@ -169,6 +173,36 @@ class PosController extends Controller
 
         $productIdsToInvalidate = [];
 
+        // ── Pré-validação de stock antes de iniciar a transacção ──────────────
+        // Falhar rápido sem dirty writes se stock insuficiente
+        foreach ($request->sales as $saleData) {
+            if (PosSale::where('store_id', $store->id)->where('local_id', $saleData['local_id'])->exists()) {
+                continue; // venda duplicada será ignorada dentro da transacção
+            }
+            foreach ($saleData['items'] as $item) {
+                if (empty($item['product_id'])) continue;
+                $stock = ProductStock::where('product_id', $item['product_id'])->first();
+                if (!$stock) continue;
+                $isWeighted = !empty($item['weight_amount']) || !empty($item['scale_value']);
+                if ($isWeighted) {
+                    $need = (float) ($item['weight_amount'] ?? 0);
+                    if ($need > 0 && $stock->weight_quantity < $need) {
+                        $product = Product::find($item['product_id']);
+                        return response()->json([
+                            'message' => "Stock por peso insuficiente para \"{$product->name}\": disponível {$stock->weight_quantity}, necessário {$need}.",
+                        ], 422);
+                    }
+                } else {
+                    if ($stock->quantity < $item['quantity']) {
+                        $product = Product::find($item['product_id']);
+                        return response()->json([
+                            'message' => "Stock insuficiente para \"{$product->name}\": disponível {$stock->quantity}, necessário {$item['quantity']}.",
+                        ], 422);
+                    }
+                }
+            }
+        }
+
         DB::transaction(function () use ($request, $store, &$created, &$skipped, &$productIdsToInvalidate) {
             foreach ($request->sales as $saleData) {
                 // Evitar duplicados por local_id
@@ -211,19 +245,43 @@ class PosController extends Controller
 
                     // Baixar stock automaticamente + sincronizar com loja online
                     if (!empty($item['product_id'])) {
-                        $stock = ProductStock::where('product_id', $item['product_id'])->first();
-                        if ($stock) {
-                            $before = $stock->quantity;
-                            $stock->decrement('quantity', $item['quantity']);
-                            StockMovement::create([
-                                'product_id'      => $item['product_id'],
-                                'type'            => 'out',
-                                'quantity'        => $item['quantity'],
-                                'quantity_before' => $before,
-                                'quantity_after'  => $before - $item['quantity'],
-                                'reason'          => 'Venda POS #' . $sale->id,
-                                'user_id'         => $request->user()->id,
-                            ]);
+                        $stock   = ProductStock::where('product_id', $item['product_id'])->first();
+                        $product = $stock ? Product::find($item['product_id']) : null;
+                        if ($stock && $product) {
+                            $isWeighted = !empty($item['weight_amount']) || !empty($item['scale_value']);
+
+                            if ($isWeighted) {
+                                // Produto por peso: baixar de weight_quantity
+                                $weightOut = (float) ($item['weight_amount'] ?? 0);
+                                // Se veio valor da balança sem peso, usar quantidade 0 (não baixa stock kg)
+                                $before = $stock->weight_quantity;
+                                if ($weightOut > 0) {
+                                    $newWeight = max(0, $before - $weightOut);
+                                    $stock->update(['weight_quantity' => $newWeight]);
+                                    StockMovement::create([
+                                        'product_id'      => $item['product_id'],
+                                        'type'            => 'out',
+                                        'quantity'        => $weightOut,
+                                        'quantity_before' => $before,
+                                        'quantity_after'  => $newWeight,
+                                        'reason'          => 'Venda POS (peso) #' . $sale->id,
+                                        'user_id'         => $request->user()->id,
+                                    ]);
+                                }
+                            } else {
+                                // Produto por unidade: baixar de quantity
+                                $before = $stock->quantity;
+                                $stock->decrement('quantity', $item['quantity']);
+                                StockMovement::create([
+                                    'product_id'      => $item['product_id'],
+                                    'type'            => 'out',
+                                    'quantity'        => $item['quantity'],
+                                    'quantity_before' => $before,
+                                    'quantity_after'  => $before - $item['quantity'],
+                                    'reason'          => 'Venda POS #' . $sale->id,
+                                    'user_id'         => $request->user()->id,
+                                ]);
+                            }
                             // Sincronizar total_sold e marcar produto para invalidar cache
                             Product::where('id', $item['product_id'])
                                 ->increment('total_sold', $item['quantity']);
@@ -257,7 +315,7 @@ class PosController extends Controller
         $validated = $request->validate([
             'product_id' => 'required|exists:products,id',
             'type'       => 'required|in:in,out,adjustment',
-            'quantity'   => 'required|integer|min:1',
+            'quantity'   => 'required|numeric|min:0',
             'reason'     => 'nullable|string|max:200',
         ]);
 
@@ -288,6 +346,55 @@ class PosController extends Controller
         Cache::forget("pos_products_{$store->id}");
 
         return response()->json(['message' => 'Movimento registado.', 'stock' => $stock->fresh()]);
+    }
+
+    // ─── Alocar stock para venda por peso ─────────────────────────────────────
+    // O dono/gerente converte parte do stock geral em stock disponível para venda kg
+    public function allocateWeightStock(Request $request): JsonResponse
+    {
+        $this->requirePosPermission($request, 'gerir_stock');
+        $store = $this->resolveStore($request);
+
+        $validated = $request->validate([
+            'product_id'    => 'required|exists:products,id',
+            'weight_amount' => 'required|numeric|min:0.001',
+            'deduct_units'  => 'nullable|integer|min:0',  // sacos/unidades a converter (opcional)
+            'reason'        => 'nullable|string|max:200',
+        ]);
+
+        $product = $store->products()->findOrFail($validated['product_id']);
+        abort_unless($product->is_weighable, 422, 'Este produto não é vendido por peso.');
+
+        $stock = ProductStock::firstOrCreate(
+            ['product_id' => $product->id],
+            ['quantity' => 0, 'weight_quantity' => 0, 'minimum_stock' => 0, 'unit' => 'un']
+        );
+
+        // Adicionar ao stock de peso
+        $stock->increment('weight_quantity', $validated['weight_amount']);
+
+        // Opcionalmente deduzir do stock geral (ex: abriu 1 saco → -1 unidade, +50 kg)
+        if (!empty($validated['deduct_units']) && $validated['deduct_units'] > 0) {
+            abort_if($stock->quantity < $validated['deduct_units'], 422, 'Stock geral insuficiente para converter.');
+            $stock->decrement('quantity', $validated['deduct_units']);
+        }
+
+        StockMovement::create([
+            'product_id'      => $product->id,
+            'type'            => 'in',
+            'quantity'        => $validated['weight_amount'],
+            'quantity_before' => $stock->weight_quantity - $validated['weight_amount'],
+            'quantity_after'  => $stock->weight_quantity,
+            'reason'          => $validated['reason'] ?? 'Alocação para venda por peso',
+            'user_id'         => $request->user()->id,
+        ]);
+
+        Cache::forget("pos_products_{$store->id}");
+
+        return response()->json([
+            'message' => 'Stock alocado para venda por peso.',
+            'stock'   => $stock->fresh(),
+        ]);
     }
 
     // ─── Relatórios unificados POS + Online ───────────────────────────────────
@@ -623,6 +730,69 @@ class PosController extends Controller
         Cache::forget("user_me_{$employee->id}");
 
         return response()->json(['message' => 'Funcionário adicionado.', 'employee' => $emp->load('user:id,name,email')]);
+    }
+
+    // ─── Criar produto pelo POS (dono + funcionários com adicionar_produtos) ────
+    public function createProduct(Request $request): JsonResponse
+    {
+        $this->requirePosPermission($request, 'adicionar_produtos');
+        $store = $this->resolveStore($request);
+
+        $validated = $request->validate([
+            'product_category_id' => 'required|exists:product_categories,id',
+            'name'                => 'required|string|max:255',
+            'description'         => 'nullable|string',
+            'price'               => 'required|numeric|min:0',
+            'cost_price'          => 'nullable|numeric|min:0',
+            'sku'                 => 'nullable|string|max:100',
+            'barcode'             => 'nullable|string|max:100',
+            'initial_stock'       => 'required|numeric|min:0',
+            'minimum_stock'       => 'nullable|numeric|min:0',
+            'unit'                => 'nullable|string|max:50',
+            'images'              => 'nullable|array',
+            'images.*'            => 'image|max:2048',
+            'availability'        => 'nullable|in:virtual_store,pos,both',
+            'selling_modes'       => 'nullable|array',
+            'selling_modes.*'     => 'in:weight,unit',
+            'is_weighable'        => 'nullable|boolean',
+            'weight_unit'         => 'nullable|in:g,kg,l,ml,un,tonelada,litro',
+            'weight_units'        => 'nullable|array',
+            'weight_units.*'      => 'in:g,kg,l,ml,un,tonelada,litro',
+            'waste_margin'        => 'nullable|numeric|min:0|max:100',
+        ]);
+
+        $images = [];
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $image) {
+                $images[] = $image->store('products', 'public');
+            }
+        }
+        if (empty($images)) {
+            $images = ['Produto.png'];
+        }
+
+        $product = Product::create([
+            ...$validated,
+            'store_id'      => $store->id,
+            'slug'          => Str::slug($validated['name']) . '-' . Str::random(6),
+            'images'        => $images,
+            'is_active'     => true,
+            'availability'  => $validated['availability'] ?? 'both',
+            'selling_modes' => $validated['selling_modes'] ?? ['unit'],
+            'waste_margin'  => $validated['waste_margin'] ?? 0,
+            'weight_units'  => $validated['weight_units'] ?? null,
+        ]);
+
+        ProductStock::create([
+            'product_id'    => $product->id,
+            'quantity'      => $validated['initial_stock'],
+            'minimum_stock' => $validated['minimum_stock'] ?? 5,
+            'unit'          => $validated['unit'] ?? 'unidade',
+        ]);
+
+        Cache::forget("pos_products_{$store->id}");
+
+        return response()->json($product->load(['category', 'stock']), 201);
     }
 
     // ─── Sincronizar produtos criados offline ──────────────────────────────────

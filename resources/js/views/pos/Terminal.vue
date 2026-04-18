@@ -690,7 +690,12 @@ function onSearchEnter() {
 const weightProduct    = ref(null)
 const weightMode       = ref('weight')           // 'weight' | 'value'
 const weightForm       = reactive({ amount: '', unit: 'kg', scaleValue: '' })
-const weightUnits      = ['g', 'kg', 'l', 'ml']
+// Unidades disponíveis são as configuradas no produto; fallback para lista padrão
+const weightUnits = computed(() =>
+  weightProduct.value?.weight_units?.length
+    ? weightProduct.value.weight_units
+    : ['kg', 'g', 'l', 'ml']
+)
 const weightAmountInput = ref(null)
 const weightValueInput  = ref(null)
 
@@ -707,7 +712,12 @@ const weightTotal = computed(() => {
 
 // Só bloqueia produto se stock for explicitamente 0 (não quando stock não está registado)
 function stockExplicitlyEmpty(p) {
-  return p.stock != null && typeof p.stock.quantity === 'number' && p.stock.quantity <= 0
+  if (p.stock == null) return false
+  if (p.is_weighable) {
+    // Produtos por peso: bloquear se weight_quantity for explicitamente 0
+    return typeof p.stock.weight_quantity === 'number' && p.stock.weight_quantity <= 0
+  }
+  return typeof p.stock.quantity === 'number' && p.stock.quantity <= 0
 }
 
 function clickProduct(p) {
@@ -715,7 +725,9 @@ function clickProduct(p) {
     weightProduct.value = p
     weightMode.value    = 'weight'
     weightForm.amount   = ''
-    weightForm.unit     = p.weight_unit ?? 'kg'
+    // Usar a primeira unidade configurada no produto como unidade padrão
+    const defaultUnit = p.weight_units?.[0] ?? p.weight_unit ?? 'kg'
+    weightForm.unit     = defaultUnit
     weightForm.scaleValue = ''
     // Auto-focar no input após render
     nextTick(() => {
@@ -820,9 +832,13 @@ function formatDateTime(iso) {
 function filterProducts() {
   let result = allProducts.value
 
-  // Filtro por categoria
+  // Filtro por categoria (incluindo categoria virtual "Por Peso")
   if (selectedCategory.value) {
-    result = result.filter(p => p.category_id === selectedCategory.value)
+    if (selectedCategory.value === '__weight__') {
+      result = result.filter(p => p.is_weighable)
+    } else {
+      result = result.filter(p => p.category_id === selectedCategory.value)
+    }
   }
 
   // Filtro por busca
@@ -1085,9 +1101,21 @@ async function loadCategories() {
   }
 }
 
+// Injeta categoria virtual "⚖️ Por Peso" no início se existirem produtos pesáveis
+function injectWeightCategory() {
+  const WEIGHT_CAT_ID = '__weight__'
+  const hasWeighable = allProducts.value.some(p => p.is_weighable)
+  // Remover categoria virtual anterior (evitar duplicados em recargas)
+  categories.value = categories.value.filter(c => c.id !== WEIGHT_CAT_ID)
+  if (hasWeighable) {
+    categories.value = [{ id: WEIGHT_CAT_ID, name: '⚖️ Por Peso', virtual: true }, ...categories.value]
+  }
+}
+
 onMounted(async () => {
   await loadProducts()
   await loadCategories()
+  injectWeightCategory()
   // Mostrar escolha de modo scan se for a primeira vez nesta sessão
   const sessionKey = `pos_scan_shown_${new Date().toDateString()}`
   if (!localStorage.getItem(sessionKey)) {

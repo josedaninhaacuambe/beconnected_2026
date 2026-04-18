@@ -358,8 +358,8 @@ class ProductController extends Controller
             'barcode'             => 'nullable|string|max:100',
             'model'               => 'nullable|string|max:255',
             'attributes'          => 'nullable|array',
-            'initial_stock'       => 'required|integer|min:0',
-            'minimum_stock'       => 'nullable|integer|min:0',
+            'initial_stock'       => 'required|numeric|min:0',
+            'minimum_stock'       => 'nullable|numeric|min:0',
             'unit'                => 'nullable|string|max:50',
             'images'              => 'nullable|array',
             'images.*'            => 'image|max:2048',
@@ -368,7 +368,9 @@ class ProductController extends Controller
             'selling_modes'       => 'nullable|array',
             'selling_modes.*'     => 'in:weight,unit',
             'is_weighable'        => 'nullable|boolean',
-            'weight_unit'         => 'nullable|in:g,kg,l,ml,un',
+            'weight_unit'         => 'nullable|in:g,kg,l,ml,un,tonelada,litro',
+            'weight_units'        => 'nullable|array',
+            'weight_units.*'      => 'in:g,kg,l,ml,un,tonelada,litro',
             'waste_margin'        => 'nullable|numeric|min:0|max:100',
         ]);
 
@@ -404,6 +406,9 @@ class ProductController extends Controller
             $productData['availability'] = $validated['availability'] ?? 'both';
         }
         $productData['selling_modes'] = $validated['selling_modes'] ?? ['unit'];
+        if (isset($validated['weight_units'])) {
+            $productData['weight_units'] = $validated['weight_units'];
+        }
 
         $product = Product::create($productData);
 
@@ -443,13 +448,15 @@ class ProductController extends Controller
             'store_section_id'    => 'nullable|exists:store_sections,id',
             'images'              => 'nullable|array',
             'images.*'            => 'image|max:2048',
-            'minimum_stock'       => 'nullable|integer|min:0',
+            'minimum_stock'       => 'nullable|numeric|min:0',
             'pos_only'            => 'nullable|boolean',
             'availability'        => 'nullable|in:virtual_store,pos,both',
             'selling_modes'       => 'nullable|array',
             'selling_modes.*'     => 'in:weight,unit',
             'is_weighable'        => 'nullable|boolean',
-            'weight_unit'         => 'nullable|in:g,kg,l,ml,un',
+            'weight_unit'         => 'nullable|in:g,kg,l,ml,un,tonelada,litro',
+            'weight_units'        => 'nullable|array',
+            'weight_units.*'      => 'in:g,kg,l,ml,un,tonelada,litro',
             'waste_margin'        => 'nullable|numeric|min:0|max:100',
             'reason'              => 'nullable|string|max:255',
         ]);

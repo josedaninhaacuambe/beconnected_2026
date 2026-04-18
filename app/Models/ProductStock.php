@@ -9,7 +9,13 @@ class ProductStock extends Model
 {
     protected $table = 'product_stock';
 
-    protected $fillable = ['product_id', 'quantity', 'minimum_stock', 'unit'];
+    protected $fillable = ['product_id', 'quantity', 'weight_quantity', 'minimum_stock', 'unit'];
+
+    protected $casts = [
+        'quantity'        => 'float',
+        'weight_quantity' => 'float',
+        'minimum_stock'   => 'float',
+    ];
 
     public function product(): BelongsTo
     {
