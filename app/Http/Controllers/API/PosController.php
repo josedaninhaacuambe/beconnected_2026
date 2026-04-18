@@ -89,7 +89,9 @@ class PosController extends Controller
         // Cache por 5 minutos — invalidado ao registar venda/movimento de stock
         $cacheKey = "pos_products_{$store->id}";
         $builder  = function () use ($store) {
-            $fields = ['id', 'name', 'price', 'cost_price', 'sku', 'barcode', 'images', 'is_weighable', 'weight_unit', 'weight_units', 'product_category_id'];
+            $fields = ['id', 'name', 'price', 'cost_price', 'sku', 'barcode', 'images', 'is_weighable', 'weight_unit', 'weight_units', 'weight_prices', 'product_category_id'];
+
+            $safeJson = fn($v) => is_array($v) ? $v : (is_string($v) ? (json_decode($v, true) ?? []) : []);
 
             // Retorna array simples (não Collection Eloquent) — seguro para serialização Redis
             return $store->products()
@@ -97,33 +99,46 @@ class PosController extends Controller
                 ->where('is_active', true)
                 ->orderBy('name')
                 ->get($fields)
-                ->map(function ($p) {
-                    $images = $p->images ?? [];
-                    if (is_string($images)) $images = json_decode($images, true) ?? [];
-                    // Apenas imagens locais (em storage) — URLs externas → null → AppImg usa Produto.png
-                    $firstImage = count($images) > 0 ? $images[0] : null;
-                    if ($firstImage && str_starts_with($firstImage, 'http')) {
-                        $firstImage = null;
+                ->map(function ($p) use ($safeJson) {
+                    try {
+                        $images = $safeJson($p->getRawOriginal('images'));
+                        $firstImage = count($images) > 0 ? $images[0] : null;
+                        if ($firstImage && str_starts_with($firstImage, 'http')) {
+                            $firstImage = null;
+                        }
+
+                        $weightUnits = $safeJson($p->getRawOriginal('weight_units'));
+                        if (empty($weightUnits)) {
+                            $weightUnits = $p->weight_unit ? [$p->weight_unit] : ['kg'];
+                        }
+
+                        $weightPricesRaw = $p->getRawOriginal('weight_prices');
+                        $weightPrices = $weightPricesRaw ? $safeJson($weightPricesRaw) : null;
+
+                        return [
+                            'id'            => $p->id,
+                            'name'          => $p->name,
+                            'price'         => $p->price,
+                            'cost_price'    => $p->cost_price,
+                            'sku'           => $p->sku,
+                            'barcode'       => $p->barcode,
+                            'image'         => $firstImage ?? '',
+                            'is_weighable'  => (bool) $p->is_weighable,
+                            'weight_unit'   => $p->weight_unit,
+                            'weight_units'  => $weightUnits,
+                            'weight_prices' => $weightPrices,
+                            'category_id'   => $p->product_category_id ?? null,
+                            'stock'         => $p->stock ? [
+                                'quantity'        => $p->stock->quantity,
+                                'weight_quantity' => $p->stock->weight_quantity ?? 0,
+                            ] : null,
+                        ];
+                    } catch (\Throwable $e) {
+                        \Log::warning("[POS] Produto {$p->id} ignorado por dados inválidos: " . $e->getMessage());
+                        return null;
                     }
-                    return [
-                        'id'            => $p->id,
-                        'name'          => $p->name,
-                        'price'         => $p->price,
-                        'cost_price'    => $p->cost_price,
-                        'sku'           => $p->sku,
-                        'barcode'       => $p->barcode,
-                        'image'         => $firstImage ?? '',
-                        'is_weighable'  => $p->is_weighable,
-                        'weight_unit'   => $p->weight_unit,
-                        'weight_units'  => $p->weight_units ?: ($p->weight_unit ? [$p->weight_unit] : ['kg']),
-                        'weight_prices' => $p->weight_prices ?: null,
-                        'category_id'   => $p->product_category_id ?? null,
-                        'stock'         => $p->stock ? [
-                            'quantity'        => $p->stock->quantity,
-                            'weight_quantity' => $p->stock->weight_quantity ?? 0,
-                        ] : null,
-                    ];
                 })
+                ->filter()   // remove nulls (produtos com dados corrompidos)
                 ->values()
                 ->all();
         };
