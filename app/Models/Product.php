@@ -18,7 +18,7 @@ class Product extends Model
         'store_id', 'product_category_id', 'store_section_id', 'brand_id', 'name', 'slug',
         'description', 'price', 'cost_price', 'compare_price', 'flash_price', 'flash_until',
         'sku', 'barcode', 'model', 'images', 'attributes', 'is_active', 'is_featured',
-        'total_sold', 'is_weighable', 'weight_unit', 'weight_units', 'waste_margin',
+        'total_sold', 'is_weighable', 'weight_unit', 'weight_units', 'weight_prices', 'waste_margin',
         'availability', 'selling_modes',
     ];
 
@@ -37,6 +37,7 @@ class Product extends Model
         'availability' => 'string',
         'selling_modes' => 'array',
         'weight_units'  => 'array',
+        'weight_prices' => 'array',
         'rating' => 'float',
         'total_sold' => 'integer',
     ];

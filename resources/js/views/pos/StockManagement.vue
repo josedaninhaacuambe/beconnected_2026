@@ -25,7 +25,7 @@
 
     <div class="flex-1 overflow-y-auto p-4">
 
-      <!-- ── Tab: Produtos e Stock ─────────────────────────────────────── -->
+      <!-- ── Tab: Produtos por Unidade ────────────────────────────────────── -->
       <div v-if="activeTab === 'stock'">
         <div class="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
           <div class="flex-1 min-w-0 flex items-center gap-3">
@@ -54,9 +54,8 @@
         </div>
 
         <div v-else class="space-y-2">
-          <div v-for="p in filteredProducts" :key="p.id"
+          <div v-for="p in filteredUnitProducts" :key="p.id"
             class="bg-white rounded-xl border border-gray-100 px-4 py-3 flex flex-col gap-2">
-            <!-- Linha superior: info + stock -->
             <div class="flex items-center gap-3">
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2">
@@ -66,12 +65,10 @@
                 <p class="text-xs text-gray-400">{{ p.sku || 'Sem SKU' }}</p>
               </div>
               <div class="text-center flex-shrink-0">
-                <p class="text-lg font-black" :class="stockColor(p.stock?.quantity)">{{ p.stock?.quantity ?? 0 }}</p>
-                <p class="text-[10px] text-gray-400">em stock</p>
+                <p class="text-lg font-black" :class="unitStockColor(p.stock?.quantity)">{{ p.stock?.quantity ?? 0 }}</p>
+                <p class="text-[10px] text-gray-400">unidades</p>
               </div>
             </div>
-
-            <!-- Linha inferior: botões de movimento -->
             <div class="flex gap-2">
               <button @click="openMovement(p, 'in')"
                 class="flex-1 py-1.5 rounded-lg text-xs font-bold text-white transition hover:opacity-90"
@@ -89,11 +86,75 @@
               </button>
             </div>
           </div>
-          <p v-if="!filteredProducts.length && !loading" class="text-center py-12 text-gray-400">Nenhum produto encontrado.</p>
+          <p v-if="!filteredUnitProducts.length && !loading" class="text-center py-12 text-gray-400">Nenhum produto encontrado.</p>
         </div>
       </div>
 
-      <!-- ── Tab: Histórico ───────────────────────────────────────────── -->
+      <!-- ── Tab: Produtos por Peso ────────────────────────────────────────── -->
+      <div v-if="activeTab === 'weight'">
+        <div class="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex-1 min-w-0 flex items-center gap-3">
+            <input v-model="weightSearch" type="text" placeholder="🔍 Pesquisar produto por peso..."
+              class="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-bc-gold" />
+            <select v-model="weightStockFilter" class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none">
+              <option value="all">Todos</option>
+              <option value="low">Stock baixo</option>
+              <option value="out">Sem stock</option>
+            </select>
+          </div>
+        </div>
+
+        <div v-if="loading" class="space-y-2">
+          <div v-for="i in 4" :key="i" class="skeleton h-16 rounded-xl"></div>
+        </div>
+
+        <div v-else class="space-y-2">
+          <div v-for="p in filteredWeightProducts" :key="p.id"
+            class="bg-white rounded-xl border border-gray-100 px-4 py-3 flex flex-col gap-2">
+            <div class="flex items-center gap-3">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <p class="font-semibold text-sm text-gray-800 truncate">{{ p.name }}</p>
+                  <span class="text-[9px] bg-bc-gold/20 text-bc-gold font-bold px-1.5 py-0.5 rounded-full flex-shrink-0">⚖️ peso</span>
+                  <span v-if="p._offline" class="text-[9px] bg-amber-100 text-amber-700 font-bold px-1.5 py-0.5 rounded-full flex-shrink-0">offline</span>
+                </div>
+                <p class="text-xs text-gray-400">
+                  {{ p.sku || 'Sem SKU' }} ·
+                  Unidades: {{ (p.weight_units || [p.weight_unit || 'kg']).join(', ') }}
+                </p>
+              </div>
+              <div class="text-center flex-shrink-0">
+                <p class="text-lg font-black" :class="weightStockColor(p.stock?.weight_quantity)">
+                  {{ formatWeightQty(p.stock?.weight_quantity) }}
+                </p>
+                <p class="text-[10px] text-gray-400">{{ p.weight_unit || 'kg' }} em stock</p>
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <button @click="openMovement(p, 'in')"
+                class="flex-1 py-1.5 rounded-lg text-xs font-bold text-white transition hover:opacity-90"
+                style="background:#22C55E;">
+                + Entrada
+              </button>
+              <button @click="openMovement(p, 'out')"
+                :disabled="(p.stock?.weight_quantity ?? 0) <= 0"
+                class="flex-1 py-1.5 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition disabled:opacity-40">
+                − Saída
+              </button>
+              <button @click="openMovement(p, 'adjustment')"
+                class="flex-1 py-1.5 rounded-lg text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition">
+                ± Ajuste
+              </button>
+            </div>
+          </div>
+          <p v-if="!filteredWeightProducts.length && !loading" class="text-center py-12 text-gray-400">
+            Nenhum produto por peso encontrado.<br>
+            <span class="text-xs text-gray-300 mt-1 block">Crie produtos com "Vendido por peso" activo para os ver aqui.</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- ── Tab: Histórico ───────────────────────────────────────────────── -->
       <div v-if="activeTab === 'history'">
 
         <!-- Movimentos pendentes offline -->
@@ -161,6 +222,25 @@
             {{ movModal.type === 'in' ? '📥 Entrada de Stock' : movModal.type === 'out' ? '📤 Saída de Stock' : '⚖️ Ajuste de Stock' }}
           </h3>
           <p class="text-sm text-gray-500 mb-1">{{ movModal.product?.name }}</p>
+
+          <!-- Badge produto pesável -->
+          <div v-if="movModal.product?.is_weighable" class="flex items-center gap-2 mb-2">
+            <span class="text-xs bg-bc-gold/10 text-bc-gold font-semibold px-2 py-0.5 rounded-full">
+              ⚖️ Produto por peso · {{ movModal.product?.weight_unit || 'kg' }}
+            </span>
+            <span class="text-xs text-gray-400">
+              Stock actual: {{ formatWeightQty(movModal.product?.stock?.weight_quantity) }} {{ movModal.product?.weight_unit || 'kg' }}
+            </span>
+          </div>
+          <div v-else class="flex items-center gap-2 mb-2">
+            <span class="text-xs bg-gray-100 text-gray-600 font-semibold px-2 py-0.5 rounded-full">
+              📦 Produto por unidade
+            </span>
+            <span class="text-xs text-gray-400">
+              Stock actual: {{ movModal.product?.stock?.quantity ?? 0 }} un
+            </span>
+          </div>
+
           <p v-if="!isOnline" class="text-xs text-amber-600 font-semibold mb-4">
             📵 Offline — será sincronizado quando houver ligação
           </p>
@@ -170,9 +250,16 @@
             <div>
               <label class="text-xs font-semibold text-gray-600">
                 {{ movModal.type === 'adjustment' ? 'Novo total em stock' : 'Quantidade' }}
+                <span v-if="movModal.product?.is_weighable" class="text-bc-gold">({{ movModal.product?.weight_unit || 'kg' }})</span>
               </label>
-              <input v-model.number="movModal.quantity" type="number" min="1"
-                class="w-full border border-gray-200 rounded-xl px-4 py-2.5 mt-1 focus:outline-none focus:border-bc-gold text-lg font-bold text-center" />
+              <input
+                v-model.number="movModal.quantity"
+                type="number"
+                :min="movModal.type === 'adjustment' ? '0' : '0.001'"
+                :step="movModal.product?.is_weighable ? '0.001' : '1'"
+                :placeholder="movModal.product?.is_weighable ? '0.000' : '1'"
+                class="w-full border border-gray-200 rounded-xl px-4 py-2.5 mt-1 focus:outline-none focus:border-bc-gold text-lg font-bold text-center"
+              />
             </div>
             <div>
               <label class="text-xs font-semibold text-gray-600">Motivo (opcional)</label>
@@ -214,6 +301,7 @@ const { isOnline, trySyncNow, refreshPendingCount } = useOfflinePos()
 const activeTab = ref('stock')
 const tabs = [
   { key: 'stock',   icon: '📦', label: 'Produtos' },
+  { key: 'weight',  icon: '⚖️', label: 'Por Peso' },
   { key: 'history', icon: '📋', label: 'Histórico' },
 ]
 
@@ -225,32 +313,75 @@ const loading          = ref(true)
 const loadingHistory   = ref(false)
 const search           = ref('')
 const stockFilter      = ref('all')
+const weightSearch     = ref('')
+const weightStockFilter = ref('all')
 
 const pendingMovementsCount = computed(() => pendingMovements.value.length)
 
 const movModal = ref({
   open: false, product: null, type: 'in',
-  quantity: 1, reason: '', loading: false, error: '',
+  quantity: null, reason: '', loading: false, error: '',
 })
 
-const filteredProducts = computed(() => {
-  let list = products.value
-  if (search.value) list = list.filter(p => p.name.toLowerCase().includes(search.value.toLowerCase()) || (p.sku && p.sku.toLowerCase().includes(search.value.toLowerCase())))
+// ── Produtos por unidade (não pesáveis) ──────────────────────────────────────
+const filteredUnitProducts = computed(() => {
+  let list = products.value.filter(p => !p.is_weighable)
+  if (search.value) list = list.filter(p =>
+    p.name.toLowerCase().includes(search.value.toLowerCase()) ||
+    (p.sku && p.sku.toLowerCase().includes(search.value.toLowerCase()))
+  )
   if (stockFilter.value === 'low')  list = list.filter(p => (p.stock?.quantity ?? 0) > 0 && (p.stock?.quantity ?? 0) <= (p.stock?.minimum_stock ?? 5))
   if (stockFilter.value === 'out')  list = list.filter(p => (p.stock?.quantity ?? 0) <= 0)
   return list
 })
 
+// ── Produtos por peso (pesáveis) ─────────────────────────────────────────────
+const filteredWeightProducts = computed(() => {
+  let list = products.value.filter(p => p.is_weighable)
+  if (weightSearch.value) list = list.filter(p =>
+    p.name.toLowerCase().includes(weightSearch.value.toLowerCase()) ||
+    (p.sku && p.sku.toLowerCase().includes(weightSearch.value.toLowerCase()))
+  )
+  if (weightStockFilter.value === 'low')  list = list.filter(p => (p.stock?.weight_quantity ?? 0) > 0 && (p.stock?.weight_quantity ?? 0) <= (p.stock?.minimum_stock ?? 0.5))
+  if (weightStockFilter.value === 'out')  list = list.filter(p => (p.stock?.weight_quantity ?? 0) <= 0)
+  return list
+})
+
 const canPrintStock = computed(() => auth.hasPosPermission('gerir_stock'))
 
+function unitStockColor(qty) {
+  if (!qty || qty <= 0) return 'text-red-500'
+  if (qty <= 5) return 'text-yellow-500'
+  return 'text-green-600'
+}
+
+function weightStockColor(qty) {
+  if (!qty || qty <= 0) return 'text-red-500'
+  if (qty <= 0.5) return 'text-yellow-500'
+  return 'text-green-600'
+}
+
+function formatWeightQty(qty) {
+  if (!qty && qty !== 0) return '0'
+  const n = parseFloat(qty)
+  return n % 1 === 0 ? n.toFixed(0) : n.toFixed(3).replace(/\.?0+$/, '')
+}
+
+function formatDate(d) {
+  return new Date(d).toLocaleDateString('pt-MZ', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
 function printStockList() {
-  const rows = filteredProducts.value.map((p, index) => {
-    const qty = p.stock?.quantity ?? 0
+  const allVisible = [...filteredUnitProducts.value, ...filteredWeightProducts.value]
+  const rows = allVisible.map((p, index) => {
+    const qty = p.is_weighable
+      ? `${formatWeightQty(p.stock?.weight_quantity)} ${p.weight_unit || 'kg'}`
+      : (p.stock?.quantity ?? 0) + ' un'
     const min = p.stock?.minimum_stock ?? 0
     return `
       <tr>
         <td>${index + 1}</td>
-        <td>${p.name}</td>
+        <td>${p.name}${p.is_weighable ? ' ⚖️' : ''}</td>
         <td>${p.sku || '-'}</td>
         <td>${p.barcode || '-'}</td>
         <td class="text-right">${qty}</td>
@@ -310,13 +441,16 @@ function printStockList() {
 }
 
 function exportStockCsv() {
-  const header = ['#', 'Produto', 'SKU', 'Barcode', 'Stock', 'Stock mínimo']
-  const rows = filteredProducts.value.map((p, index) => [
+  const header = ['#', 'Produto', 'Tipo', 'SKU', 'Barcode', 'Stock', 'Unidade', 'Stock mínimo']
+  const allVisible = [...filteredUnitProducts.value, ...filteredWeightProducts.value]
+  const rows = allVisible.map((p, index) => [
     index + 1,
     p.name,
+    p.is_weighable ? 'Peso' : 'Unidade',
     p.sku || '-',
     p.barcode || '-',
-    p.stock?.quantity ?? 0,
+    p.is_weighable ? formatWeightQty(p.stock?.weight_quantity ?? 0) : (p.stock?.quantity ?? 0),
+    p.is_weighable ? (p.weight_unit || 'kg') : 'un',
     p.stock?.minimum_stock ?? 0,
   ])
   const csv = [header, ...rows].map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\r\n')
@@ -331,18 +465,9 @@ function exportStockCsv() {
   URL.revokeObjectURL(url)
 }
 
-function stockColor(qty) {
-  if (!qty || qty <= 0) return 'text-red-500'
-  if (qty <= 5) return 'text-yellow-500'
-  return 'text-green-600'
-}
-
-function formatDate(d) {
-  return new Date(d).toLocaleDateString('pt-MZ', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
-
 function openMovement(product, type) {
-  movModal.value = { open: true, product, type, quantity: 1, reason: '', loading: false, error: '' }
+  const defaultQty = product.is_weighable ? null : 1
+  movModal.value = { open: true, product, type, quantity: defaultQty, reason: '', loading: false, error: '' }
 }
 
 async function confirmMovement() {
@@ -351,16 +476,15 @@ async function confirmMovement() {
   movModal.value.error   = ''
 
   const { product, type, quantity, reason } = movModal.value
+  const isWeighable = product.is_weighable
 
   try {
     if (isOnline.value) {
-      // ── Online: enviar para API ──────────────────────────────────────
       await axios.post('/pos/stock/movement', {
         product_id: product.id,
         type, quantity, reason,
       })
     } else {
-      // ── Offline: guardar na fila do IndexedDB ────────────────────────
       const mov = {
         local_id:     `mov_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         product_id:   product.id,
@@ -377,15 +501,20 @@ async function confirmMovement() {
     // Actualizar stock localmente + cache
     const p = products.value.find(x => x.id === product.id)
     if (p && p.stock) {
-      if (type === 'in')         p.stock.quantity += quantity
-      else if (type === 'out')   p.stock.quantity  = Math.max(0, p.stock.quantity - quantity)
-      else                       p.stock.quantity  = quantity
+      if (isWeighable) {
+        const wq = p.stock.weight_quantity ?? 0
+        if (type === 'in')         p.stock.weight_quantity = wq + quantity
+        else if (type === 'out')   p.stock.weight_quantity = Math.max(0, wq - quantity)
+        else                       p.stock.weight_quantity = quantity
+      } else {
+        if (type === 'in')         p.stock.quantity += quantity
+        else if (type === 'out')   p.stock.quantity  = Math.max(0, p.stock.quantity - quantity)
+        else                       p.stock.quantity  = quantity
+      }
       await updateCachedProduct(p)
     }
 
     movModal.value.open = false
-
-    // Histórico só carrega se online
     if (isOnline.value) loadHistory()
 
   } catch (e) {
@@ -398,7 +527,6 @@ async function confirmMovement() {
 async function loadHistory() {
   loadingHistory.value = true
 
-  // Mostrar cache offline imediatamente
   if (!isOnline.value) {
     const cached = await getCachedStockHistory()
     if (cached) movements.value = cached.value
@@ -406,7 +534,6 @@ async function loadHistory() {
     return
   }
 
-  // Mostrar cache enquanto carrega da rede
   const cached = await getCachedStockHistory()
   if (cached) movements.value = cached.value
 
@@ -422,14 +549,12 @@ async function loadHistory() {
 async function loadProducts() {
   loading.value = true
 
-  // 1. Mostrar cache imediatamente — filtrada pela loja activa
   const cached = await getCachedProducts(auth.activeStoreId ?? auth.activeStore?.id)
   if (cached.length) {
     products.value = cached
     loading.value  = false
   }
 
-  // 2. Actualizar do servidor em background se online
   if (isOnline.value) {
     try {
       const { data } = await axios.get('/pos/stock')
@@ -447,7 +572,6 @@ async function loadPendingMovements() {
   pendingMovements.value = await getPendingMovements()
 }
 
-// Quando volta a ficar online: sincronizar e recarregar
 watch(isOnline, async (online) => {
   if (online) {
     await trySyncNow()

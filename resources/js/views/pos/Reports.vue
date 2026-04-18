@@ -181,14 +181,21 @@
         <div v-if="canal !== 'online'" class="bg-white rounded-xl border border-gray-100 p-4">
           <h3 class="font-bold text-sm text-gray-700 mb-3">👤 Por Vendedor (POS)</h3>
           <div class="space-y-2">
-            <div v-for="s in data.by_seller" :key="s.name" class="flex items-center justify-between">
+            <div v-for="s in data.by_seller" :key="s.name"
+              @click="openSellerDetail(s)"
+              class="flex items-center justify-between p-2 rounded-xl cursor-pointer hover:bg-gray-50 transition group">
               <div class="flex items-center gap-2">
                 <div class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold" style="background:#1C2B3C;">{{ s.name[0] }}</div>
-                <span class="text-sm text-gray-700">{{ s.name }}</span>
+                <div>
+                  <span class="text-sm text-gray-700 font-semibold group-hover:text-bc-gold transition">{{ s.name }}</span>
+                  <p class="text-[10px] text-gray-400">{{ s.count }} venda{{ s.count !== 1 ? 's' : '' }}</p>
+                </div>
               </div>
-              <div class="text-right">
-                <p class="text-sm font-bold" style="color:#F07820;">{{ fmt(s.total) }}</p>
-                <p class="text-[10px] text-gray-400">{{ s.count }} vendas</p>
+              <div class="flex items-center gap-2">
+                <div class="text-right">
+                  <p class="text-sm font-bold" style="color:#F07820;">{{ fmt(s.total) }}</p>
+                </div>
+                <span class="text-gray-300 group-hover:text-bc-gold transition text-xs">›</span>
               </div>
             </div>
             <p v-if="!data.by_seller.length" class="text-center text-gray-400 text-sm py-2">Sem vendas POS no período.</p>
@@ -286,14 +293,144 @@
       <p>Selecciona um período e clica em "Ver Relatório"</p>
     </div>
   </div>
+
+  <!-- ══ MODAL: Detalhe por Vendedor ══════════════════════════════════════ -->
+  <Teleport to="body">
+    <div v-if="selectedSeller" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" style="background:rgba(0,0,0,0.55);" @click.self="selectedSeller = null">
+      <div class="bg-white w-full sm:max-w-2xl sm:rounded-2xl shadow-2xl flex flex-col" style="max-height:95vh; border-radius:1.25rem 1.25rem 0 0;">
+
+        <!-- Cabeçalho -->
+        <div class="flex items-center gap-3 px-5 py-4 border-b border-gray-100 flex-shrink-0">
+          <div class="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-black flex-shrink-0" style="background:#1C2B3C;">{{ selectedSeller.name[0] }}</div>
+          <div class="flex-1 min-w-0">
+            <h2 class="font-black text-gray-800 text-base">{{ selectedSeller.name }}</h2>
+            <p class="text-xs text-gray-400">{{ sellerSales.length }} venda{{ sellerSales.length !== 1 ? 's' : '' }} no período · Total: <strong style="color:#F07820;">{{ fmt(selectedSeller.total) }}</strong></p>
+          </div>
+          <button @click="selectedSeller = null" class="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 text-sm flex-shrink-0">✕</button>
+        </div>
+
+        <!-- Filtros de data e pesquisa -->
+        <div class="flex flex-wrap gap-2 px-5 py-3 border-b border-gray-100 flex-shrink-0 bg-gray-50">
+          <div class="flex items-center gap-2">
+            <label class="text-xs text-gray-500 font-semibold">Filtrar dia:</label>
+            <input v-model="sellerDayFilter" type="date" class="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-bc-gold" />
+            <button v-if="sellerDayFilter" @click="sellerDayFilter = ''" class="text-xs text-gray-400 hover:text-red-500 transition">✕ limpar</button>
+          </div>
+          <div class="flex gap-1 ml-auto flex-wrap">
+            <button @click="sellerDayFilter = todayStr" class="px-2 py-1 rounded-lg border text-xs font-semibold text-gray-600 hover:border-bc-gold hover:text-bc-gold transition">Hoje</button>
+            <button @click="sellerDayFilter = yesterdayStr" class="px-2 py-1 rounded-lg border text-xs font-semibold text-gray-600 hover:border-bc-gold hover:text-bc-gold transition">Ontem</button>
+          </div>
+        </div>
+
+        <!-- Sumário do filtro activo -->
+        <div v-if="sellerDayFilter" class="flex items-center gap-4 px-5 py-2 bg-bc-gold/10 text-xs text-gray-700 border-b border-bc-gold/20 flex-shrink-0">
+          <span>📅 {{ sellerDayFilter }}</span>
+          <span class="font-bold">{{ sellerSalesFiltered.length }} vendas</span>
+          <span style="color:#F07820;" class="font-bold">{{ fmt(sellerSalesFiltered.reduce((s,x) => s + parseFloat(x.total), 0)) }}</span>
+        </div>
+
+        <!-- Lista de vendas -->
+        <div class="flex-1 overflow-y-auto px-5 py-3 space-y-3">
+          <div v-if="!sellerSalesFiltered.length" class="flex flex-col items-center justify-center py-12 text-gray-400">
+            <span class="text-3xl mb-2">🧾</span>
+            <p class="text-sm">Nenhuma venda encontrada para este filtro.</p>
+          </div>
+
+          <div v-for="sale in sellerSalesFiltered" :key="sale.id"
+            class="border border-gray-100 rounded-xl overflow-hidden">
+            <!-- Cabeçalho da venda -->
+            <div class="flex items-center justify-between px-4 py-2.5 bg-gray-50 cursor-pointer select-none"
+              @click="toggleSaleExpand(sale.id)">
+              <div class="flex items-center gap-3">
+                <span class="text-xs font-bold px-1.5 py-0.5 rounded-full text-white" style="background:#F07820;">POS</span>
+                <div>
+                  <p class="text-sm font-semibold text-gray-800">{{ formatTime(sale.sale_at) }}</p>
+                  <p class="text-[10px] text-gray-400">
+                    {{ methodIcon(sale.payment_method) }} {{ sale.payment_method?.toUpperCase() }}
+                    <span v-if="sale.customer_name"> · {{ sale.customer_name }}</span>
+                    · {{ sale.items?.length ?? 0 }} item(s)
+                  </p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <p class="text-sm font-black" style="color:#F07820;">{{ fmt(sale.total) }}</p>
+                <span class="text-gray-400 text-xs transition-transform" :class="expandedSales.has(sale.id) ? 'rotate-90' : ''">›</span>
+              </div>
+            </div>
+
+            <!-- Items expandidos -->
+            <div v-if="expandedSales.has(sale.id)" class="px-4 py-3 space-y-1.5 border-t border-gray-100">
+              <div v-for="item in sale.items" :key="item.id ?? item.product_name"
+                class="flex justify-between text-xs text-gray-700">
+                <div class="flex-1 min-w-0">
+                  <span class="font-semibold">{{ item.product_name }}</span>
+                  <span class="text-gray-400 ml-1.5">
+                    <template v-if="item.weight_amount && item.scale_value">
+                      ⚖️ {{ item.weight_amount }}{{ item.weight_unit }} · balança
+                    </template>
+                    <template v-else-if="item.weight_amount">
+                      ⚖️ {{ item.weight_amount }}{{ item.weight_unit }} × {{ fmtCompact(item.unit_price) }}/{{ item.weight_unit }}
+                    </template>
+                    <template v-else>
+                      {{ item.quantity }}× {{ fmtCompact(item.unit_price) }}
+                    </template>
+                  </span>
+                </div>
+                <span class="font-bold ml-2 flex-shrink-0">{{ fmtCompact(item.subtotal) }}</span>
+              </div>
+              <div class="border-t border-dashed border-gray-200 pt-1.5 mt-1 flex justify-between text-xs">
+                <span class="text-gray-500">
+                  <span v-if="sale.discount > 0">Desconto: -{{ fmtCompact(sale.discount) }} · </span>
+                  <span v-if="sale.apply_vat">IVA {{ sale.vat_rate }}%: {{ fmtCompact(sale.vat_amount) }} · </span>
+                  Total
+                </span>
+                <span class="font-black text-sm" style="color:#F07820;">{{ fmt(sale.total) }}</span>
+              </div>
+              <div v-if="sale.amount_paid > sale.total" class="flex justify-between text-xs text-gray-500">
+                <span>Valor entregue</span><span>{{ fmtCompact(sale.amount_paid) }}</span>
+              </div>
+              <div v-if="(sale.amount_paid - sale.total) > 0.01" class="flex justify-between text-xs text-green-600 font-bold">
+                <span>Troco</span><span>{{ fmtCompact(sale.amount_paid - sale.total) }}</span>
+              </div>
+              <!-- Apagar venda — apenas dono da loja -->
+              <div v-if="isStoreOwner" class="flex justify-end pt-1 border-t border-dashed border-gray-100 mt-1">
+                <button
+                  @click.stop="deleteSellerSale(sale.id, sale.customer_name)"
+                  :disabled="deletingSellerSale === sale.id"
+                  class="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-lg transition disabled:opacity-50">
+                  <span>{{ deletingSellerSale === sale.id ? '⏳' : '🗑️' }}</span>
+                  {{ deletingSellerSale === sale.id ? 'A apagar...' : 'Apagar venda' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rodapé com totais -->
+        <div class="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50 flex-shrink-0">
+          <div class="flex gap-4 text-xs text-gray-500">
+            <span>{{ sellerSalesFiltered.length }} vendas</span>
+            <span>Ticket médio: <strong>{{ fmt(sellerSalesFiltered.length ? sellerSalesFiltered.reduce((s,x) => s + parseFloat(x.total), 0) / sellerSalesFiltered.length : 0) }}</strong></span>
+          </div>
+          <div class="text-right">
+            <p class="text-xs text-gray-500">Total {{ sellerDayFilter ? 'do dia' : 'do período' }}</p>
+            <p class="text-lg font-black" style="color:#F07820;">{{ fmt(sellerSalesFiltered.reduce((s,x) => s + parseFloat(x.total), 0)) }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { useOfflinePos, cacheReports, getCachedReports, fmtCacheAge } from '@/composables/useOfflinePos'
+import { useAuthStore } from '@/stores/auth.js'
 
 const { isOnline } = useOfflinePos()
+const auth = useAuthStore()
+const isStoreOwner = computed(() => auth.isStoreOwner)
 
 const from   = ref(new Date(new Date().setDate(1)).toISOString().slice(0, 10))
 const to     = ref(new Date().toISOString().slice(0, 10))
@@ -305,6 +442,66 @@ const periods = ref({})
 const deleting = ref(null)
 const isFromCache = ref(false)
 const cacheAge    = ref('')
+
+// ── Detalhe por vendedor ──────────────────────────────────────────────────────
+const selectedSeller    = ref(null)
+const sellerDayFilter   = ref('')
+const expandedSales     = ref(new Set())
+const deletingSellerSale = ref(null)
+
+const todayStr     = new Date().toISOString().slice(0, 10)
+const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+
+function openSellerDetail(seller) {
+  selectedSeller.value  = seller
+  sellerDayFilter.value = ''
+  expandedSales.value   = new Set()
+}
+
+function toggleSaleExpand(id) {
+  const s = expandedSales.value
+  if (s.has(id)) s.delete(id)
+  else s.add(id)
+  expandedSales.value = new Set(s) // trigger reactivity
+}
+
+const sellerSales = computed(() => {
+  if (!selectedSeller.value || !data.value) return []
+  return (data.value.pos_sales ?? []).filter(s =>
+    s.user_id === selectedSeller.value.user_id ||
+    (s.user?.name ?? '') === selectedSeller.value.name
+  )
+})
+
+const sellerSalesFiltered = computed(() => {
+  if (!sellerDayFilter.value) return sellerSales.value
+  return sellerSales.value.filter(s =>
+    (s.sale_at ?? '').slice(0, 10) === sellerDayFilter.value
+  )
+})
+
+function fmtCompact(v) {
+  return new Intl.NumberFormat('pt-MZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v ?? 0)
+}
+
+async function deleteSellerSale(saleId, customerName) {
+  const label = customerName ? ` de ${customerName}` : ''
+  if (!confirm(`Apagar esta venda${label}? O stock será revertido.`)) return
+  deletingSellerSale.value = saleId
+  try {
+    await axios.delete(`/pos/sales/${saleId}`)
+    await load()
+    // Actualizar lista do vendedor sem fechar o modal
+    if (selectedSeller.value) {
+      const updated = (data.value?.by_seller ?? []).find(s => s.user_id === selectedSeller.value.user_id)
+      if (updated) selectedSeller.value = updated
+    }
+  } catch (err) {
+    alert(err.response?.data?.message ?? 'Erro ao apagar venda.')
+  } finally {
+    deletingSellerSale.value = null
+  }
+}
 
 const periodCards = [
   { key: 'today', label: 'Hoje' },

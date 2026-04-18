@@ -19,8 +19,8 @@
             <div class="flex-1 min-w-0">
               <p class="font-semibold text-gray-800 truncate">{{ item.product_name }}</p>
               <p class="text-gray-400">
-                <span v-if="item.weight_amount">⚖️ {{ item.weight_amount }}{{ item.weight_unit }} · {{ fmt(item.unit_price) }}/{{ item.weight_unit }}</span>
-                <span v-else-if="item.scale_value">⚖️ valor da balança</span>
+                <span v-if="item.weight_amount && item.scale_value">⚖️ {{ item.weight_amount }}{{ item.weight_unit }} · balança</span>
+                <span v-else-if="item.weight_amount">⚖️ {{ item.weight_amount }}{{ item.weight_unit }} · {{ fmt(item.unit_price) }}/{{ item.weight_unit }}</span>
                 <span v-else>{{ fmt(item.unit_price) }}</span>
               </p>
             </div>
@@ -499,23 +499,44 @@
                 </div>
               </template>
 
-              <!-- MODO: Valor directo da balança -->
+              <!-- MODO: Valor directo da balança (peso + total) -->
               <template v-else>
-                <p class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">3. Valor mostrado na balança (MZN)</p>
-                <div class="relative">
-                  <input ref="weightValueInput" v-model.number="weightForm.scaleValue"
-                    type="number" step="0.01" min="0.01" inputmode="decimal"
-                    placeholder="0.00"
-                    class="w-full border-2 border-gray-200 rounded-xl px-4 py-4 text-3xl font-black focus:outline-none focus:border-orange-400 text-center tracking-tight"
-                    @keydown.enter.prevent="confirmWeight" />
-                  <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">MZN</span>
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">3. Peso e Valor da Balança</p>
+
+                <!-- 3a — Peso -->
+                <div class="mb-3">
+                  <p class="text-xs text-gray-500 font-semibold mb-1">Peso lido na balança</p>
+                  <div class="relative">
+                    <input ref="weightScaleWeightInput" v-model.number="weightForm.scaleWeight"
+                      type="number" step="0.001" min="0.001" inputmode="decimal"
+                      :placeholder="`0.000`"
+                      class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-2xl font-black focus:outline-none focus:border-orange-400 text-center"
+                      @keydown.enter.prevent="weightValueInput?.focus()" />
+                    <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">{{ weightForm.unit }}</span>
+                  </div>
                 </div>
-                <div v-if="weightForm.scaleValue" class="mt-3 rounded-xl p-3 text-center" style="background:#FFF7ED;">
+
+                <!-- 3b — Valor da balança -->
+                <div>
+                  <p class="text-xs text-gray-500 font-semibold mb-1">Valor total mostrado na balança (MZN)</p>
+                  <div class="relative">
+                    <input ref="weightValueInput" v-model.number="weightForm.scaleValue"
+                      type="number" step="0.01" min="0.01" inputmode="decimal"
+                      placeholder="0.00"
+                      class="w-full border-2 border-gray-200 rounded-xl px-4 py-4 text-3xl font-black focus:outline-none focus:border-orange-400 text-center tracking-tight"
+                      @keydown.enter.prevent="confirmWeight" />
+                    <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">MZN</span>
+                  </div>
+                </div>
+
+                <!-- Resumo -->
+                <div v-if="weightForm.scaleValue && weightForm.scaleWeight" class="mt-3 rounded-xl p-3 text-center" style="background:#FFF7ED;">
                   <p class="text-xs text-gray-400">Total a cobrar</p>
                   <p class="text-4xl font-black mt-0.5" style="color:#F07820;">{{ fmt(weightForm.scaleValue) }}</p>
+                  <p class="text-xs text-gray-400 mt-1">{{ weightForm.scaleWeight }} {{ weightForm.unit }} · valor da balança</p>
                 </div>
                 <p v-else class="text-xs text-gray-400 text-center mt-2">
-                  Copia exactamente o valor que aparece no display da balança.
+                  Introduza o peso e depois o valor total que a balança mostra.
                 </p>
               </template>
             </div>
@@ -528,7 +549,7 @@
               Cancelar
             </button>
             <button @click="confirmWeight"
-              :disabled="weightMode === 'weight' ? !weightForm.amount : !weightForm.scaleValue"
+              :disabled="weightMode === 'weight' ? !weightForm.amount : (!weightForm.scaleWeight || !weightForm.scaleValue)"
               class="flex-1 py-3 rounded-xl text-white font-black text-sm transition disabled:opacity-40 active:scale-95"
               style="background:#F07820;">
               ✓ Adicionar ao carrinho
@@ -571,6 +592,7 @@
                 <div v-if="auth.user?.store?.phone" style="font-size:9px; color:#666;">{{ auth.user?.store?.phone }}</div>
                 <div style="font-size:10px; color:#666;">{{ formatDateTime(receipt.sale_at) }}</div>
                 <div style="font-size:10px; color:#666;">{{ receipt.local_id }}</div>
+                <div v-if="receipt.seller_name" style="font-size:10px; color:#666;">Vendedor: {{ receipt.seller_name }}</div>
               </div>
 
               <div style="border-top:1px dashed #ccc; margin:6px 0;"></div>
@@ -579,8 +601,11 @@
               <div v-for="item in receipt.items" :key="item._key ?? item.product_name" style="margin-bottom:4px;">
                 <div style="font-weight:700; font-size:11px;">{{ item.product_name }}</div>
                 <div style="display:flex; justify-content:space-between; color:#444; font-size:11px;">
-                  <span v-if="item.weight_amount">
-                    {{ item.weight_amount }}{{ item.weight_unit }} × {{ fmtN(item.unit_price) }}
+                  <span v-if="item.weight_amount && item.scale_value">
+                    ⚖️ {{ item.weight_amount }}{{ item.weight_unit }} · balança
+                  </span>
+                  <span v-else-if="item.weight_amount">
+                    {{ item.weight_amount }}{{ item.weight_unit }} × {{ fmtN(item.unit_price) }}/{{ item.weight_unit }}
                   </span>
                   <span v-else>
                     {{ item.quantity }} × {{ fmtN(item.unit_price) }}
@@ -719,15 +744,16 @@ function onSearchEnter() {
 // ── Produto por peso / balança ───────────────────────────────────────────────
 const weightProduct    = ref(null)
 const weightMode       = ref('weight')           // 'weight' | 'value'
-const weightForm       = reactive({ amount: '', unit: 'kg', scaleValue: '' })
+const weightForm       = reactive({ amount: '', unit: 'kg', scaleValue: '', scaleWeight: '' })
 // Unidades disponíveis são as configuradas no produto; fallback para lista padrão
 const weightUnits = computed(() =>
   weightProduct.value?.weight_units?.length
     ? weightProduct.value.weight_units
     : ['kg', 'g', 'l', 'ml']
 )
-const weightAmountInput = ref(null)
-const weightValueInput  = ref(null)
+const weightAmountInput      = ref(null)
+const weightValueInput       = ref(null)
+const weightScaleWeightInput = ref(null)
 
 const weightTotal = computed(() => {
   if (!weightProduct.value || !weightForm.amount) return 0
@@ -754,11 +780,12 @@ function clickProduct(p) {
   if (p.is_weighable) {
     weightProduct.value = p
     weightMode.value    = 'weight'
-    weightForm.amount   = ''
+    weightForm.amount      = ''
+    weightForm.scaleValue  = ''
+    weightForm.scaleWeight = ''
     // Usar a primeira unidade configurada no produto como unidade padrão
     const defaultUnit = p.weight_units?.[0] ?? p.weight_unit ?? 'kg'
-    weightForm.unit     = defaultUnit
-    weightForm.scaleValue = ''
+    weightForm.unit = defaultUnit
     // Auto-focar no input após render
     nextTick(() => {
       weightAmountInput.value?.focus()
@@ -774,20 +801,24 @@ function confirmWeight() {
   const key = `${p.id}_${Date.now()}`
 
   if (weightMode.value === 'value') {
-    // Modo balança: o valor total vem directamente da balança
-    if (!weightForm.scaleValue) return
+    // Modo balança: o vendedor insere peso + total mostrado na balança
+    if (!weightForm.scaleValue || !weightForm.scaleWeight) return
+    const sw = parseFloat(weightForm.scaleWeight)
+    const sv = parseFloat(weightForm.scaleValue)
+    // Preço unitário derivado (para registos de custo/lucro)
+    const derivedUnitPrice = sw > 0 ? parseFloat((sv / sw).toFixed(4)) : parseFloat(p.price)
     cart.value.push({
       _key:          key,
       product_id:    p.id,
       product_name:  p.name,
       product_sku:   p.sku,
-      unit_price:    parseFloat(p.price),
+      unit_price:    derivedUnitPrice,
       cost_price:    parseFloat(p.cost_price ?? 0),
       quantity:      1,
-      weight_amount: null,         // peso não foi inserido neste modo
+      weight_amount: sw,
       weight_unit:   weightForm.unit,
-      scale_value:   true,         // flag: total veio da balança
-      subtotal:      parseFloat(parseFloat(weightForm.scaleValue).toFixed(2)),
+      scale_value:   true,          // flag: total veio da balança directamente
+      subtotal:      parseFloat(sv.toFixed(2)),
     })
   } else {
     // Modo peso: calcula total a partir do peso inserido
@@ -951,6 +982,7 @@ async function finalizeSale() {
     change:         change.value,
     payment_method: payMethod.value,
     customer_name:  customerName.value || null,
+    seller_name:    auth.user?.name ?? null,
     sale_at:        new Date().toISOString(),
     items:          cart.value.map(i => ({
       product_id:    i.product_id > 0 ? i.product_id : null, // IDs locais negativos não existem no servidor

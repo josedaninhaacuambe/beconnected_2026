@@ -63,7 +63,9 @@
         <textarea v-model="form.description" placeholder="Descrição" rows="3" class="input-african resize-none"></textarea>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="text-bc-muted text-xs mb-1 block">Preço (MZN) *</label>
+            <label class="text-bc-muted text-xs mb-1 block">
+              {{ form.is_weighable ? `Preço por ${form.weight_unit} (MZN) *` : 'Preço (MZN) *' }}
+            </label>
             <input v-model="form.price" type="number" step="0.01" min="0" placeholder="0.00" class="input-african" required />
           </div>
           <div>
@@ -162,30 +164,58 @@
 
         <!-- Unidades disponíveis (só aparece para KG) -->
         <div v-if="form.is_weighable" class="space-y-2">
-          <label class="text-bc-muted text-xs block">Unidades disponíveis no POS (selecciona uma ou mais)</label>
+          <div class="flex items-center justify-between">
+            <label class="text-bc-muted text-xs block">Unidades disponíveis no POS</label>
+            <span class="text-xs font-semibold text-bc-gold">
+              ✓ {{ form.weight_units.length }} seleccionada{{ form.weight_units.length !== 1 ? 's' : '' }}:
+              {{ form.weight_units.join(', ') }}
+            </span>
+          </div>
           <div class="flex flex-wrap gap-2">
             <button
               v-for="u in ALL_WEIGHT_UNITS" :key="u.value"
               type="button"
               @click="toggleWeightUnit(u.value)"
-              :class="['px-3 py-1.5 rounded-lg text-sm font-medium border transition',
+              :class="['px-3 py-2 rounded-lg text-sm font-medium border-2 transition flex items-center gap-1.5',
                 form.weight_units.includes(u.value)
-                  ? 'border-bc-gold bg-bc-gold text-bc-dark'
-                  : 'border-bc-gold/30 text-bc-muted hover:border-bc-gold/60']"
+                  ? 'border-bc-gold bg-bc-gold text-bc-dark shadow-sm'
+                  : 'border-bc-gold/20 text-bc-muted hover:border-bc-gold/50 hover:text-bc-light']"
             >
+              <span v-if="form.weight_units.includes(u.value)" class="text-xs">✓</span>
               {{ u.label }}
             </button>
           </div>
           <p class="text-bc-muted text-xs">
-            Unidade padrão: <strong class="text-bc-gold">{{ form.weight_unit }}</strong> —
-            o vendedor pode escolher entre as unidades seleccionadas ao fazer a venda.
+            Clica para seleccionar/remover. Unidade padrão: <strong class="text-bc-gold">{{ form.weight_unit }}</strong>.
+            O vendedor pode escolher entre as unidades seleccionadas ao fazer a venda.
           </p>
         </div>
 
-        <!-- Stock inicial adapta-se ao tipo -->
-        <div v-if="form.is_weighable" class="bg-bc-surface-2/50 rounded-xl p-3">
+        <!-- Preços por unidade de medida (só aparece para produtos pesáveis com múltiplas unidades) -->
+        <div v-if="form.is_weighable && form.weight_units.length > 1" class="space-y-2">
+          <label class="text-bc-muted text-xs block font-semibold">Preços por outras unidades (opcional)</label>
+          <div class="space-y-2">
+            <div v-for="u in form.weight_units.filter(x => x !== form.weight_unit)" :key="u"
+              class="flex items-center gap-3 bg-bc-surface-2/30 rounded-xl px-3 py-2">
+              <span class="text-sm font-bold text-bc-gold w-14 flex-shrink-0">{{ u }}</span>
+              <input
+                v-model.number="form.weight_prices[u]"
+                type="number" step="0.01" min="0"
+                :placeholder="`0.00`"
+                class="flex-1 input-african text-sm"
+              />
+              <span class="text-xs text-bc-muted whitespace-nowrap">MZN / {{ u }}</span>
+            </div>
+          </div>
           <p class="text-bc-muted text-xs">
-            💡 O preço indicado acima é por <strong class="text-bc-light">{{ form.weight_unit }}</strong>.
+            Define o preço para cada unidade extra — o POS usará estes valores nos cálculos automáticos.
+          </p>
+        </div>
+        <!-- Info box quando só há uma unidade -->
+        <div v-else-if="form.is_weighable" class="bg-bc-surface-2/50 rounded-xl p-3">
+          <p class="text-bc-muted text-xs">
+            💡 O preço indicado em <strong class="text-bc-light">Informações do Produto</strong> é por
+            <strong class="text-bc-light">{{ form.weight_unit }}</strong>.
             O stock inicial representa a quantidade disponível em {{ form.weight_unit }}.
           </p>
         </div>
@@ -276,13 +306,21 @@ const form = reactive({
   is_weighable: false,
   weight_unit: 'kg',
   weight_units: ['kg'],
+  weight_prices: {},
 })
 
 function toggleWeightUnit(unit) {
   const idx = form.weight_units.indexOf(unit)
-  if (idx === -1) form.weight_units.push(unit)
-  else if (form.weight_units.length > 1) form.weight_units.splice(idx, 1)
-  // garantir que weight_unit (unidade padrão) é sempre a primeira seleccionada
+  if (idx === -1) {
+    form.weight_units.push(unit)
+    // Inicializar preço para a nova unidade se ainda não estiver definido
+    if (form.weight_prices[unit] === undefined) form.weight_prices[unit] = ''
+  } else if (form.weight_units.length > 1) {
+    form.weight_units.splice(idx, 1)
+    // Remover preço da unidade removida
+    delete form.weight_prices[unit]
+  }
+  // Garantir que weight_unit (unidade padrão) é sempre a primeira seleccionada
   form.weight_unit = form.weight_units[0]
 }
 
@@ -342,7 +380,13 @@ async function submit() {
     if (form.is_weighable) {
       fd.append('weight_unit', form.weight_unit)
       form.weight_units.forEach(u => fd.append('weight_units[]', u))
-      // produto pesável → modo de venda é peso
+      // Enviar preços por unidade (excluindo a unidade padrão cujo preço já está em form.price)
+      Object.entries(form.weight_prices).forEach(([unit, price]) => {
+        if (unit !== form.weight_unit && price !== '' && price !== null && price !== undefined) {
+          fd.append(`weight_prices[${unit}]`, price)
+        }
+      })
+      // Produto pesável → modo de venda é peso
       fd.append('selling_modes[]', 'weight')
     } else {
       form.selling_modes.forEach(mode => fd.append('selling_modes[]', mode))
@@ -398,6 +442,7 @@ onMounted(async () => {
         is_weighable:  p.is_weighable  ?? false,
         weight_unit:   p.weight_unit   ?? 'kg',
         weight_units:  p.weight_units?.length ? p.weight_units : (p.weight_unit ? [p.weight_unit] : ['kg']),
+        weight_prices: p.weight_prices ?? {},
       })
       if (p.images?.length) {
         existingImages.value = p.images

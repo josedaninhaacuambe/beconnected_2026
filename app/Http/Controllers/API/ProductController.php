@@ -371,6 +371,8 @@ class ProductController extends Controller
             'weight_unit'         => 'nullable|in:g,kg,l,ml,un,tonelada,litro',
             'weight_units'        => 'nullable|array',
             'weight_units.*'      => 'in:g,kg,l,ml,un,tonelada,litro',
+            'weight_prices'       => 'nullable|array',
+            'weight_prices.*'     => 'nullable|numeric|min:0',
             'waste_margin'        => 'nullable|numeric|min:0|max:100',
         ]);
 
@@ -408,6 +410,9 @@ class ProductController extends Controller
         $productData['selling_modes'] = $validated['selling_modes'] ?? ['unit'];
         if (isset($validated['weight_units'])) {
             $productData['weight_units'] = $validated['weight_units'];
+        }
+        if (isset($validated['weight_prices'])) {
+            $productData['weight_prices'] = $validated['weight_prices'];
         }
 
         $product = Product::create($productData);
@@ -457,6 +462,8 @@ class ProductController extends Controller
             'weight_unit'         => 'nullable|in:g,kg,l,ml,un,tonelada,litro',
             'weight_units'        => 'nullable|array',
             'weight_units.*'      => 'in:g,kg,l,ml,un,tonelada,litro',
+            'weight_prices'       => 'nullable|array',
+            'weight_prices.*'     => 'nullable|numeric|min:0',
             'waste_margin'        => 'nullable|numeric|min:0|max:100',
             'reason'              => 'nullable|string|max:255',
         ]);

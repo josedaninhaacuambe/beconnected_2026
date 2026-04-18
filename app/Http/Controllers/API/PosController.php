@@ -116,6 +116,7 @@ class PosController extends Controller
                         'is_weighable'  => $p->is_weighable,
                         'weight_unit'   => $p->weight_unit,
                         'weight_units'  => $p->weight_units ?: ($p->weight_unit ? [$p->weight_unit] : ['kg']),
+                        'weight_prices' => $p->weight_prices ?: null,
                         'category_id'   => $p->product_category_id ?? null,
                         'stock'         => $p->stock ? [
                             'quantity'        => $p->stock->quantity,
@@ -320,17 +321,19 @@ class PosController extends Controller
         ]);
 
         $product = $store->products()->findOrFail($validated['product_id']);
-        $stock   = ProductStock::firstOrCreate(['product_id' => $product->id], ['quantity' => 0, 'minimum_stock' => 5, 'unit' => 'un']);
+        $stock   = ProductStock::firstOrCreate(['product_id' => $product->id], ['quantity' => 0, 'weight_quantity' => 0, 'minimum_stock' => 5, 'unit' => 'un']);
 
-        $before = $stock->quantity;
+        // Produtos pesáveis usam weight_quantity; produtos por unidade usam quantity
+        $field  = $product->is_weighable ? 'weight_quantity' : 'quantity';
+        $before = $stock->$field ?? 0;
 
         if ($validated['type'] === 'in') {
-            $stock->increment('quantity', $validated['quantity']);
+            $stock->increment($field, $validated['quantity']);
         } elseif ($validated['type'] === 'out') {
-            abort_if($stock->quantity < $validated['quantity'], 422, 'Stock insuficiente.');
-            $stock->decrement('quantity', $validated['quantity']);
+            abort_if(($stock->$field ?? 0) < $validated['quantity'], 422, 'Stock insuficiente.');
+            $stock->decrement($field, $validated['quantity']);
         } else {
-            $stock->update(['quantity' => $validated['quantity']]);
+            $stock->update([$field => $validated['quantity']]);
         }
 
         StockMovement::create([
@@ -338,7 +341,7 @@ class PosController extends Controller
             'type'            => $validated['type'],
             'quantity'        => $validated['quantity'],
             'quantity_before' => $before,
-            'quantity_after'  => $stock->fresh()->quantity,
+            'quantity_after'  => $stock->fresh()->$field ?? 0,
             'reason'          => $validated['reason'] ?? ucfirst($validated['type']) . ' manual',
             'user_id'         => $request->user()->id,
         ]);
@@ -547,9 +550,10 @@ class PosController extends Controller
         // ── Por vendedor (POS) ─────────────────────────────────────────────────
         $bySeller = $posSales->groupBy('user_id')
             ->map(fn($g) => [
-                'name'  => $g->first()->user?->name ?? 'Desconhecido',
-                'total' => $g->sum('total'),
-                'count' => $g->count(),
+                'user_id' => $g->first()->user_id,
+                'name'    => $g->first()->user?->name ?? 'Desconhecido',
+                'total'   => $g->sum('total'),
+                'count'   => $g->count(),
             ])->values();
 
         return response()->json([
@@ -559,9 +563,56 @@ class PosController extends Controller
             'by_payment'    => $byPayment,
             'top_products'  => $topProducts,
             'by_seller'     => $bySeller,
-            'pos_sales'     => $posSales->take(50),
+            'pos_sales'     => $posSales->take(500),
             'online_orders' => $onlineOrders->take(50),
         ]);
+    }
+
+    // ─── Apagar venda (apenas dono da loja) ───────────────────────────────────
+    public function deleteSale(Request $request, PosSale $sale): JsonResponse
+    {
+        $store = $this->resolveStore($request);
+
+        // Apenas o dono da loja pode apagar vendas
+        abort_unless(
+            $request->user()->role === 'store_owner' || $request->user()->role === 'admin',
+            403,
+            'Apenas o dono da loja pode apagar vendas.'
+        );
+
+        // Garantir que a venda pertence à loja do utilizador
+        abort_unless($sale->store_id === $store->id, 404, 'Venda não encontrada.');
+
+        // Reverter stock dos itens da venda
+        foreach ($sale->items as $item) {
+            if (!$item->product_id) continue;
+            $product = \App\Models\Product::find($item->product_id);
+            if (!$product) continue;
+            $stock = ProductStock::firstOrCreate(
+                ['product_id' => $item->product_id],
+                ['quantity' => 0, 'weight_quantity' => 0, 'minimum_stock' => 0, 'unit' => 'un']
+            );
+            if ($product->is_weighable && $item->weight_amount) {
+                $stock->increment('weight_quantity', $item->weight_amount);
+            } else {
+                $stock->increment('quantity', $item->quantity);
+            }
+            StockMovement::create([
+                'product_id'      => $item->product_id,
+                'type'            => 'in',
+                'quantity'        => $product->is_weighable && $item->weight_amount ? $item->weight_amount : $item->quantity,
+                'quantity_before' => $product->is_weighable ? ($stock->weight_quantity - ($item->weight_amount ?? 0)) : ($stock->quantity - $item->quantity),
+                'quantity_after'  => $product->is_weighable ? $stock->weight_quantity : $stock->quantity,
+                'reason'          => 'Reversão — venda #' . $sale->id . ' apagada',
+                'user_id'         => $request->user()->id,
+            ]);
+        }
+
+        $sale->delete();
+
+        Cache::forget("pos_products_{$store->id}");
+
+        return response()->json(['message' => 'Venda apagada e stock revertido.']);
     }
 
     // ─── Fecho de caixa do dia ─────────────────────────────────────────────────
@@ -660,7 +711,8 @@ class PosController extends Controller
             ->with('stock')
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'sku', 'barcode', 'price', 'images']);
+            ->get(['id', 'name', 'sku', 'barcode', 'price', 'images',
+                   'is_weighable', 'weight_unit', 'weight_units']);
 
         return response()->json($products);
     }
