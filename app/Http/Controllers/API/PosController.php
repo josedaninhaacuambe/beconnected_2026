@@ -759,12 +759,18 @@ class PosController extends Controller
         $this->requirePosPermission($request, 'gerir_stock');
         $store = $this->resolveStore($request);
 
-        $movements = StockMovement::whereIn('product_id', $store->products()->pluck('id'))
-            ->with(['product:id,name,sku', 'user:id,name'])
-            ->orderByDesc('created_at')
-            ->paginate(30);
+        $productIds = $store->products()->pluck('id');
 
-        return response()->json($movements);
+        $query = StockMovement::whereIn('product_id', $productIds)
+            ->with(['product:id,name,sku', 'user:id,name'])
+            ->orderByDesc('created_at');
+
+        // Filtro opcional por produto específico
+        if ($productId = $request->integer('product_id')) {
+            $query->where('product_id', $productId);
+        }
+
+        return response()->json($query->paginate(50));
     }
 
     // ─── Funcionários ─────────────────────────────────────────────────────────
@@ -773,7 +779,7 @@ class PosController extends Controller
         $store = $this->resolveStore($request);
 
         $employees = StoreEmployee::where('store_id', $store->id)
-            ->with('user:id,name,email,avatar')
+            ->with('user:id,name,email,phone,avatar')
             ->get();
 
         return response()->json($employees);
@@ -1050,6 +1056,7 @@ class PosController extends Controller
 
         $validated = $request->validate([
             'name'          => 'required|string|max:255',
+            'phone'         => 'required|string|max:30',
             'email'         => 'required|email|max:255|unique:users,email',
             'password'      => 'required|string|min:6',
             'role'          => 'required|in:manager,cashier,stock_keeper,viewer',
@@ -1065,6 +1072,7 @@ class PosController extends Controller
         // Criar utilizador sem OTP — activo imediatamente
         $newUser = \App\Models\User::create([
             'name'           => $validated['name'],
+            'phone'          => $validated['phone'],
             'email'          => $validated['email'],
             'password'       => $validated['password'], // hashed pelo cast
             'role'           => 'customer',
@@ -1083,7 +1091,7 @@ class PosController extends Controller
 
         return response()->json([
             'message'  => 'Conta criada com sucesso.',
-            'employee' => $emp->load('user:id,name,email'),
+            'employee' => $emp->load('user:id,name,email,phone'),
         ], 201);
     }
 

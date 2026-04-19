@@ -101,6 +101,7 @@ const navItems = computed(() => {
     { to: '/admin/utilizadores', icon: '👥', label: 'Utilizadores', fullAdminOnly: true },
     { to: '/admin/lojas', icon: '🏪', label: 'Lojas', fullAdminOnly: true },
     { to: '/admin/colaboradores', icon: '🤝', label: 'Colaboradores', fullAdminOnly: true },
+    { to: '/admin/funcionarios-loja', icon: '👔', label: 'Func. de Loja', fullAdminOnly: true },
     { to: '/admin/visibilidade', icon: '📡', label: 'Visibilidade', permission: 'manage_visibility' },
     { to: '/admin/pedidos', icon: '📦', label: 'Pedidos', permission: 'manage_orders' },
     { to: '/admin/entregas', icon: '🚚', label: 'Entregas', permission: 'manage_deliveries' },

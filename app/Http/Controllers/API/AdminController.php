@@ -282,4 +282,36 @@ class AdminController extends Controller
 
         return response()->json($data);
     }
+
+    // ─── Funcionários de todas as lojas (histórico permanente) ───────────────
+    public function storeEmployees(Request $request): JsonResponse
+    {
+        $query = StoreEmployee::with([
+            'user:id,name,email,phone,created_at',
+            'store:id,name,slug',
+            'addedBy:id,name',
+        ]);
+
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('user', fn($u) =>
+                    $u->where('name',  'like', "%{$search}%")
+                      ->orWhere('email', 'like', "%{$search}%")
+                      ->orWhere('phone', 'like', "%{$search}%")
+                );
+            });
+        }
+
+        if ($storeId = $request->integer('store_id')) {
+            $query->where('store_id', $storeId);
+        }
+
+        if ($request->filled('active')) {
+            $query->where('is_active', (bool) $request->integer('active'));
+        }
+
+        $employees = $query->orderByDesc('created_at')->paginate(50);
+
+        return response()->json($employees);
+    }
 }

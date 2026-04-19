@@ -40,6 +40,12 @@
                 class="w-full border border-gray-200 rounded-xl px-3 py-2.5 mt-1 text-sm focus:outline-none focus:border-bc-gold" />
             </div>
             <div class="col-span-2 sm:col-span-1">
+              <label class="text-xs font-semibold text-gray-500">Contacto / Telefone *</label>
+              <input v-model="createForm.phone" type="tel" placeholder="+258 84 000 0000" required
+                class="w-full border border-gray-200 rounded-xl px-3 py-2.5 mt-1 text-sm focus:outline-none focus:border-bc-gold" />
+              <p class="text-[10px] text-gray-400 mt-0.5">Guardado mesmo após remoção da equipa.</p>
+            </div>
+            <div class="col-span-2 sm:col-span-1">
               <label class="text-xs font-semibold text-gray-500">Email *</label>
               <input v-model="createForm.email" type="email" placeholder="joao.silva@exemplo.com" required
                 class="w-full border border-gray-200 rounded-xl px-3 py-2.5 mt-1 text-sm focus:outline-none focus:border-bc-gold" />
@@ -177,6 +183,7 @@
               <div class="flex-1 min-w-0">
                 <p class="font-semibold text-sm text-gray-800">{{ emp.user?.name ?? 'Utilizador' }}</p>
                 <p class="text-xs text-gray-400">{{ emp.user?.email }}</p>
+                <p v-if="emp.user?.phone" class="text-xs text-gray-400">📞 {{ emp.user.phone }}</p>
               </div>
               <span class="text-xs font-bold px-2.5 py-1 rounded-full" :class="roleBadge(emp.role)">
                 {{ roleLabel(emp.role) }}
@@ -324,6 +331,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import axios from 'axios'
+import { useAuthStore } from '@/stores/auth.js'
 import {
   useOfflinePos,
   cacheEmployees, getCachedEmployees,
@@ -331,6 +339,7 @@ import {
 } from '@/composables/useOfflinePos'
 
 const { isOnline, pendingEmployeeCount, refreshPendingCount } = useOfflinePos()
+const auth = useAuthStore()
 
 const employees  = ref([])
 const loading    = ref(true)
@@ -343,7 +352,7 @@ const createLoading = ref(false)
 const createError   = ref('')
 const createSuccess = ref('')
 const showCreatePass = ref(false)
-const createForm = reactive({ name: '', email: '', password: '', role: '', permissions: [] })
+const createForm = reactive({ name: '', phone: '', email: '', password: '', role: '', permissions: [] })
 
 function selectCreateRole(role) {
   createForm.role = role
@@ -360,7 +369,7 @@ async function createAccount() {
   createSuccess.value = ''
   createLoading.value = true
   const payload = {
-    name: createForm.name, email: createForm.email,
+    name: createForm.name, phone: createForm.phone, email: createForm.email,
     password: createForm.password, role: createForm.role,
     permissions: createForm.permissions,
   }
@@ -379,7 +388,7 @@ async function createAccount() {
       createSuccess.value = `Conta criada! ${createForm.name} já pode entrar com ${createForm.email}`
       await loadEmployees()
     }
-    Object.assign(createForm, { name: '', email: '', password: '', role: '', permissions: [] })
+    Object.assign(createForm, { name: '', phone: '', email: '', password: '', role: '', permissions: [] })
     showCreatePass.value = false
   } catch (e) {
     createError.value = e.response?.data?.errors?.email?.[0]

@@ -83,6 +83,7 @@ const routes = [
             { path: 'feedbacks', name: 'admin-feedbacks', component: () => import('../views/admin/Feedbacks.vue') },
             { path: 'entregas', name: 'admin-deliveries', component: () => import('../views/admin/Deliveries.vue') },
             { path: 'colaboradores', name: 'admin-staff', component: () => import('../views/admin/Colaboradores.vue') },
+            { path: 'funcionarios-loja', name: 'admin-store-employees', component: () => import('../views/admin/AdminEmployees.vue') },
             { path: 'visibilidade', name: 'admin-visibility', component: () => import('../views/admin/Visibilidade.vue') },
             { path: 'pedidos', name: 'admin-pedidos', component: () => import('../views/admin/Pedidos.vue') },
         ],

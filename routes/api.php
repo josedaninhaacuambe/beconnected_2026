@@ -315,6 +315,9 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
         // Visão geral
         Route::get('overview', [AdminController::class, 'overview']);
 
+        // Funcionários de loja (histórico completo, mesmo removidos)
+        Route::get('store-employees', [AdminController::class, 'storeEmployees']);
+
         // Gestão de utilizadores
         Route::get('users', [AdminController::class, 'users']);
         Route::put('users/{user}/promote-store-owner', [AdminController::class, 'promoteToStoreOwner']);

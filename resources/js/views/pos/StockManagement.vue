@@ -84,6 +84,11 @@
                 class="flex-1 py-1.5 rounded-lg text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition">
                 ± Ajuste
               </button>
+              <button @click="openProductHistory(p)"
+                class="px-3 py-1.5 rounded-lg text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition"
+                title="Ver histórico deste produto">
+                📋
+              </button>
             </div>
           </div>
           <p v-if="!filteredUnitProducts.length && !loading" class="text-center py-12 text-gray-400">Nenhum produto encontrado.</p>
@@ -144,6 +149,11 @@
               <button @click="openMovement(p, 'adjustment')"
                 class="flex-1 py-1.5 rounded-lg text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition">
                 ± Ajuste
+              </button>
+              <button @click="openProductHistory(p)"
+                class="px-3 py-1.5 rounded-lg text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition"
+                title="Ver histórico deste produto">
+                📋
               </button>
             </div>
           </div>
@@ -213,6 +223,64 @@
       </div>
 
     </div>
+
+    <!-- ── Modal: histórico por produto ──────────────────────────────────────── -->
+    <Teleport to="body">
+      <div v-if="prodHistModal.open" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" style="background:rgba(0,0,0,0.5)" @click.self="prodHistModal.open = false">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col" style="max-height:85vh">
+          <!-- Cabeçalho -->
+          <div class="flex items-center gap-3 p-5 border-b border-gray-100">
+            <div class="flex-1 min-w-0">
+              <h3 class="font-bold text-base text-gray-800 truncate">📋 {{ prodHistModal.product?.name }}</h3>
+              <p class="text-xs text-gray-400">SKU: {{ prodHistModal.product?.sku || '—' }}</p>
+            </div>
+            <button @click="prodHistModal.open = false" class="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+          </div>
+
+          <!-- Corpo -->
+          <div class="overflow-y-auto flex-1 p-4">
+            <div v-if="prodHistModal.loading" class="space-y-2">
+              <div v-for="i in 5" :key="i" class="skeleton h-12 rounded-xl"></div>
+            </div>
+            <div v-else-if="!prodHistModal.movements.length" class="text-center py-12 text-gray-400">
+              <span class="text-3xl block mb-2">📭</span>
+              <p class="text-sm">Nenhum movimento registado para este produto.</p>
+            </div>
+            <div v-else class="space-y-2">
+              <div v-for="m in prodHistModal.movements" :key="m.id"
+                class="bg-gray-50 rounded-xl border border-gray-100 px-4 py-3 flex items-center gap-3">
+                <span class="text-xl flex-shrink-0">{{ m.type === 'in' ? '📥' : m.type === 'out' ? '📤' : '⚖️' }}</span>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-semibold text-gray-800">
+                    {{ m.type === 'in' ? 'Entrada' : m.type === 'out' ? 'Saída' : 'Ajuste' }}
+                    <span class="font-black" :class="m.type === 'in' ? 'text-green-600' : m.type === 'out' ? 'text-red-500' : 'text-blue-500'">
+                      {{ m.type === 'in' ? '+' : m.type === 'out' ? '−' : '' }}{{ m.quantity }}
+                    </span>
+                  </p>
+                  <p class="text-xs text-gray-400 truncate">
+                    {{ m.reason || 'Sem motivo' }}
+                    <span v-if="m.user?.name"> · {{ m.user.name }}</span>
+                  </p>
+                </div>
+                <div class="text-right flex-shrink-0">
+                  <p class="text-xs text-gray-500 font-semibold">{{ m.quantity_before }} → {{ m.quantity_after }}</p>
+                  <p class="text-[10px] text-gray-400">{{ formatDate(m.created_at) }}</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Paginação -->
+            <div v-if="prodHistModal.lastPage > 1" class="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
+              <button :disabled="prodHistModal.page <= 1" @click="loadProductHistoryPage(prodHistModal.page - 1)"
+                class="px-4 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 disabled:opacity-40">← Anterior</button>
+              <span class="text-xs text-gray-400">Página {{ prodHistModal.page }} / {{ prodHistModal.lastPage }}</span>
+              <button :disabled="prodHistModal.page >= prodHistModal.lastPage" @click="loadProductHistoryPage(prodHistModal.page + 1)"
+                class="px-4 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 disabled:opacity-40">Seguinte →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- ── Modal de movimento ──────────────────────────────────────────────── -->
     <Teleport to="body">
@@ -463,6 +531,31 @@ function exportStockCsv() {
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
+}
+
+// ── Histórico por produto ────────────────────────────────────────────────────
+const prodHistModal = ref({
+  open: false, product: null, movements: [],
+  loading: false, page: 1, lastPage: 1,
+})
+
+async function openProductHistory(product) {
+  prodHistModal.value = { open: true, product, movements: [], loading: true, page: 1, lastPage: 1 }
+  await loadProductHistoryPage(1)
+}
+
+async function loadProductHistoryPage(page) {
+  prodHistModal.value.loading = true
+  try {
+    const { data } = await axios.get('/pos/stock/history', {
+      params: { product_id: prodHistModal.value.product.id, page },
+    })
+    prodHistModal.value.movements = data.data
+    prodHistModal.value.page      = data.current_page
+    prodHistModal.value.lastPage  = data.last_page
+  } finally {
+    prodHistModal.value.loading = false
+  }
 }
 
 function openMovement(product, type) {
