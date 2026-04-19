@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Jobs\IndexProductInSearch;
 use App\Models\Brand;
 use App\Models\PriceHistory;
+use App\Models\StoreEmployee;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductStock;
@@ -350,7 +351,12 @@ class ProductController extends Controller
 
         if ($user->isStoreOwner() || $user->isAdmin()) {
             $store = $this->resolveOwnerStore($request);
-        } elseif ($employee = $user->activePosEmployee) {
+        } else {
+            // Funcionário/gerente — relação ou query directa
+            $employee = $user->activePosEmployee
+                ?? StoreEmployee::where('user_id', $user->id)->where('is_active', true)->first();
+
+            abort_unless($employee, 403, 'Sem permissão para aceder a este recurso.');
             abort_unless(
                 $employee->hasPermission('adicionar_produtos'),
                 403,
@@ -358,8 +364,6 @@ class ProductController extends Controller
             );
             $store = $employee->store;
             abort_unless($store, 404);
-        } else {
-            abort(403, 'Sem permissão para aceder a este recurso.');
         }
 
         $validated = $request->validate([
