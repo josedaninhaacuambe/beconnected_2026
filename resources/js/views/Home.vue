@@ -76,11 +76,11 @@
         </div>
 
         <!-- ═════════════════════════════════════════════════════════════════
-             PESQUISA POR LOCALIZAÇÃO (Dentro da Imagem - Mobile)
+             PESQUISA POR LOCALIZAÇÃO (Apenas desktop)
              ═════════════════════════════════════════════════════════════════ -->
-        <div class="w-full max-w-2xl space-y-3 pb-10">
+        <div class="hidden md:block w-full max-w-2xl space-y-3 pb-10">
           <h3 class="text-white font-bold text-lg">Pesquisar por Localização</h3>
-          
+
           <!-- Botões de localização perto de mim -->
           <div class="flex justify-start gap-2 flex-wrap">
             <button

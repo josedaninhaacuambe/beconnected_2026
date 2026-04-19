@@ -188,6 +188,14 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
         // Produtos visíveis ao dono da loja e aos funcionários do POS
         Route::get('products', [ProductController::class, 'myProducts']);
 
+        // Criar/editar produtos — permitido ao dono, admin E gerente/funcionário com permissão
+        Route::post('products', [ProductController::class, 'storeProduct']);
+        Route::put('products/{product}', [ProductController::class, 'updateProduct']);
+        Route::post('products/{product}/stock', [ProductController::class, 'updateStock']);
+        Route::get('products/{product}/stock/movements', [ProductController::class, 'stockMovements']);
+        Route::get('products/{product}/price-history',  [ProductController::class, 'priceHistory']);
+        Route::post('products/fetch-image', [ProductController::class, 'fetchAutoImage']);
+
         Route::middleware('role:store_owner,admin')->group(function () {
             Route::get('/', [StoreController::class, 'myStore']);
             Route::get('all', [StoreController::class, 'myStores']);   // lista todas as lojas do dono
@@ -195,14 +203,8 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
             Route::post('update', [StoreController::class, 'updateMyStore']);
             Route::get('dashboard', [StoreController::class, 'dashboard']);
 
-            // Produtos
-            Route::post('products', [ProductController::class, 'storeProduct']);
-            Route::put('products/{product}', [ProductController::class, 'updateProduct']);
+            // Apagar produto — apenas dono/admin
             Route::delete('products/{product}', [ProductController::class, 'destroyProduct']);
-            Route::post('products/{product}/stock', [ProductController::class, 'updateStock']);
-            Route::get('products/{product}/stock/movements', [ProductController::class, 'stockMovements']);
-            Route::get('products/{product}/price-history',  [ProductController::class, 'priceHistory']);
-            Route::post('products/fetch-image', [ProductController::class, 'fetchAutoImage']);
 
             // Pedidos da loja
             Route::get('orders', [OrderController::class, 'storeOrders']);
