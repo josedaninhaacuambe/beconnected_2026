@@ -344,7 +344,22 @@ class ProductController extends Controller
 
     public function storeProduct(Request $request): JsonResponse
     {
-        $store = $this->resolveOwnerStore($request);
+        $user = $request->user();
+        $store = null;
+
+        if ($user->isStoreOwner() || $user->isAdmin()) {
+            $store = $this->resolveOwnerStore($request);
+        } elseif ($employee = $user->activePosEmployee) {
+            abort_unless(
+                $employee->hasPermission('adicionar_produtos'),
+                403,
+                'Sem permissão para adicionar produtos.'
+            );
+            $store = $employee->store;
+            abort_unless($store, 404);
+        } else {
+            abort(403, 'Sem permissão para aceder a este recurso.');
+        }
 
         $validated = $request->validate([
             'product_category_id' => 'required|exists:product_categories,id',
