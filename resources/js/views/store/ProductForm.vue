@@ -31,7 +31,7 @@
         >
           <span class="text-3xl mb-1 block">📷</span>
           <p class="text-bc-muted text-sm">Clica ou arrasta imagens aqui</p>
-          <p class="text-bc-muted text-xs mt-1">JPG, PNG — máx. 2MB por imagem</p>
+          <p class="text-bc-muted text-xs mt-1">JPG, PNG, WebP — máx. 10 MB · comprimida automaticamente</p>
         </div>
         <input ref="imgInput" type="file" accept="image/*" multiple class="hidden" @change="onImagesChange" />
 
@@ -57,9 +57,39 @@
       <div class="card-african p-5 space-y-4">
         <h2 class="text-bc-gold font-semibold">Informações do Produto</h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <input v-model="form.name" type="text" placeholder="Nome do produto *" class="input-african" required />
+          <div class="relative">
+            <input v-model="form.name" type="text" placeholder="Nome do produto *" class="input-african" required @input="onNameInput" />
+          </div>
           <input v-model="form.sku" type="text" placeholder="SKU / Referência" class="input-african" />
         </div>
+
+        <!-- ── Sugestões da Biblioteca de Imagens ──────────────────────────── -->
+        <div v-if="libraryImages.length > 0" class="rounded-xl border border-bc-gold/30 bg-bc-gold/5 p-3">
+          <p class="text-xs font-semibold text-bc-gold mb-2">
+            📚 {{ libraryImages.length }} imagem{{ libraryImages.length > 1 ? 'ns' : '' }} na biblioteca para "{{ form.name }}" — clica para usar
+          </p>
+          <div class="flex gap-2 flex-wrap">
+            <button v-for="img in libraryImages" :key="img.id" type="button"
+              @click="useLibraryImage(img)"
+              class="relative group rounded-xl overflow-hidden border-2 transition flex-shrink-0"
+              :class="selectedLibraryImage?.id === img.id ? 'border-bc-gold ring-2 ring-bc-gold/50' : 'border-bc-gold/20 hover:border-bc-gold/60'"
+              style="width:80px;height:80px">
+              <img :src="img.url" class="w-full h-full object-cover" :alt="img.name" loading="lazy" />
+              <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex flex-col items-center justify-center gap-0.5">
+                <span class="text-white text-[10px] font-bold">Usar</span>
+                <span class="text-white/70 text-[9px]">{{ img.use_count }}× usada</span>
+              </div>
+              <div v-if="selectedLibraryImage?.id === img.id"
+                class="absolute inset-0 bg-bc-gold/30 flex items-center justify-center">
+                <span class="text-white text-xl font-black">✓</span>
+              </div>
+            </button>
+          </div>
+          <p v-if="selectedLibraryImage" class="text-xs text-bc-gold mt-2 font-semibold">
+            ✓ Imagem da biblioteca seleccionada — ou carrega uma tua própria para substituir.
+          </p>
+        </div>
+        <div v-else-if="searchingLibrary" class="text-xs text-bc-muted">🔍 A pesquisar na biblioteca...</div>
         <textarea v-model="form.description" placeholder="Descrição" rows="3" class="input-african resize-none"></textarea>
         <div class="grid grid-cols-2 gap-3">
           <div>
@@ -286,6 +316,45 @@ const existingImages = ref([]) // URLs already stored (edit mode)
 const autoImageUrl = ref('')
 const fetchingImage = ref(false)
 
+// ── Biblioteca de imagens ────────────────────────────────────────────────────
+const libraryImages       = ref([])
+const searchingLibrary    = ref(false)
+const selectedLibraryImage = ref(null)
+let libraryTimer = null
+
+function onNameInput() {
+  clearTimeout(libraryTimer)
+  selectedLibraryImage.value = null
+  if (!form.name || form.name.length < 3) {
+    libraryImages.value = []
+    return
+  }
+  libraryTimer = setTimeout(searchLibrary, 400)
+}
+
+async function searchLibrary() {
+  searchingLibrary.value = true
+  try {
+    const { data } = await axios.get('/product-images', { params: { name: form.name } })
+    libraryImages.value = data
+  } catch {
+    libraryImages.value = []
+  } finally {
+    searchingLibrary.value = false
+  }
+}
+
+async function useLibraryImage(img) {
+  if (selectedLibraryImage.value?.id === img.id) {
+    // Toggle off
+    selectedLibraryImage.value = null
+    return
+  }
+  selectedLibraryImage.value = img
+  // Marcar utilização na API (fire-and-forget)
+  axios.post(`/product-images/${img.id}/use`).catch(() => {})
+}
+
 const ALL_WEIGHT_UNITS = [
   { value: 'kg',       label: 'kg (quilograma)' },
   { value: 'g',        label: 'g (grama)' },
@@ -392,6 +461,12 @@ async function submit() {
       form.selling_modes.forEach(mode => fd.append('selling_modes[]', mode))
     }
     imageFiles.value.forEach(f => fd.append('images[]', f))
+
+    // Se nenhuma imagem nova foi carregada mas o utilizador seleccionou uma da biblioteca,
+    // enviar o path da biblioteca como imagem existente
+    if (imageFiles.value.length === 0 && selectedLibraryImage.value && !isEditing.value) {
+      fd.append('library_image_url', selectedLibraryImage.value.url)
+    }
 
     if (isEditing.value) {
       fd.append('_method', 'PUT')

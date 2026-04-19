@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductStock;
 use App\Models\Store;
+use App\Services\ImageLibraryService;
 use App\Services\ProductImageService;
 use App\Services\Search\ProductSearchService;
 use App\Traits\ResolvesOwnerStore;
@@ -372,12 +373,13 @@ class ProductController extends Controller
             'sku'                 => 'nullable|string|max:100',
             'barcode'             => 'nullable|string|max:100',
             'model'               => 'nullable|string|max:255',
+            'library_image_url'   => 'nullable|url',
             'attributes'          => 'nullable|array',
             'initial_stock'       => 'required|numeric|min:0',
             'minimum_stock'       => 'nullable|numeric|min:0',
             'unit'                => 'nullable|string|max:50',
             'images'              => 'nullable|array',
-            'images.*'            => 'image|max:2048',
+            'images.*'            => 'image|max:10240', // 10 MB — comprimida antes de guardar
             'pos_only'            => 'nullable|boolean',
             'availability'        => 'nullable|in:virtual_store,pos,both',
             'selling_modes'       => 'nullable|array',
@@ -391,24 +393,34 @@ class ProductController extends Controller
             'waste_margin'        => 'nullable|numeric|min:0|max:100',
         ]);
 
-        $images = [];
-        if ($request->hasFile('images')) {
-            foreach ($request->file('images') as $image) {
-                $images[] = $image->store('products', 'public');
+        $images     = [];
+        $imageFiles = $request->hasFile('images') ? $request->file('images') : [];
+
+        if ($imageFiles) {
+            $libraryService = app(ImageLibraryService::class);
+            foreach ($imageFiles as $imageFile) {
+                $path = $imageFile->store('products', 'public');
+                $images[] = $path;
+                // Adicionar à biblioteca partilhada em background (não bloqueia a resposta)
+                try {
+                    $libraryService->addFromPath($path, $validated['name'], $request->user()->id);
+                } catch (\Throwable) {
+                    // Biblioteca não é crítica — falha silenciosa
+                }
             }
         }
 
-        // Se não foram fornecidas imagens, buscar automaticamente na internet
+        // Se não foram fornecidas imagens: usar da biblioteca ou buscar na internet
         if (empty($images)) {
-            $brandName = isset($validated['brand_id'])
-                ? Brand::find($validated['brand_id'])?->name
-                : null;
-            $autoImage = (new ProductImageService())->fetchForProduct($validated['name'], $brandName);
-            if ($autoImage) {
-                $images = [$autoImage];
+            if (!empty($validated['library_image_url'])) {
+                // Utilizador escolheu uma imagem da biblioteca partilhada
+                $images = [$validated['library_image_url']];
             } else {
-                // Usar imagem padrão se não conseguir buscar automaticamente
-                $images = ['Produto.png'];
+                $brandName = isset($validated['brand_id'])
+                    ? Brand::find($validated['brand_id'])?->name
+                    : null;
+                $autoImage = (new ProductImageService())->fetchForProduct($validated['name'], $brandName);
+                $images = $autoImage ? [$autoImage] : ['Produto.png'];
             }
         }
 
@@ -467,7 +479,7 @@ class ProductController extends Controller
             'product_category_id' => 'nullable|exists:product_categories,id',
             'store_section_id'    => 'nullable|exists:store_sections,id',
             'images'              => 'nullable|array',
-            'images.*'            => 'image|max:2048',
+            'images.*'            => 'image|max:10240', // 10 MB — comprimida antes de guardar
             'minimum_stock'       => 'nullable|numeric|min:0',
             'pos_only'            => 'nullable|boolean',
             'availability'        => 'nullable|in:virtual_store,pos,both',

@@ -22,6 +22,7 @@ use App\Http\Controllers\API\FeedbackController;
 use App\Http\Controllers\API\PosController;
 use App\Http\Controllers\API\ReviewController;
 use App\Http\Controllers\API\StoreSectionController;
+use App\Http\Controllers\API\ProductImageLibraryController;
 use App\Http\Controllers\API\VisibilityController;
 use Illuminate\Support\Facades\Route;
 
@@ -171,6 +172,13 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
         Route::post('{delivery}/accept', [DeliveryController::class, 'acceptDelivery']);
         Route::post('{delivery}/status', [DeliveryController::class, 'updateDeliveryStatus']);
         Route::post('{delivery}/confirm-receipt', [DeliveryController::class, 'confirmReceipt']);
+    });
+
+    // ─── Biblioteca partilhada de imagens de produtos ─────────────────────────
+    Route::prefix('product-images')->group(function () {
+        Route::get('/',          [ProductImageLibraryController::class, 'search']);   // ?name=...
+        Route::post('/',         [ProductImageLibraryController::class, 'store']);    // upload
+        Route::post('{image}/use', [ProductImageLibraryController::class, 'markUsed']); // incrementar uso
     });
 
     // =============================================
