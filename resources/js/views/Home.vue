@@ -29,14 +29,14 @@
       <div class="relative z-10 flex flex-col justify-end md:justify-center min-h-screen md:min-h-[clamp(320px,45vw,620px)] px-4 sm:px-14 max-w-2xl"
            style="min-height: 100vh; md:min-height: clamp(320px, 45vw, 620px);">
 
-        <!-- Título — oculto no mobile para não tapar a imagem -->
-        <h1 class="hidden md:block text-3xl sm:text-5xl md:text-6xl lg:text-7xl text-white leading-tight mb-4" style="color:#ffffff;">
+        <!-- Título — visível em todos os tamanhos, acima do input -->
+        <h1 class="text-2xl sm:text-5xl md:text-6xl lg:text-7xl text-white leading-tight mb-2 md:mb-4 drop-shadow-lg" style="color:#ffffff;">
           COMPRA. VENDE.<br>
           <span style="color:#F07820;">CONECTA.</span>
         </h1>
 
-        <!-- Texto descritivo - oculto no mobile -->
-        <p class="hidden md:block text-white text-base sm:text-xl mb-8 max-w-sm font-semibold drop-shadow-lg">
+        <!-- Subtítulo -->
+        <p class="text-white text-xs sm:text-xl mb-4 md:mb-8 max-w-sm font-semibold drop-shadow-lg opacity-90">
           O mercado digital de Moçambique
         </p>
 
