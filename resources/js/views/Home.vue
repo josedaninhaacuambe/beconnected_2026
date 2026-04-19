@@ -19,27 +19,29 @@
         />
       </picture>
 
-      <!-- Overlay escuro (mobile only) para melhor legibilidade -->
-      <div class="absolute inset-0 bg-black/30 md:hidden opacity-40"></div>
+      <!-- Overlay: gradiente no fundo para legibilidade da pesquisa (mobile) -->
+      <div class="absolute inset-0 md:hidden"
+        style="background: linear-gradient(to bottom, transparent 45%, rgba(0,0,0,0.55) 70%, rgba(0,0,0,0.75) 100%);"></div>
 
-      <!-- ═════════════════════════════════════════════════════════════════ 
-           CONTEÚDO PRINCIPAL (Texto + Pesquisa) 
+      <!-- ═════════════════════════════════════════════════════════════════
+           CONTEÚDO PRINCIPAL (Texto + Pesquisa)
            ═════════════════════════════════════════════════════════════════ -->
-      <div class="relative z-10 flex flex-col justify-end md:justify-center min-h-screen md:min-h-[clamp(320px,45vw,620px)] px-4 sm:px-14 py-12 max-w-2xl"
+      <div class="relative z-10 flex flex-col justify-end md:justify-center min-h-screen md:min-h-[clamp(320px,45vw,620px)] px-4 sm:px-14 max-w-2xl"
            style="min-height: 100vh; md:min-height: clamp(320px, 45vw, 620px);">
 
-        <h1 class="text-3xl sm:text-5xl md:text-6xl lg:text-7xl text-white leading-tight mb-4" style="color:#ffffff;">
+        <!-- Título — oculto no mobile para não tapar a imagem -->
+        <h1 class="hidden md:block text-3xl sm:text-5xl md:text-6xl lg:text-7xl text-white leading-tight mb-4" style="color:#ffffff;">
           COMPRA. VENDE.<br>
           <span style="color:#F07820;">CONECTA.</span>
         </h1>
-        
+
         <!-- Texto descritivo - oculto no mobile -->
         <p class="hidden md:block text-white text-base sm:text-xl mb-8 max-w-sm font-semibold drop-shadow-lg">
           O mercado digital de Moçambique
         </p>
 
         <!-- Barra de pesquisa rápida no hero -->
-        <form @submit.prevent="goSearch" class="flex gap-2 mb-6 w-full max-w-lg">
+        <form @submit.prevent="goSearch" class="flex gap-2 mb-4 w-full max-w-lg">
           <input
             v-model="heroSearch"
             type="text"
@@ -56,7 +58,7 @@
         </form>
 
         <!-- Botões principais — compactos no mobile, maiores no desktop -->
-        <div class="flex flex-wrap gap-2 sm:gap-3 mb-8">
+        <div class="flex flex-wrap gap-2 sm:gap-3 mb-6">
           <RouterLink
             to="/lojas"
             class="inline-flex items-center gap-1.5 sm:gap-2 font-black uppercase tracking-wide rounded-xl text-white transition hover:opacity-90 active:scale-95 text-xs sm:text-sm px-3 py-2 sm:px-6 sm:py-3.5"
@@ -73,10 +75,10 @@
           </RouterLink>
         </div>
 
-        <!-- ═════════════════════════════════════════════════════════════════ 
-             PESQUISA POR LOCALIZAÇÃO (Dentro da Imagem - Mobile) 
+        <!-- ═════════════════════════════════════════════════════════════════
+             PESQUISA POR LOCALIZAÇÃO (Dentro da Imagem - Mobile)
              ═════════════════════════════════════════════════════════════════ -->
-        <div class="w-full max-w-2xl space-y-4 mt-auto mb-12">
+        <div class="w-full max-w-2xl space-y-3 pb-10">
           <h3 class="text-white font-bold text-lg">Pesquisar por Localização</h3>
           
           <!-- Botões de localização perto de mim -->
