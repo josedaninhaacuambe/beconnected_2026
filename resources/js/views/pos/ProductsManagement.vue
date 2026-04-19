@@ -634,15 +634,18 @@ async function saveProduct() {
       await refreshPendingCount()
       await load() // actualiza a lista com offlineProducts
     } else {
-      // Online: criar via store endpoint (owner/admin)
+      // Online: criar via POS endpoint (suporta dono, admin e gerente/funcionário)
       const fd = new FormData()
-      Object.entries(form.value).forEach(([k, v]) => {
+      const { stock_quantity, stock_min, ...rest } = form.value
+      // Mapear campos do formulário POS para os campos esperados pelo endpoint
+      const payload = { ...rest, initial_stock: stock_quantity ?? 0, minimum_stock: stock_min ?? 5 }
+      Object.entries(payload).forEach(([k, v]) => {
         if (v !== null && v !== undefined && v !== '') {
           fd.append(k, Array.isArray(v) ? JSON.stringify(v) : v)
         }
       })
-      if (imgFile.value) fd.append('image', imgFile.value)
-      await axios.post('/store/products', fd)
+      if (imgFile.value) fd.append('images[]', imgFile.value)
+      await axios.post('/pos/products', fd)
       await load()
     }
     showForm.value = false
