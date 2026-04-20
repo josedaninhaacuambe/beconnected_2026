@@ -42,7 +42,7 @@
 
     <!-- ── Lista de produtos ───────────────────────────────────────────────────── -->
     <div class="flex-1 overflow-y-auto p-4">
-      <div v-if="loading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div v-if="loading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
         <div v-for="i in 6" :key="i" class="bg-white rounded-xl h-48 animate-pulse"></div>
       </div>
 
@@ -56,7 +56,7 @@
       </div>
 
       <div v-else>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
           <div v-for="p in paged" :key="p.id"
             class="bg-white rounded-xl shadow-sm border flex flex-col overflow-hidden transition"
             :class="!p.is_active ? 'opacity-60 border-red-200' : 'border-transparent hover:shadow-md'">

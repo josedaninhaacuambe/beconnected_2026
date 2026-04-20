@@ -191,7 +191,7 @@
 
       <!-- Grid de produtos (Mobile: lista vertical com botão grande | Desktop: grid) -->
       <div class="flex-1 overflow-y-auto p-3">
-        <div v-if="loadingProducts" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+        <div v-if="loadingProducts" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
           <div v-for="i in 8" :key="i" class="skeleton h-28 rounded-xl"></div>
         </div>
 
@@ -241,7 +241,7 @@
           </div>
 
           <!-- Desktop: Grid como antes -->
-          <div class="hidden lg:grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+          <div class="hidden lg:grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
             <button
               v-for="p in filtered" :key="p.id"
               @click="clickProduct(p)"
