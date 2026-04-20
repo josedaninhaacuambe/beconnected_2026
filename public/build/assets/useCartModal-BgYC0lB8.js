@@ -1,1 +1,0 @@
-import{F as e}from"./vendor-FrstsrM9.js";var t=e({visible:!1,product:null});function n(){function e(e){t.product=e,t.visible=!0}function n(){t.visible=!1,t.product=null}return{state:t,open:e,close:n}}export{n as t};

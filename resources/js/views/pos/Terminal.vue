@@ -199,12 +199,19 @@
           <span class="text-4xl mb-2">⚠️</span>
           <p class="text-sm font-semibold">Erro ao carregar produtos</p>
           <p class="text-xs mt-1 text-red-300">{{ loadError }}</p>
-          <button @click="loadProducts" class="mt-3 px-4 py-2 rounded-lg text-xs font-bold text-white" style="background:#F07820;">Tentar novamente</button>
+          <div class="flex gap-2 mt-3">
+            <button @click="loadProducts" class="px-4 py-2 rounded-lg text-xs font-bold text-white" style="background:#F07820;">Tentar novamente</button>
+            <RouterLink v-if="canManageProducts" to="/pos/products" class="px-4 py-2 rounded-lg text-xs font-bold text-white" style="background:#1C2B3C;">➕ Adicionar produtos</RouterLink>
+          </div>
         </div>
-        <div v-else-if="!filtered.length" class="flex flex-col items-center justify-center h-full text-gray-400">
+        <div v-else-if="!filtered.length" class="flex flex-col items-center justify-center h-full text-gray-400 p-4 text-center">
           <span class="text-4xl mb-2">📦</span>
-          <p class="text-sm">Nenhum produto encontrado</p>
-          <button @click="loadProducts" class="mt-3 px-4 py-2 rounded-lg text-xs font-bold text-white" style="background:#F07820;">Recarregar</button>
+          <p class="text-sm font-semibold">Nenhum produto encontrado</p>
+          <p class="text-xs mt-1 text-gray-500">Esta loja ainda não tem produtos.</p>
+          <div class="flex gap-2 mt-3">
+            <button @click="loadProducts" class="px-4 py-2 rounded-lg text-xs font-bold text-white" style="background:#F07820;">Recarregar</button>
+            <RouterLink v-if="canManageProducts" to="/pos/products" class="px-4 py-2 rounded-lg text-xs font-bold text-white" style="background:#1C2B3C;">➕ Adicionar produtos</RouterLink>
+          </div>
         </div>
 
         <!-- Mobile: Lista vertical com cards grandes e touch-friendly -->
@@ -680,6 +687,7 @@
 
 <script setup>
 import { ref, computed, reactive, onMounted, nextTick } from 'vue'
+import { RouterLink } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -691,7 +699,8 @@ import {
 const auth = useAuthStore()
 const { isOnline, pendingCount, pendingProductCount, syncing, syncMessage, trySyncNow } = useOfflinePos()
 
-const canAddProducts = computed(() => auth.hasPosPermission('adicionar_produtos'))
+const canAddProducts    = computed(() => auth.hasPosPermission('adicionar_produtos'))
+const canManageProducts = computed(() => auth.posRole === 'owner' || auth.posRole === 'manager')
 
 // ── Estado principal ───────────────────────────────────────────────────────
 const allProducts  = ref([])

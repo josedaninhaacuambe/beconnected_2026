@@ -102,8 +102,9 @@ export const useAuthStore = defineStore('auth', () => {
         token.value = data.token
         user.value = data.user
         localStorage.setItem('bc_token', data.token)
-        // Auto-seleccionar a única loja (se houver apenas uma)
-        if (data.user.role === 'store_owner' && data.user.stores?.length) {
+        // Auto-seleccionar a primeira loja APENAS se nenhuma estava guardada
+        // (preserva a loja activa de sessões anteriores para não perder contexto multi-loja)
+        if (data.user.role === 'store_owner' && data.user.stores?.length && !activeStoreId.value) {
             setActiveStore(data.user.stores[0])
         }
         return data
