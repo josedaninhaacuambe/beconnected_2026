@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Carbon\Carbon;
 
 class PosController extends Controller
 {
@@ -350,14 +351,33 @@ class PosController extends Controller
         $store = $this->resolveStore($request);
 
         $validated = $request->validate([
-            'product_id' => 'required|exists:products,id',
-            'type'       => 'required|in:in,out,adjustment',
-            'quantity'   => 'required|numeric|min:0',
-            'reason'     => 'nullable|string|max:200',
+            'product_id'        => 'required|exists:products,id',
+            'type'              => 'required|in:in,out,adjustment',
+            // quantity pode vir calculado ou ser derivado de units_per_box × boxes_count
+            'quantity'          => 'nullable|numeric|min:0',
+            'reason'            => 'nullable|string|max:200',
+            // Entrada por caixa
+            'entry_mode'        => 'nullable|in:unit,box',
+            'units_per_box'     => 'nullable|numeric|min:0.001',
+            'boxes_count'       => 'nullable|numeric|min:0.001',
+            'acquisition_price' => 'nullable|numeric|min:0',
+            // Validade do lote
+            'expiry_date'       => 'nullable|date|after:today',
         ]);
 
         $product = $store->products()->findOrFail($validated['product_id']);
         $stock   = ProductStock::firstOrCreate(['product_id' => $product->id], ['quantity' => 0, 'weight_quantity' => 0, 'minimum_stock' => 5, 'unit' => 'un']);
+
+        // Se entrada por caixa, calcular quantidade total a partir das caixas
+        $entryMode = $validated['entry_mode'] ?? 'unit';
+        if ($validated['type'] === 'in' && $entryMode === 'box') {
+            $unitsPerBox = $validated['units_per_box'] ?? 0;
+            $boxesCount  = $validated['boxes_count']  ?? 0;
+            abort_if($unitsPerBox <= 0 || $boxesCount <= 0, 422, 'Unidades por caixa e número de caixas são obrigatórios.');
+            $validated['quantity'] = round($unitsPerBox * $boxesCount, 3);
+        }
+
+        abort_if(empty($validated['quantity']) || $validated['quantity'] <= 0, 422, 'Quantidade inválida.');
 
         // Produtos pesáveis usam weight_quantity; produtos por unidade usam quantity
         $field  = $product->is_weighable ? 'weight_quantity' : 'quantity';
@@ -373,18 +393,60 @@ class PosController extends Controller
         }
 
         StockMovement::create([
-            'product_id'      => $product->id,
-            'type'            => $validated['type'],
-            'quantity'        => $validated['quantity'],
-            'quantity_before' => $before,
-            'quantity_after'  => $stock->fresh()->$field ?? 0,
-            'reason'          => $validated['reason'] ?? ucfirst($validated['type']) . ' manual',
-            'user_id'         => $request->user()->id,
+            'product_id'        => $product->id,
+            'type'              => $validated['type'],
+            'quantity'          => $validated['quantity'],
+            'quantity_before'   => $before,
+            'quantity_after'    => $stock->fresh()->$field ?? 0,
+            'reason'            => $validated['reason'] ?? ucfirst($validated['type']) . ' manual',
+            'user_id'           => $request->user()->id,
+            'entry_mode'        => $entryMode,
+            'units_per_box'     => $validated['units_per_box']     ?? null,
+            'boxes_count'       => $validated['boxes_count']       ?? null,
+            'acquisition_price' => $validated['acquisition_price'] ?? null,
+            'expiry_date'       => $validated['expiry_date']       ?? null,
         ]);
 
         Cache::forget("pos_products_{$store->id}");
 
         return response()->json(['message' => 'Movimento registado.', 'stock' => $stock->fresh()]);
+    }
+
+    // ─── Produtos com validade próxima ou expirada ────────────────────────────
+    // Retorna lotes (movimentos 'in') cujo expiry_date está a 30 dias ou menos
+    public function expiringStock(Request $request): JsonResponse
+    {
+        $this->requirePosPermission($request, 'gerir_stock');
+        $store = $this->resolveStore($request);
+
+        $days = max(1, min(365, (int) $request->query('days', 30)));
+
+        $movements = StockMovement::with('product')
+            ->whereHas('product', fn ($q) => $q->where('store_id', $store->id)->where('has_expiry', true))
+            ->where('type', 'in')
+            ->whereNotNull('expiry_date')
+            ->whereDate('expiry_date', '<=', now()->addDays($days))
+            ->orderBy('expiry_date', 'asc')
+            ->get()
+            ->map(function ($m) {
+                $daysLeft = now()->startOfDay()->diffInDays(\Carbon\Carbon::parse($m->expiry_date)->startOfDay(), false);
+                return [
+                    'id'                => $m->id,
+                    'product_id'        => $m->product_id,
+                    'product_name'      => $m->product?->name,
+                    'product_sku'       => $m->product?->sku,
+                    'quantity'          => $m->quantity,
+                    'entry_mode'        => $m->entry_mode,
+                    'units_per_box'     => $m->units_per_box,
+                    'boxes_count'       => $m->boxes_count,
+                    'acquisition_price' => $m->acquisition_price,
+                    'expiry_date'       => $m->expiry_date?->format('Y-m-d'),
+                    'days_left'         => $daysLeft,
+                    'created_at'        => $m->created_at,
+                ];
+            });
+
+        return response()->json($movements);
     }
 
     // ─── Alocar stock para venda por peso ─────────────────────────────────────
@@ -748,7 +810,7 @@ class PosController extends Controller
             ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name', 'sku', 'barcode', 'price', 'images',
-                   'is_weighable', 'weight_unit', 'weight_units']);
+                   'is_weighable', 'weight_unit', 'weight_units', 'has_expiry']);
 
         return response()->json($products);
     }
@@ -853,6 +915,7 @@ class PosController extends Controller
             'weight_units'        => 'nullable|array',
             'weight_units.*'      => 'in:g,kg,l,ml,un,tonelada,litro',
             'waste_margin'        => 'nullable|numeric|min:0|max:100',
+            'has_expiry'          => 'nullable|boolean',
         ]);
 
         $images = [];
@@ -875,6 +938,7 @@ class PosController extends Controller
             'selling_modes' => $validated['selling_modes'] ?? ['unit'],
             'waste_margin'  => $validated['waste_margin'] ?? 0,
             'weight_units'  => $validated['weight_units'] ?? null,
+            'has_expiry'    => filter_var($validated['has_expiry'] ?? false, FILTER_VALIDATE_BOOLEAN),
         ]);
 
         ProductStock::create([
@@ -1268,6 +1332,7 @@ class PosController extends Controller
             'availability'       => 'sometimes|string|in:pos,virtual_store,both',
             'selling_modes'      => 'sometimes|array',
             'is_active'          => 'sometimes|boolean',
+            'has_expiry'         => 'sometimes|boolean',
             'reason'             => 'sometimes|nullable|string|max:255',
         ]);
 

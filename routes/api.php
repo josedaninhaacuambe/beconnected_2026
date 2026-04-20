@@ -303,6 +303,7 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
         Route::post('stock/movement',          [PosController::class, 'stockMovement']);
         Route::post('stock/allocate-weight',   [PosController::class, 'allocateWeightStock']);
         Route::get('stock/history',   [PosController::class, 'stockHistory']);
+        Route::get('stock/expiring',  [PosController::class, 'expiringStock']);
         Route::get('reports',         [PosController::class, 'reports']);
         Route::get('daily-cash',      [PosController::class, 'dailyCash']);
         Route::post('sync-products',  [PosController::class, 'syncProducts']);

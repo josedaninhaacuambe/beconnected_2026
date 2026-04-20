@@ -11,14 +11,18 @@
     </div>
 
     <!-- Tabs -->
-    <div class="flex border-b border-gray-200 bg-white px-4">
+    <div class="flex border-b border-gray-200 bg-white px-4 overflow-x-auto">
       <button v-for="t in tabs" :key="t.key" @click="activeTab = t.key"
-        class="px-4 py-3 text-sm font-semibold border-b-2 transition"
+        class="px-4 py-3 text-sm font-semibold border-b-2 transition whitespace-nowrap"
         :class="activeTab === t.key ? 'border-bc-gold text-bc-gold' : 'border-transparent text-gray-500 hover:text-gray-700'">
         {{ t.icon }} {{ t.label }}
         <span v-if="t.key === 'history' && pendingMovementsCount > 0"
           class="ml-1 bg-amber-400 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
           {{ pendingMovementsCount }}
+        </span>
+        <span v-if="t.key === 'expiry' && expiringCount > 0"
+          class="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+          {{ expiringCount }}
         </span>
       </button>
     </div>
@@ -222,6 +226,63 @@
         </div>
       </div>
 
+      <!-- ── Tab: Validades ──────────────────────────────────────────────────── -->
+      <div v-if="activeTab === 'expiry'">
+        <div class="flex items-center gap-3 mb-4">
+          <select v-model="expiryDays" @change="loadExpiring"
+            class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none">
+            <option :value="7">Próximos 7 dias</option>
+            <option :value="15">Próximos 15 dias</option>
+            <option :value="30">Próximos 30 dias</option>
+            <option :value="60">Próximos 60 dias</option>
+            <option :value="90">Próximos 90 dias</option>
+          </select>
+          <span class="text-xs text-gray-400">{{ expiringItems.length }} lote(s) a expirar</span>
+        </div>
+
+        <div v-if="loadingExpiry" class="space-y-2">
+          <div v-for="i in 4" :key="i" class="skeleton h-16 rounded-xl"></div>
+        </div>
+
+        <div v-else-if="!expiringItems.length" class="flex flex-col items-center justify-center py-16 text-gray-400">
+          <span class="text-4xl mb-3">✅</span>
+          <p class="text-sm font-semibold">Nenhum produto a expirar</p>
+          <p class="text-xs mt-1 text-gray-300">Nos próximos {{ expiryDays }} dias não há validades a vencer.</p>
+        </div>
+
+        <div v-else class="space-y-2">
+          <div v-for="item in expiringItems" :key="item.id"
+            class="bg-white rounded-xl border px-4 py-3 flex items-center gap-3"
+            :class="item.days_left < 0 ? 'border-red-300 bg-red-50' : item.days_left <= 7 ? 'border-orange-300 bg-orange-50' : 'border-yellow-200 bg-yellow-50'">
+            <div class="text-2xl flex-shrink-0">
+              {{ item.days_left < 0 ? '🚫' : item.days_left <= 7 ? '🔴' : '🟡' }}
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="font-semibold text-sm text-gray-800 truncate">{{ item.product_name }}</p>
+              <p class="text-xs text-gray-500">
+                SKU: {{ item.product_sku || '—' }} ·
+                Qtd. entrada: {{ item.quantity }} unid.
+                <span v-if="item.entry_mode === 'box'"> ({{ item.boxes_count }}cx × {{ item.units_per_box }}un)</span>
+              </p>
+              <p class="text-xs font-semibold mt-0.5"
+                :class="item.days_left < 0 ? 'text-red-600' : item.days_left <= 7 ? 'text-orange-600' : 'text-yellow-700'">
+                {{ item.days_left < 0
+                    ? `Expirado há ${Math.abs(item.days_left)} dia(s)`
+                    : item.days_left === 0
+                      ? 'Expira hoje — vender com urgência!'
+                      : `Expira em ${item.days_left} dia(s)` }}
+              </p>
+            </div>
+            <div class="text-right flex-shrink-0">
+              <p class="text-xs font-bold text-gray-700">{{ formatDateShort(item.expiry_date) }}</p>
+              <p v-if="item.acquisition_price" class="text-[10px] text-gray-400">
+                Custo: {{ fmtMoney(item.acquisition_price) }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
 
     <!-- ── Modal: histórico por produto ──────────────────────────────────────── -->
@@ -315,7 +376,41 @@
           <p v-else class="mb-4"></p>
 
           <div class="space-y-3">
-            <div>
+
+            <!-- Toggle entrada por caixa (apenas para entradas de produtos por unidade) -->
+            <div v-if="movModal.type === 'in' && !movModal.product?.is_weighable"
+              class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+              <span class="text-sm">📦 Entrada por caixa</span>
+              <button @click="movModal.boxMode = !movModal.boxMode"
+                class="ml-auto flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold transition"
+                :class="movModal.boxMode ? 'bg-bc-gold text-white' : 'bg-gray-200 text-gray-600'">
+                {{ movModal.boxMode ? 'Activo' : 'Inactivo' }}
+              </button>
+            </div>
+
+            <!-- Modo caixa -->
+            <div v-if="movModal.boxMode && movModal.type === 'in'" class="space-y-2 p-3 bg-blue-50 rounded-xl border border-blue-200">
+              <p class="text-xs font-bold text-blue-700 mb-1">Configurar entrada por caixa</p>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="text-xs font-semibold text-gray-600">Un. por caixa</label>
+                  <input v-model.number="movModal.unitsPerBox" type="number" min="1" step="1" placeholder="24"
+                    class="w-full border border-gray-200 rounded-xl px-3 py-2 mt-1 text-sm focus:outline-none focus:border-bc-gold text-center font-bold" />
+                </div>
+                <div>
+                  <label class="text-xs font-semibold text-gray-600">Nº de caixas</label>
+                  <input v-model.number="movModal.boxesCount" type="number" min="1" step="1" placeholder="10"
+                    class="w-full border border-gray-200 rounded-xl px-3 py-2 mt-1 text-sm focus:outline-none focus:border-bc-gold text-center font-bold" />
+                </div>
+              </div>
+              <div v-if="movModal.unitsPerBox > 0 && movModal.boxesCount > 0"
+                class="text-center text-sm font-black text-blue-800 bg-blue-100 rounded-lg py-2">
+                Total: {{ movModal.unitsPerBox * movModal.boxesCount }} unidades
+              </div>
+            </div>
+
+            <!-- Quantidade manual (quando não é modo caixa) -->
+            <div v-if="!movModal.boxMode">
               <label class="text-xs font-semibold text-gray-600">
                 {{ movModal.type === 'adjustment' ? 'Novo total em stock' : 'Quantidade' }}
                 <span v-if="movModal.product?.is_weighable" class="text-bc-gold">({{ movModal.product?.weight_unit || 'kg' }})</span>
@@ -329,6 +424,24 @@
                 class="w-full border border-gray-200 rounded-xl px-4 py-2.5 mt-1 focus:outline-none focus:border-bc-gold text-lg font-bold text-center"
               />
             </div>
+
+            <!-- Preço de aquisição (apenas para entradas) -->
+            <div v-if="movModal.type === 'in'">
+              <label class="text-xs font-semibold text-gray-600">Preço de aquisição deste lote (opcional)</label>
+              <div class="relative mt-1">
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">MZN</span>
+                <input v-model.number="movModal.acquisitionPrice" type="number" min="0" step="0.01" placeholder="0.00"
+                  class="w-full border border-gray-200 rounded-xl pl-12 pr-4 py-2.5 focus:outline-none focus:border-bc-gold text-sm" />
+              </div>
+            </div>
+
+            <!-- Data de validade (apenas para produtos com has_expiry + entradas) -->
+            <div v-if="movModal.type === 'in' && movModal.product?.has_expiry">
+              <label class="text-xs font-semibold text-gray-600">Data de validade deste lote <span class="text-red-500">*</span></label>
+              <input v-model="movModal.expiryDate" type="date" :min="todayStr"
+                class="w-full border border-gray-200 rounded-xl px-4 py-2.5 mt-1 text-sm focus:outline-none focus:border-bc-gold" />
+            </div>
+
             <div>
               <label class="text-xs font-semibold text-gray-600">Motivo (opcional)</label>
               <input v-model="movModal.reason" type="text" placeholder="ex: Compra ao fornecedor"
@@ -371,6 +484,7 @@ const tabs = [
   { key: 'stock',   icon: '📦', label: 'Produtos' },
   { key: 'weight',  icon: '⚖️', label: 'Por Peso' },
   { key: 'history', icon: '📋', label: 'Histórico' },
+  { key: 'expiry',  icon: '⏰', label: 'Validades' },
 ]
 
 const auth = useAuthStore()
@@ -389,7 +503,17 @@ const pendingMovementsCount = computed(() => pendingMovements.value.length)
 const movModal = ref({
   open: false, product: null, type: 'in',
   quantity: null, reason: '', loading: false, error: '',
+  boxMode: false, unitsPerBox: null, boxesCount: null,
+  acquisitionPrice: null, expiryDate: '',
 })
+
+// ── Validades ────────────────────────────────────────────────────────────────
+const expiringItems   = ref([])
+const loadingExpiry   = ref(false)
+const expiryDays      = ref(30)
+const expiringCount   = computed(() => expiringItems.value.length)
+
+const todayStr = new Date().toISOString().slice(0, 10)
 
 // ── Produtos por unidade (não pesáveis) ──────────────────────────────────────
 const filteredUnitProducts = computed(() => {
@@ -437,6 +561,16 @@ function formatWeightQty(qty) {
 
 function formatDate(d) {
   return new Date(d).toLocaleDateString('pt-MZ', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
+function formatDateShort(d) {
+  if (!d) return '—'
+  return new Date(d + 'T00:00:00').toLocaleDateString('pt-MZ', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function fmtMoney(v) {
+  if (!v) return '—'
+  return new Intl.NumberFormat('pt-MZ', { style: 'currency', currency: 'MZN', minimumFractionDigits: 2 }).format(v)
 }
 
 function printStockList() {
@@ -559,30 +693,59 @@ async function loadProductHistoryPage(page) {
 }
 
 function openMovement(product, type) {
-  const defaultQty = product.is_weighable ? null : 1
-  movModal.value = { open: true, product, type, quantity: defaultQty, reason: '', loading: false, error: '' }
+  const defaultQty = product.is_weighable ? null : (type === 'in' ? null : 1)
+  movModal.value = {
+    open: true, product, type,
+    quantity: defaultQty, reason: '', loading: false, error: '',
+    boxMode: false, unitsPerBox: null, boxesCount: null,
+    acquisitionPrice: null, expiryDate: '',
+  }
 }
 
 async function confirmMovement() {
-  if (!movModal.value.quantity || movModal.value.quantity <= 0) return
-  movModal.value.loading = true
-  movModal.value.error   = ''
+  const m = movModal.value
 
-  const { product, type, quantity, reason } = movModal.value
+  // Calcular quantidade efectiva
+  const effectiveQty = (m.type === 'in' && m.boxMode)
+    ? (m.unitsPerBox || 0) * (m.boxesCount || 0)
+    : m.quantity
+
+  if (!effectiveQty || effectiveQty <= 0) {
+    m.error = 'Indique a quantidade ou configure as caixas correctamente.'
+    return
+  }
+
+  // Validade obrigatória para produtos com has_expiry em entradas
+  if (m.type === 'in' && m.product?.has_expiry && !m.expiryDate) {
+    m.error = 'A data de validade é obrigatória para este produto.'
+    return
+  }
+
+  m.loading = true
+  m.error   = ''
+
+  const { product, type, reason } = m
   const isWeighable = product.is_weighable
 
   try {
     if (isOnline.value) {
       await axios.post('/pos/stock/movement', {
-        product_id: product.id,
-        type, quantity, reason,
+        product_id:        product.id,
+        type,
+        quantity:          m.boxMode ? null : effectiveQty,
+        reason,
+        entry_mode:        (type === 'in' && m.boxMode) ? 'box' : 'unit',
+        units_per_box:     (type === 'in' && m.boxMode) ? m.unitsPerBox : undefined,
+        boxes_count:       (type === 'in' && m.boxMode) ? m.boxesCount  : undefined,
+        acquisition_price: type === 'in' ? (m.acquisitionPrice || undefined) : undefined,
+        expiry_date:       (type === 'in' && m.expiryDate) ? m.expiryDate : undefined,
       })
     } else {
       const mov = {
         local_id:     `mov_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         product_id:   product.id,
         product_name: product.name,
-        type, quantity,
+        type, quantity: effectiveQty,
         reason:       reason || '',
         created_at:   new Date().toISOString(),
       }
@@ -596,13 +759,13 @@ async function confirmMovement() {
     if (p && p.stock) {
       if (isWeighable) {
         const wq = p.stock.weight_quantity ?? 0
-        if (type === 'in')         p.stock.weight_quantity = wq + quantity
-        else if (type === 'out')   p.stock.weight_quantity = Math.max(0, wq - quantity)
-        else                       p.stock.weight_quantity = quantity
+        if (type === 'in')         p.stock.weight_quantity = wq + effectiveQty
+        else if (type === 'out')   p.stock.weight_quantity = Math.max(0, wq - effectiveQty)
+        else                       p.stock.weight_quantity = effectiveQty
       } else {
-        if (type === 'in')         p.stock.quantity += quantity
-        else if (type === 'out')   p.stock.quantity  = Math.max(0, p.stock.quantity - quantity)
-        else                       p.stock.quantity  = quantity
+        if (type === 'in')         p.stock.quantity += effectiveQty
+        else if (type === 'out')   p.stock.quantity  = Math.max(0, p.stock.quantity - effectiveQty)
+        else                       p.stock.quantity  = effectiveQty
       }
       await updateCachedProduct(p)
     }
@@ -665,18 +828,39 @@ async function loadPendingMovements() {
   pendingMovements.value = await getPendingMovements()
 }
 
+async function loadExpiring() {
+  if (!isOnline.value) return
+  loadingExpiry.value = true
+  try {
+    const { data } = await axios.get('/pos/stock/expiring', { params: { days: expiryDays.value } })
+    expiringItems.value = data
+  } catch {
+    // silencioso
+  } finally {
+    loadingExpiry.value = false
+  }
+}
+
 watch(isOnline, async (online) => {
   if (online) {
     await trySyncNow()
     await loadProducts()
     await loadHistory()
     await loadPendingMovements()
+    await loadExpiring()
   }
+})
+
+watch(activeTab, (tab) => {
+  if (tab === 'expiry' && isOnline.value && !expiringItems.value.length) loadExpiring()
 })
 
 onMounted(async () => {
   await loadProducts()
   await loadPendingMovements()
-  if (isOnline.value) loadHistory()
+  if (isOnline.value) {
+    loadHistory()
+    loadExpiring()
+  }
 })
 </script>

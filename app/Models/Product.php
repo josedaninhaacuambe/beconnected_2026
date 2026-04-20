@@ -19,7 +19,7 @@ class Product extends Model
         'description', 'price', 'cost_price', 'compare_price', 'flash_price', 'flash_until',
         'sku', 'barcode', 'model', 'images', 'attributes', 'is_active', 'is_featured',
         'total_sold', 'is_weighable', 'weight_unit', 'weight_units', 'weight_prices', 'waste_margin',
-        'availability', 'selling_modes',
+        'availability', 'selling_modes', 'has_expiry',
     ];
 
     protected $casts = [
@@ -34,6 +34,7 @@ class Product extends Model
         'attributes' => 'array',
         'is_active' => 'boolean',
         'is_featured' => 'boolean',
+        'has_expiry'    => 'boolean',
         'availability' => 'string',
         'selling_modes' => 'array',
         'weight_units'  => 'array',

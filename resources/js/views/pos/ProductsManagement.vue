@@ -296,6 +296,17 @@
               </select>
             </div>
 
+            <!-- Controlo de validade -->
+            <div class="border border-gray-100 rounded-xl p-3">
+              <label class="flex items-center gap-2 text-sm cursor-pointer">
+                <input v-model="form.has_expiry" type="checkbox" class="rounded" />
+                <span class="font-semibold text-gray-700">⏰ Produto com prazo de validade</span>
+              </label>
+              <p v-if="form.has_expiry" class="text-xs text-gray-400 mt-1 ml-5">
+                Ao dar entrada de stock será pedida a data de validade do lote. O sistema alertará produtos próximos de expirar.
+              </p>
+            </div>
+
             <!-- Disponibilidade -->
             <div>
               <label class="text-xs font-bold text-gray-600">Disponibilidade</label>
@@ -388,6 +399,7 @@ function blankForm() {
     price: 0, cost_price: 0, product_category_id: null,
     stock_quantity: 0, stock_min: 5,
     is_weighable: false, weight_unit: 'kg',
+    has_expiry: false,
     availability: 'both', selling_modes: ['unit'], reason: '',
   }
 }
@@ -593,6 +605,7 @@ function openEdit(p) {
     stock_min:          p.stock_min ?? 5,
     is_weighable:       p.is_weighable || false,
     weight_unit:        p.weight_unit ?? 'kg',
+    has_expiry:         p.has_expiry || false,
     availability:       p.availability || 'both',
     selling_modes:      p.selling_modes || ['unit'],
     reason:             '',
