@@ -13,13 +13,24 @@ use Laravel\Socialite\Facades\Socialite;
 class GoogleAuthController extends Controller
 {
     /**
-     * Retorna a URL de redirect para o Google OAuth
-     * O frontend usa esta URL para iniciar o fluxo
+     * Gera o redirect_uri dinamicamente a partir do host actual da request.
+     * Garante que staging e produção usam sempre o seu próprio domínio,
+     * sem depender da variável APP_URL do .env.
      */
-    public function redirectUrl(): JsonResponse
+    private function callbackUrl(Request $request): string
+    {
+        return $request->getSchemeAndHttpHost() . '/api/auth/google/callback';
+    }
+
+    /**
+     * Retorna a URL de redirect para o Google OAuth.
+     * O frontend usa esta URL para iniciar o fluxo.
+     */
+    public function redirectUrl(Request $request): JsonResponse
     {
         $url = Socialite::driver('google')
             ->stateless()
+            ->redirectUrl($this->callbackUrl($request))
             ->redirect()
             ->getTargetUrl();
 
@@ -27,12 +38,16 @@ class GoogleAuthController extends Controller
     }
 
     /**
-     * Callback do Google — recebe o código, troca por token, autentica o user
+     * Callback do Google — recebe o código, troca por token, autentica o user.
      */
     public function callback(Request $request): JsonResponse
     {
         try {
-            $googleUser = Socialite::driver('google')->stateless()->user();
+            // redirect_uri deve ser o mesmo usado na autorização (obrigatório pelo OAuth2)
+            $googleUser = Socialite::driver('google')
+                ->stateless()
+                ->redirectUrl($this->callbackUrl($request))
+                ->user();
         } catch (\Exception $e) {
             return response()->json(['message' => 'Falha ao autenticar com Google. Tente novamente.'], 422);
         }
@@ -78,7 +93,6 @@ class GoogleAuthController extends Controller
             // Verificar se há dados de loja na sessão (registro com loja)
             $storeData = session('store_registration_data');
             if ($storeData) {
-                // Mudar role para store_owner e criar loja
                 $user->update(['role' => 'store_owner']);
 
                 Store::create([
@@ -88,10 +102,9 @@ class GoogleAuthController extends Controller
                     'phone'       => $storeData['phone'],
                     'whatsapp'    => $storeData['whatsapp'] ?? null,
                     'address'     => $storeData['address'] ?? null,
-                    'is_active'   => true, // loja ativa pois email já verificado pelo Google
+                    'is_active'   => true,
                 ]);
 
-                // Limpar dados da sessão
                 session()->forget('store_registration_data');
             }
         }
@@ -113,15 +126,20 @@ class GoogleAuthController extends Controller
     }
 
     /**
-     * Callback via redirect (para apps web que usam redirect flow)
-     * Redireciona para o frontend com o token
+     * Callback via redirect (para apps web que usam redirect flow).
+     * Redireciona para o frontend com o token.
      */
     public function callbackRedirect(Request $request)
     {
+        $baseUrl = $request->getSchemeAndHttpHost();
+
         try {
-            $googleUser = Socialite::driver('google')->stateless()->user();
+            $googleUser = Socialite::driver('google')
+                ->stateless()
+                ->redirectUrl($this->callbackUrl($request))
+                ->user();
         } catch (\Exception $e) {
-            return redirect(config('app.url') . '/login?error=google_failed');
+            return redirect($baseUrl . '/login?error=google_failed');
         }
 
         $user = User::where('google_id', $googleUser->getId())
@@ -130,22 +148,20 @@ class GoogleAuthController extends Controller
 
         if (!$user) {
             $user = User::create([
-                'google_id' => $googleUser->getId(),
-                'name' => $googleUser->getName(),
-                'email' => $googleUser->getEmail(),
-                'google_avatar' => $googleUser->getAvatar(),
-                'avatar' => $googleUser->getAvatar(),
-                'google_token' => $googleUser->token,
+                'google_id'            => $googleUser->getId(),
+                'name'                 => $googleUser->getName(),
+                'email'                => $googleUser->getEmail(),
+                'google_avatar'        => $googleUser->getAvatar(),
+                'avatar'               => $googleUser->getAvatar(),
+                'google_token'         => $googleUser->token,
                 'google_refresh_token' => $googleUser->refreshToken,
-                'role' => 'customer',
-                'is_active' => true,
-                'email_verified_at' => now(),
+                'role'                 => 'customer',
+                'is_active'            => true,
+                'email_verified_at'    => now(),
             ]);
 
-            // Verificar se há dados de loja na sessão (registro com loja)
             $storeData = session('store_registration_data');
             if ($storeData) {
-                // Mudar role para store_owner e criar loja
                 $user->update(['role' => 'store_owner']);
 
                 Store::create([
@@ -155,39 +171,37 @@ class GoogleAuthController extends Controller
                     'phone'       => $storeData['phone'],
                     'whatsapp'    => $storeData['whatsapp'] ?? null,
                     'address'     => $storeData['address'] ?? null,
-                    'is_active'   => true, // loja ativa pois email já verificado pelo Google
+                    'is_active'   => true,
                 ]);
 
-                // Limpar dados da sessão
                 session()->forget('store_registration_data');
             }
         } else {
             $user->update([
-                'google_id' => $googleUser->getId(),
-                'google_token' => $googleUser->token,
+                'google_id'            => $googleUser->getId(),
+                'google_token'         => $googleUser->token,
                 'google_refresh_token' => $googleUser->refreshToken,
             ]);
         }
 
         if (!$user->is_active) {
-            return redirect(config('app.url') . '/login?error=account_suspended');
+            return redirect($baseUrl . '/login?error=account_suspended');
         }
 
         $token = $user->createToken('beconnect-google')->plainTextToken;
 
-        // Redireciona para frontend com token na URL (SPA apanha e guarda)
-        return redirect(config('app.url') . '/auth/google/success?token=' . $token . '&user=' . urlencode(json_encode([
-            'id' => $user->id,
-            'name' => $user->name,
-            'email' => $user->email,
-            'role' => $user->role,
+        return redirect($baseUrl . '/auth/google/success?token=' . $token . '&user=' . urlencode(json_encode([
+            'id'     => $user->id,
+            'name'   => $user->name,
+            'email'  => $user->email,
+            'role'   => $user->role,
             'avatar' => $user->avatar ?? $user->google_avatar,
         ])));
     }
 
     /**
-     * Iniciar registro com Google e dados da loja
-     * Armazena dados da loja na sessão e redireciona para Google OAuth
+     * Iniciar registro com Google e dados da loja.
+     * Armazena dados da loja na sessão e redireciona para Google OAuth.
      */
     public function registerWithStore(Request $request): JsonResponse
     {
@@ -199,11 +213,11 @@ class GoogleAuthController extends Controller
             'store.address'     => 'nullable|string|max:500',
         ]);
 
-        // Armazenar dados da loja na sessão para usar após callback do Google
         session(['store_registration_data' => $validated['store']]);
 
         $url = Socialite::driver('google')
             ->stateless()
+            ->redirectUrl($this->callbackUrl($request))
             ->redirect()
             ->getTargetUrl();
 
