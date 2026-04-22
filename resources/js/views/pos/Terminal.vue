@@ -1020,7 +1020,19 @@ async function finalizeSale() {
     clearCart()
     search.value = ''
     filterProducts()
-  } catch {
+  } catch (err) {
+    const status = err?.response?.status
+    // Erros de servidor (4xx/5xx): o servidor recebeu e rejeitou — NÃO guardar como pendente
+    // (ex: 422 stock insuficiente — reenviar não vai funcionar)
+    // Erro de rede (status undefined / 0): o servidor pode ou não ter processado —
+    // guardar como pendente; o servidor descarta duplicados via local_id único
+    if (status && status >= 400) {
+      // Mostrar erro ao utilizador mas NÃO guardar como pendente
+      processing.value = false
+      alert(err?.response?.data?.message ?? 'Erro ao registar venda. Verifique o stock e tente novamente.')
+      return
+    }
+    // Erro de rede: guardar para sincronizar depois
     await savePendingSale(sale)
     receipt.value = sale
     clearCart()

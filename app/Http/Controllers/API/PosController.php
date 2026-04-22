@@ -243,19 +243,15 @@ class PosController extends Controller
 
         DB::transaction(function () use ($request, $store, &$created, &$skipped, &$productIdsToInvalidate) {
             foreach ($request->sales as $saleData) {
-                // Evitar duplicados por local_id
-                if (PosSale::where('store_id', $store->id)->where('local_id', $saleData['local_id'])->exists()) {
-                    $skipped++;
-                    continue;
-                }
-
-                $sale = PosSale::create([
+                // Inserção atómica: ignora silenciosamente se local_id já existir (unique constraint)
+                // Isto elimina a race condition em que dois pedidos simultâneos passam ambos o exists() check
+                $inserted = DB::table('pos_sales')->insertOrIgnore([
                     'store_id'       => $store->id,
                     'user_id'        => $request->user()->id,
                     'local_id'       => $saleData['local_id'],
                     'subtotal'       => $saleData['subtotal']     ?? $saleData['total'],
                     'discount'       => $saleData['discount']     ?? 0,
-                    'apply_vat'      => $saleData['apply_vat']    ?? false,
+                    'apply_vat'      => isset($saleData['apply_vat']) ? (int)(bool)$saleData['apply_vat'] : 0,
                     'vat_rate'       => $saleData['vat_rate']     ?? 17.00,
                     'vat_amount'     => $saleData['vat_amount']   ?? 0,
                     'total'          => $saleData['total'],
@@ -263,9 +259,18 @@ class PosController extends Controller
                     'customer_name'  => $saleData['customer_name']  ?? null,
                     'customer_phone' => $saleData['customer_phone'] ?? null,
                     'notes'          => $saleData['notes']          ?? null,
-                    'synced'         => true,
+                    'synced'         => 1,
                     'sale_at'        => $saleData['sale_at'],
+                    'created_at'     => now(),
+                    'updated_at'     => now(),
                 ]);
+
+                if (!$inserted) {
+                    $skipped++;
+                    continue;
+                }
+
+                $sale = PosSale::where('store_id', $store->id)->where('local_id', $saleData['local_id'])->first();
 
                 foreach ($saleData['items'] as $item) {
                     PosSaleItem::create([

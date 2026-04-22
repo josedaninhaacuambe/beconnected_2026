@@ -16,6 +16,12 @@ const DB_NAME    = 'beconnect_pos'
 const DB_VERSION = 5
 let db = null
 
+// ── Mutex global de sincronização ─────────────────────────────────────────
+// Partilhado entre TODAS as instâncias do composable para evitar que dois
+// componentes (ex: Terminal + PosLayout) disparem trySyncNow() em simultâneo
+// e enviem as mesmas vendas pendentes duas vezes ao servidor.
+let _syncingGlobal = false
+
 // ── Abrir / inicializar IndexedDB ──────────────────────────────────────────
 async function openDB() {
   if (db) return db
@@ -487,12 +493,14 @@ export function useOfflinePos() {
   }
 
   async function trySyncNow() {
-    if (!isOnline.value || syncing.value) return
+    // Usar mutex global: impede que dois componentes sincronizem em simultâneo
+    if (!isOnline.value || _syncingGlobal) return
     const [sales, products, movements, empOps] = await Promise.all([
       getPendingSales(), getPendingProducts(), getPendingMovements(), getPendingEmployeeOps(),
     ])
     if (!sales.length && !products.length && !movements.length && !empOps.length) return
 
+    _syncingGlobal    = true
     syncing.value     = true
     syncMessage.value = ''
     try {
@@ -518,7 +526,8 @@ export function useOfflinePos() {
     } catch {
       syncMessage.value = '⚠️ Erro a sincronizar. Tentará de novo mais tarde.'
     } finally {
-      syncing.value = false
+      _syncingGlobal = false
+      syncing.value  = false
       setTimeout(() => syncMessage.value = '', 5000)
     }
   }
