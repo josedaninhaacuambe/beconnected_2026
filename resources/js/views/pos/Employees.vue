@@ -10,6 +10,23 @@
         </span>
       </div>
 
+      <!-- Selector de loja (apenas para donos com múltiplas lojas) -->
+      <div v-if="auth.allStores.length > 1" class="bg-white rounded-xl border border-gray-100 p-4">
+        <label class="text-xs font-semibold text-gray-500 block mb-2">🏪 Loja activa</label>
+        <div class="flex gap-2 flex-wrap">
+          <button v-for="store in auth.allStores" :key="store.id"
+            type="button"
+            @click="switchStore(store)"
+            class="px-3 py-2 rounded-xl border-2 text-sm font-semibold transition"
+            :class="auth.activeStoreId === store.id
+              ? 'border-bc-gold bg-bc-gold/5 text-bc-gold'
+              : 'border-gray-200 text-gray-600 hover:border-gray-300'">
+            {{ store.name }}
+          </button>
+        </div>
+        <p class="text-[10px] text-gray-400 mt-1">Os funcionários abaixo pertencem à loja seleccionada.</p>
+      </div>
+
       <!-- Adicionar / Criar funcionário -->
       <div class="bg-white rounded-xl border border-gray-100 p-5">
         <h2 class="font-bold text-base text-gray-800 mb-4">➕ Funcionário</h2>
@@ -329,7 +346,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth.js'
 import {
@@ -621,6 +638,13 @@ async function loadEmployees() {
 
   loading.value = false
 }
+
+function switchStore(store) {
+  auth.setActiveStore(store)
+  loadEmployees()
+}
+
+watch(() => auth.activeStoreId, loadEmployees)
 
 onMounted(loadEmployees)
 </script>

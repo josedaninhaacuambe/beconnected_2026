@@ -33,15 +33,29 @@
         </select>
       </div>
 
-      <button v-if="canManage" @click="openCreate"
+      <button v-if="canManage && activeTab === 'products'" @click="openCreate"
         class="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-bold text-white shrink-0"
         style="background:#F07820;">
         ➕ Novo
       </button>
     </div>
 
+    <!-- ── Abas ────────────────────────────────────────────────────────────────── -->
+    <div class="flex-shrink-0 flex gap-1 px-4 py-2 bg-white border-b border-gray-200">
+      <button @click="activeTab = 'products'"
+        class="px-4 py-1.5 rounded-lg text-sm font-semibold transition"
+        :class="activeTab === 'products' ? 'bg-bc-gold text-white' : 'text-gray-500 hover:bg-gray-100'">
+        📦 Produtos
+      </button>
+      <button v-if="canManage" @click="activeTab = 'categories'"
+        class="px-4 py-1.5 rounded-lg text-sm font-semibold transition"
+        :class="activeTab === 'categories' ? 'bg-bc-gold text-white' : 'text-gray-500 hover:bg-gray-100'">
+        🗂️ Categorias
+      </button>
+    </div>
+
     <!-- ── Lista de produtos ───────────────────────────────────────────────────── -->
-    <div class="flex-1 overflow-y-auto p-4">
+    <div v-if="activeTab === 'products'" class="flex-1 overflow-y-auto p-4">
       <div v-if="loading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
         <div v-for="i in 6" :key="i" class="bg-white rounded-xl h-48 animate-pulse"></div>
       </div>
@@ -172,6 +186,73 @@
             class="px-3 py-1 rounded border border-gray-200 text-xs font-semibold disabled:opacity-40 hover:bg-gray-50">
             Próxima →
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Gestão de Categorias ─────────────────────────────────────────────────── -->
+    <div v-if="activeTab === 'categories'" class="flex-1 overflow-y-auto p-4">
+      <div class="max-w-lg mx-auto space-y-4">
+
+        <!-- Formulário criar / editar -->
+        <div class="bg-white rounded-xl border border-gray-100 p-4">
+          <h3 class="font-bold text-sm text-gray-800 mb-3">
+            {{ editingCatId ? '✏️ Editar Categoria' : '➕ Nova Categoria' }}
+          </h3>
+          <div class="flex gap-2">
+            <input v-model="catForm.icon" type="text" placeholder="🏷️"
+              class="w-14 border border-gray-200 rounded-xl px-2 py-2 text-sm text-center focus:outline-none focus:border-bc-gold flex-shrink-0" />
+            <input v-model="catForm.name" type="text" placeholder="Nome da categoria *"
+              class="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-bc-gold" />
+            <button @click="saveCat" :disabled="catSaving || !catForm.name.trim()"
+              class="px-4 py-2 rounded-xl text-white text-sm font-bold disabled:opacity-50 transition hover:opacity-90 flex-shrink-0"
+              style="background:#F07820;">
+              {{ catSaving ? '...' : (editingCatId ? 'Guardar' : 'Criar') }}
+            </button>
+            <button v-if="editingCatId" @click="cancelCatEdit"
+              class="px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 flex-shrink-0">
+              ✕
+            </button>
+          </div>
+          <p v-if="catError" class="text-red-500 text-xs mt-2">{{ catError }}</p>
+        </div>
+
+        <!-- Lista de categorias da loja -->
+        <div class="bg-white rounded-xl border border-gray-100 p-4">
+          <h3 class="font-bold text-sm text-gray-800 mb-3">🗂️ Categorias da Loja</h3>
+          <div v-if="!storeCategories.length" class="text-center py-8 text-gray-400 text-sm">
+            Ainda sem categorias criadas. Crie a primeira acima.
+          </div>
+          <div v-else class="space-y-2">
+            <div v-for="cat in storeCategories" :key="cat.id"
+              class="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-gray-100 hover:border-gray-200 transition">
+              <span class="text-lg w-7 text-center flex-shrink-0">{{ cat.icon || '🏷️' }}</span>
+              <span class="flex-1 text-sm font-semibold text-gray-800">{{ cat.name }}</span>
+              <span class="text-xs text-gray-400 flex-shrink-0">
+                {{ catProductCount(cat.id) }} produto(s)
+              </span>
+              <button @click="startCatEdit(cat)"
+                class="text-xs px-2 py-1 rounded-lg border border-gray-200 text-gray-500 hover:border-bc-gold hover:text-bc-gold transition flex-shrink-0">
+                ✏️
+              </button>
+              <button @click="deleteCat(cat)"
+                class="text-xs px-2 py-1 rounded-lg border border-red-100 text-red-400 hover:border-red-300 hover:text-red-600 transition flex-shrink-0">
+                🗑️
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Categorias globais (informativo) -->
+        <div v-if="globalCategories.length" class="bg-gray-50 rounded-xl border border-gray-100 p-4">
+          <h3 class="font-bold text-sm text-gray-600 mb-2">🌐 Categorias Globais</h3>
+          <p class="text-xs text-gray-400 mb-3">Partilhadas por todas as lojas — não editáveis aqui.</p>
+          <div class="flex flex-wrap gap-2">
+            <span v-for="cat in globalCategories" :key="cat.id"
+              class="px-3 py-1 rounded-full bg-white border border-gray-200 text-xs text-gray-600 font-semibold">
+              {{ cat.icon || '🏷️' }} {{ cat.name }}
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -362,6 +443,7 @@ const { isOnline, pendingProductCount, refreshPendingCount } = useOfflinePos()
 const offlineProducts = ref([]) // produtos criados offline ainda não sincronizados
 
 // ── State ──────────────────────────────────────────────────────────────────────
+const activeTab     = ref('products')
 const products      = ref([])
 const categories    = ref([])
 const loading       = ref(true)
@@ -409,6 +491,64 @@ const canManage = computed(() => {
   const role = auth.posRole
   return role === 'owner' || role === 'manager'
 })
+
+// ── Gestão de categorias ───────────────────────────────────────────────────────
+const storeCategories  = computed(() => categories.value.filter(c => c.store_id != null))
+const globalCategories = computed(() => categories.value.filter(c => c.store_id == null))
+
+const catForm       = reactive({ name: '', icon: '' })
+const catSaving     = ref(false)
+const catError      = ref('')
+const editingCatId  = ref(null)
+
+function startCatEdit(cat) {
+  editingCatId.value = cat.id
+  catForm.name = cat.name
+  catForm.icon = cat.icon || ''
+  catError.value = ''
+}
+function cancelCatEdit() {
+  editingCatId.value = null
+  catForm.name = ''
+  catForm.icon = ''
+  catError.value = ''
+}
+
+async function saveCat() {
+  catError.value = ''
+  catSaving.value = true
+  try {
+    if (editingCatId.value) {
+      const { data } = await axios.put(`/pos/categories/${editingCatId.value}`, catForm)
+      const idx = categories.value.findIndex(c => c.id === editingCatId.value)
+      if (idx >= 0) categories.value[idx] = data
+      cancelCatEdit()
+    } else {
+      const { data } = await axios.post('/pos/categories', catForm)
+      categories.value.push(data)
+      catForm.name = ''
+      catForm.icon = ''
+    }
+  } catch (e) {
+    catError.value = e.response?.data?.message ?? e.response?.data?.errors?.name?.[0] ?? 'Erro ao guardar categoria.'
+  } finally {
+    catSaving.value = false
+  }
+}
+
+async function deleteCat(cat) {
+  if (!confirm(`Apagar categoria "${cat.name}"?`)) return
+  try {
+    await axios.delete(`/pos/categories/${cat.id}`)
+    categories.value = categories.value.filter(c => c.id !== cat.id)
+  } catch (e) {
+    alert(e.response?.data?.message ?? 'Erro ao apagar categoria.')
+  }
+}
+
+function catProductCount(catId) {
+  return products.value.filter(p => p.product_category_id === catId && p.is_active).length
+}
 
 // ── Filtro + paginação ─────────────────────────────────────────────────────────
 const filtered = computed(() => {

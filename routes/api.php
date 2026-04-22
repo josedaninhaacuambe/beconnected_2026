@@ -296,6 +296,9 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
         Route::delete('products/{product}',              [PosController::class, 'deactivatePosProduct']);
         Route::get('products/{product}/history',         [PosController::class, 'posProductHistory']);
         Route::get('categories',                         [PosController::class, 'categories']);
+        Route::post('categories',                        [PosController::class, 'createCategory']);
+        Route::put('categories/{category}',              [PosController::class, 'updateCategory']);
+        Route::delete('categories/{category}',           [PosController::class, 'deleteCategory']);
         Route::post('sync',           [PosController::class, 'sync'])->middleware('throttle:pos-sync');
         Route::delete('sales/{sale}', [PosController::class, 'deleteSale']);
         Route::post('sales/{sale}/void', [PosController::class, 'voidSale']);

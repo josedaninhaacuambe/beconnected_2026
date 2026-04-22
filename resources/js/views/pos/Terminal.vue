@@ -278,7 +278,8 @@
     </button>
 
     <!-- ── DIREITA: Carrinho (Desktop only) ──────────────────────────────────── -->
-    <div class="hidden lg:flex lg:w-72 lg:flex-col bg-white">
+    <div class="hidden lg:flex lg:flex-col bg-white transition-all duration-300"
+      :class="cartExpanded ? 'lg:w-[52%] xl:w-[48%]' : 'lg:w-72'">
       <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
         <p class="font-bold text-gray-800">🛒 Carrinho</p>
         <div class="flex items-center gap-2">
@@ -291,6 +292,38 @@
               :class="applyVat ? 'bg-green-500 border-green-500' : 'border-gray-300'"></span>
           </button>
           <button v-if="cart.length" @click="clearCart" class="text-xs text-red-400 hover:text-red-600">Limpar</button>
+          <!-- Expandir / recolher carrinho -->
+          <button @click="cartExpanded = !cartExpanded"
+            class="text-xs px-2 py-1 rounded-lg border border-gray-200 text-gray-500 hover:border-bc-gold hover:text-bc-gold transition"
+            :title="cartExpanded ? 'Recolher carrinho' : 'Expandir carrinho'">
+            {{ cartExpanded ? '⟨' : '⟩' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Pesquisa + Categorias inline (apenas no modo expandido) -->
+      <div v-if="cartExpanded" class="px-3 pt-3 pb-2 border-b border-gray-100 space-y-2">
+        <input
+          v-model="search"
+          @input="filterProducts"
+          @keydown.enter="onSearchEnter"
+          type="text"
+          :placeholder="scanMode ? '📷 Aguardando scanner...' : '🔍 Pesquisar produto, SKU ou barcode...'"
+          class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-bc-gold"
+        />
+        <div v-if="categories.length > 0" class="flex gap-1.5 overflow-x-auto pb-0.5">
+          <button
+            @click="selectedCategory = null; filterProducts()"
+            class="flex-shrink-0 px-3 py-1 rounded-full text-xs font-bold transition"
+            :class="selectedCategory === null ? 'bg-bc-gold text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'">
+            Todos
+          </button>
+          <button v-for="cat in categories" :key="cat.id"
+            @click="selectedCategory = cat.id; filterProducts()"
+            class="flex-shrink-0 px-3 py-1 rounded-full text-xs font-bold transition"
+            :class="selectedCategory === cat.id ? 'bg-bc-gold text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'">
+            {{ cat.name }}
+          </button>
         </div>
       </div>
 
@@ -720,6 +753,7 @@ const receipt      = ref(null)
 const loadingProducts = ref(true)
 const loadError = ref('')
 const showMobileCart = ref(false)
+const cartExpanded   = ref(false)
 
 // ── Modo scanner ────────────────────────────────────────────────────────────
 const showScanChoice = ref(false)

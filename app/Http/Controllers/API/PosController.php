@@ -855,8 +855,7 @@ class PosController extends Controller
     public function addEmployee(Request $request): JsonResponse
     {
         $user  = $request->user();
-        $store = $user->store;
-        abort_if(!$store, 403);
+        $store = $this->resolveStore($request);
 
         $validated = $request->validate([
             'email'       => 'required|email|exists:users,email',
@@ -1063,8 +1062,8 @@ class PosController extends Controller
 
     public function removeEmployee(Request $request, StoreEmployee $employee): JsonResponse
     {
-        $store = $request->user()->store;
-        abort_if(!$store || $employee->store_id !== $store->id, 403);
+        $store = $this->resolveStore($request);
+        abort_if($employee->store_id !== $store->id, 403);
 
         $employee->update(['is_active' => false]);
         Cache::forget("user_me_{$employee->user_id}");
@@ -1074,8 +1073,8 @@ class PosController extends Controller
     // ─── Actualizar role e permissões de um funcionário ───────────────────────
     public function updateEmployee(Request $request, StoreEmployee $employee): JsonResponse
     {
-        $store = $request->user()->store;
-        abort_if(!$store || $employee->store_id !== $store->id, 403, 'Sem permissão.');
+        $store = $this->resolveStore($request);
+        abort_if($employee->store_id !== $store->id, 403, 'Sem permissão.');
 
         $validated = $request->validate([
             'role'          => 'required|in:manager,cashier,stock_keeper,viewer',
@@ -1108,13 +1107,7 @@ class PosController extends Controller
             ], 403);
         }
 
-        // Verificar se o usuário tem uma loja associada
-        $store = $user->store;
-        if (!$store) {
-            return response()->json([
-                'message' => 'Você precisa ter uma loja cadastrada para adicionar funcionários. Crie sua loja primeiro.',
-            ], 403);
-        }
+        $store = $this->resolveStore($request);
 
         // Verificar se a loja está ativa
         if ($store->status !== 'active') {
@@ -1167,8 +1160,8 @@ class PosController extends Controller
     // ─── Redefinir senha de um funcionário (pelo dono) ───────────────────────
     public function resetEmployeePassword(Request $request, StoreEmployee $employee): JsonResponse
     {
-        $store = $request->user()->store;
-        abort_if(!$store || $employee->store_id !== $store->id, 403, 'Sem permissão.');
+        $store = $this->resolveStore($request);
+        abort_if($employee->store_id !== $store->id, 403, 'Sem permissão.');
 
         $validated = $request->validate([
             'password' => 'required|string|min:6',
@@ -1268,17 +1261,87 @@ class PosController extends Controller
         $this->requirePosPermission($request, 'fazer_vendas');
         $store = $this->resolveStore($request);
 
-        $categoryIds = $store->products()
+        // Categorias usadas por produtos da loja
+        $usedIds = $store->products()
             ->where('is_active', true)
             ->whereNotNull('product_category_id')
             ->pluck('product_category_id')
             ->unique();
 
-        $cats = \App\Models\ProductCategory::whereIn('id', $categoryIds)
+        // Retorna: categorias usadas + categorias criadas por esta loja
+        $cats = \App\Models\ProductCategory::where(function ($q) use ($store, $usedIds) {
+            $q->whereIn('id', $usedIds)
+              ->orWhere('store_id', $store->id);
+        })
             ->orderBy('name')
-            ->get(['id', 'name', 'parent_id']);
+            ->get(['id', 'store_id', 'name', 'parent_id']);
 
         return response()->json($cats);
+    }
+
+    // ─── Criar categoria (dono / manager com adicionar_produtos) ─────────────
+    public function createCategory(Request $request): JsonResponse
+    {
+        $this->requirePosPermission($request, 'adicionar_produtos');
+        $store = $this->resolveStore($request);
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:100',
+            'icon' => 'nullable|string|max:10',
+        ]);
+
+        $slug = Str::slug($validated['name']) . '-' . $store->id;
+
+        $cat = \App\Models\ProductCategory::firstOrCreate(
+            ['store_id' => $store->id, 'name' => $validated['name']],
+            [
+                'slug'      => $slug,
+                'icon'      => $validated['icon'] ?? null,
+                'is_active' => true,
+            ]
+        );
+
+        return response()->json($cat, 201);
+    }
+
+    // ─── Actualizar categoria da loja ─────────────────────────────────────────
+    public function updateCategory(Request $request, \App\Models\ProductCategory $category): JsonResponse
+    {
+        $this->requirePosPermission($request, 'adicionar_produtos');
+        $store = $this->resolveStore($request);
+
+        abort_if($category->store_id !== $store->id, 403, 'Sem permissão para editar esta categoria.');
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:100',
+            'icon' => 'nullable|string|max:10',
+        ]);
+
+        $category->update([
+            'name' => $validated['name'],
+            'slug' => Str::slug($validated['name']) . '-' . $store->id,
+            'icon' => $validated['icon'] ?? $category->icon,
+        ]);
+
+        return response()->json($category);
+    }
+
+    // ─── Apagar categoria da loja ─────────────────────────────────────────────
+    public function deleteCategory(Request $request, \App\Models\ProductCategory $category): JsonResponse
+    {
+        $this->requirePosPermission($request, 'adicionar_produtos');
+        $store = $this->resolveStore($request);
+
+        abort_if($category->store_id !== $store->id, 403, 'Sem permissão para apagar esta categoria.');
+
+        $inUse = $store->products()->where('product_category_id', $category->id)->exists();
+        if ($inUse) {
+            return response()->json(['message' => 'Não é possível apagar: existem produtos nesta categoria.'], 422);
+        }
+
+        $category->delete();
+
+        return response()->json(['message' => 'Categoria apagada.']);
     }
 
     // ─── Todos os produtos da loja (activos + inactivos) para gestão ──────────
