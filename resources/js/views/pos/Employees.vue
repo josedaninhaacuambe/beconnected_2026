@@ -235,10 +235,16 @@
                   :class="(editTab[emp.id] ?? 'perms') === 'perms' ? 'bg-white shadow text-gray-800' : 'text-gray-500'">
                   🔑 Permissões
                 </button>
+                <button v-if="auth.allStores.length > 1"
+                  @click="editTab[emp.id] = 'stores'; loadAllocations(emp)"
+                  class="flex-1 py-1.5 rounded-lg text-xs font-semibold transition"
+                  :class="editTab[emp.id] === 'stores' ? 'bg-white shadow text-gray-800' : 'text-gray-500'">
+                  🏪 Lojas
+                </button>
                 <button @click="editTab[emp.id] = 'password'"
                   class="flex-1 py-1.5 rounded-lg text-xs font-semibold transition"
                   :class="editTab[emp.id] === 'password' ? 'bg-white shadow text-gray-800' : 'text-gray-500'">
-                  🔒 Redefinir senha
+                  🔒 Senha
                 </button>
               </div>
 
@@ -286,8 +292,45 @@
                 </div>
               </div>
 
+              <!-- Lojas — alocação do funcionário por loja do dono -->
+              <div v-else-if="editTab[emp.id] === 'stores'" class="space-y-3">
+                <p class="text-xs text-gray-400">
+                  Define em que lojas <strong>{{ emp.user?.name }}</strong> tem acesso.
+                  O funcionário herda o perfil e permissões desta loja nas lojas onde for adicionado.
+                </p>
+                <div v-if="allocLoading[emp.id]" class="text-xs text-gray-400 text-center py-4">
+                  A carregar lojas...
+                </div>
+                <div v-else class="space-y-2">
+                  <div v-for="store in (allocations[emp.id] ?? [])" :key="store.store_id"
+                    class="flex items-center justify-between px-3 py-2.5 rounded-xl border transition"
+                    :class="store.allocated ? 'border-bc-gold bg-bc-gold/5' : 'border-gray-100 bg-gray-50'">
+                    <div class="flex items-center gap-2">
+                      <span class="w-2 h-2 rounded-full flex-shrink-0"
+                        :class="store.allocated ? 'bg-green-400' : 'bg-gray-300'"></span>
+                      <span class="text-sm font-semibold text-gray-800">{{ store.store_name }}</span>
+                      <span v-if="store.store_id === auth.activeStoreId"
+                        class="text-[10px] bg-bc-gold/10 text-bc-gold font-bold px-1.5 py-0.5 rounded-full">
+                        actual
+                      </span>
+                    </div>
+                    <button
+                      @click="toggleAllocation(emp, store)"
+                      :disabled="allocSaving[emp.id + '_' + store.store_id]"
+                      class="text-xs px-3 py-1.5 rounded-xl font-bold transition disabled:opacity-50"
+                      :class="store.allocated
+                        ? 'bg-red-50 text-red-500 border border-red-100 hover:bg-red-100'
+                        : 'bg-bc-gold/10 text-bc-gold border border-bc-gold/30 hover:bg-bc-gold/20'">
+                      {{ allocSaving[emp.id + '_' + store.store_id] ? '...'
+                         : store.allocated ? 'Remover' : 'Adicionar' }}
+                    </button>
+                  </div>
+                </div>
+                <p v-if="allocError[emp.id]" class="text-red-500 text-xs">{{ allocError[emp.id] }}</p>
+              </div>
+
               <!-- Redefinir senha -->
-              <div v-else class="space-y-3">
+              <div v-else-if="editTab[emp.id] === 'password'" class="space-y-3">
                 <p class="text-xs text-gray-400">
                   Define uma nova senha para <strong>{{ emp.user?.name }}</strong>. Avisa o funcionário da nova senha.
                 </p>
@@ -470,7 +513,11 @@ const savingId   = ref(null)
 const editTab    = reactive({})
 
 function toggleEdit(emp) {
-  if (editingId.value === emp.id) { editingId.value = null; return }
+  if (editingId.value === emp.id) {
+    editingId.value = null
+    delete allocations[emp.id]  // limpa cache para recarregar na próxima abertura
+    return
+  }
   editingId.value = emp.id
   editTab[emp.id] = 'perms'
   editForms[emp.id] = {
@@ -517,6 +564,43 @@ async function saveEdit(emp) {
     editErrors[emp.id] = e.response?.data?.message ?? 'Erro ao guardar.'
   } finally {
     savingId.value = null
+  }
+}
+
+// ── Alocação de lojas ──────────────────────────────────────────────────────
+const allocations  = reactive({})
+const allocLoading = reactive({})
+const allocSaving  = reactive({})
+const allocError   = reactive({})
+
+async function loadAllocations(emp) {
+  if (allocations[emp.id]) return  // já carregado
+  allocLoading[emp.id] = true
+  allocError[emp.id]   = ''
+  try {
+    const { data } = await axios.get(`/pos/employees/${emp.id}/allocations`)
+    allocations[emp.id] = data
+  } catch (e) {
+    allocError[emp.id] = e.response?.data?.message ?? 'Erro ao carregar lojas.'
+  } finally {
+    allocLoading[emp.id] = false
+  }
+}
+
+async function toggleAllocation(emp, store) {
+  const key = emp.id + '_' + store.store_id
+  allocSaving[key]   = true
+  allocError[emp.id] = ''
+  try {
+    await axios.post(`/pos/employees/${emp.id}/allocate`, {
+      store_id: store.store_id,
+      active:   !store.allocated,
+    })
+    store.allocated = !store.allocated
+  } catch (e) {
+    allocError[emp.id] = e.response?.data?.message ?? 'Erro ao actualizar alocação.'
+  } finally {
+    allocSaving[key] = false
   }
 }
 

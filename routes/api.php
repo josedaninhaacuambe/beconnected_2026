@@ -315,6 +315,8 @@ Route::middleware(['auth:sanctum', 'throttle:api-auth'])->group(function () {
         Route::post('employees/create-account',             [PosController::class, 'createEmployeeAccount']);
         Route::put('employees/{employee}',                   [PosController::class, 'updateEmployee']);
         Route::put('employees/{employee}/reset-password',    [PosController::class, 'resetEmployeePassword']);
+        Route::get('employees/{employee}/allocations',       [PosController::class, 'employeeAllocations']);
+        Route::post('employees/{employee}/allocate',         [PosController::class, 'allocateEmployee']);
         Route::delete('employees/{employee}',                [PosController::class, 'removeEmployee']);
     });
 

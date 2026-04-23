@@ -1070,6 +1070,67 @@ class PosController extends Controller
         return response()->json(['message' => 'Acesso removido.']);
     }
 
+    // ─── Alocações do funcionário em todas as lojas do dono ──────────────────
+    public function employeeAllocations(Request $request, StoreEmployee $employee): JsonResponse
+    {
+        $user  = $request->user();
+        $store = $this->resolveStore($request);
+        abort_if($employee->store_id !== $store->id, 403);
+
+        $ownerStores = Store::where('user_id', $user->id)->get(['id', 'name']);
+
+        $allocs = StoreEmployee::where('user_id', $employee->user_id)
+            ->whereIn('store_id', $ownerStores->pluck('id'))
+            ->get(['id', 'store_id', 'is_active']);
+
+        $result = $ownerStores->map(function ($s) use ($allocs) {
+            $a = $allocs->firstWhere('store_id', $s->id);
+            return [
+                'store_id'   => $s->id,
+                'store_name' => $s->name,
+                'allocated'  => $a ? (bool) $a->is_active : false,
+            ];
+        });
+
+        return response()->json($result);
+    }
+
+    // ─── Alocar / desalocar funcionário de uma loja do mesmo dono ────────────
+    public function allocateEmployee(Request $request, StoreEmployee $employee): JsonResponse
+    {
+        $user  = $request->user();
+        $store = $this->resolveStore($request);
+        abort_if($employee->store_id !== $store->id, 403);
+
+        $validated = $request->validate([
+            'store_id' => 'required|integer|exists:stores,id',
+            'active'   => 'required|boolean',
+        ]);
+
+        $target = Store::where('id', $validated['store_id'])
+            ->where('user_id', $user->id)
+            ->firstOrFail();
+
+        if ($validated['active']) {
+            StoreEmployee::updateOrCreate(
+                ['store_id' => $target->id, 'user_id' => $employee->user_id],
+                [
+                    'role'        => $employee->role,
+                    'permissions' => $employee->permissions,
+                    'is_active'   => true,
+                    'added_by'    => $user->id,
+                ]
+            );
+        } else {
+            StoreEmployee::where('store_id', $target->id)
+                ->where('user_id', $employee->user_id)
+                ->update(['is_active' => false]);
+        }
+
+        Cache::forget("user_me_{$employee->user_id}");
+        return response()->json(['message' => 'Alocação actualizada.']);
+    }
+
     // ─── Actualizar role e permissões de um funcionário ───────────────────────
     public function updateEmployee(Request $request, StoreEmployee $employee): JsonResponse
     {
