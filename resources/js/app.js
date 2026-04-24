@@ -57,6 +57,11 @@ axios.interceptors.response.use(
             return Promise.reject(error)
         }
 
+        // Quando offline, falhar imediatamente — não retentar (evita bloquear a UI por segundos)
+        if (!navigator.onLine) {
+            return Promise.reject(error)
+        }
+
         config.__retryCount = config.__retryCount || 0
 
         if (config.__retryCount >= AXIOS_RETRY_MAX) {

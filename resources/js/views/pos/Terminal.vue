@@ -721,7 +721,7 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted, nextTick } from 'vue'
+import { ref, computed, reactive, onMounted, nextTick, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
@@ -1144,7 +1144,11 @@ function printReceipt() {
 async function loadProducts() {
   loadingProducts.value = true
   loadError.value = ''
-  const storeId = auth.activeStoreId ?? auth.activeStore?.id ?? auth.user?.pos_employee?.store?.id
+  const rawStoreId = auth.activeStoreId
+    ?? auth.activeStore?.id
+    ?? auth.user?.pos_employee?.store?.id
+    ?? auth.user?.pos_employee?.store_id
+  const storeId = rawStoreId ? Number(rawStoreId) : null
 
   try {
     // 1. Mostrar cache imediatamente (sem esperar servidor) — filtrada por loja
@@ -1251,6 +1255,8 @@ onMounted(async () => {
 })
 
 // ── Watchers ────────────────────────────────────────────────────────────────
+// Quando a internet volta: recarregar produtos (sincroniza stock actualizado)
+watch(isOnline, (online) => { if (online) loadProducts() })
 </script>
 
 <style>

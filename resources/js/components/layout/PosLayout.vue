@@ -189,7 +189,13 @@ const { isOnline, pendingCount, syncing, syncMessage, trySyncNow } = useOfflineP
 
 // Pré-carregar todos os dados POS para IndexedDB sempre que online,
 // garantindo funcionamento offline em todos os ecrãs sem visita prévia.
-function resolveStoreId() { return auth.activeStoreId ?? auth.activeStore?.id ?? null }
+function resolveStoreId() {
+  return auth.activeStoreId
+    ?? auth.activeStore?.id
+    ?? auth.user?.pos_employee?.store?.id
+    ?? auth.user?.pos_employee?.store_id
+    ?? null
+}
 function runPrefetch() { prefetchPosData(resolveStoreId()) }
 onMounted(runPrefetch)
 watch(isOnline, (online) => { if (online) runPrefetch() })
