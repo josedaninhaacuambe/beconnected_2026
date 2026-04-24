@@ -130,7 +130,7 @@
           <input
             ref="searchInput"
             v-model="search"
-            @input="filterProducts"
+            @input="debouncedFilter"
             @keydown.enter="onSearchEnter"
             type="text"
             :placeholder="scanMode ? '📷 Aguardando leitura do scanner...' : '🔍 Pesquisar produto, SKU ou código de barras...'"
@@ -219,13 +219,14 @@
           <div class="lg:hidden space-y-2">
             <button
               v-for="p in filtered" :key="p.id"
+              v-memo="[p.id, p.stock?.quantity, p.stock?.weight_quantity, p.price]"
               @click="clickProduct(p)"
               class="w-full flex items-center gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-bc-gold hover:shadow-md transition active:scale-95"
               :class="stockExplicitlyEmpty(p) ? 'opacity-40 cursor-not-allowed' : ''"
               :disabled="stockExplicitlyEmpty(p)"
             >
               <div class="w-20 h-20 bg-white rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center border border-gray-100">
-                <AppImg :src="p.image ? (p.image.startsWith('http') ? p.image : '/storage/' + p.image) : ''" type="product" class="w-full h-full object-cover" />
+                <AppImg :src="p.image ? (p.image.startsWith('http') ? p.image : '/storage/' + p.image) : ''" type="product" loading="lazy" class="w-full h-full object-cover" />
               </div>
               <div class="flex-1 min-w-0 text-left">
                 <p class="text-sm font-semibold text-gray-800 truncate">{{ p.name }}</p>
@@ -244,13 +245,14 @@
           <div class="hidden lg:grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
             <button
               v-for="p in filtered" :key="p.id"
+              v-memo="[p.id, p.stock?.quantity, p.stock?.weight_quantity, p.price]"
               @click="clickProduct(p)"
               class="relative flex flex-col items-center text-center p-3 bg-white rounded-xl border-2 border-transparent hover:border-bc-gold hover:shadow-md transition active:scale-95"
               :class="stockExplicitlyEmpty(p) ? 'opacity-40 cursor-not-allowed' : ''"
               :disabled="stockExplicitlyEmpty(p)"
             >
               <div class="w-full h-16 rounded-lg overflow-hidden bg-gray-100 mb-2 flex items-center justify-center">
-                <AppImg :src="p.image ? (p.image.startsWith('http') ? p.image : '/storage/' + p.image) : ''" type="product" class="w-full h-full object-cover" />
+                <AppImg :src="p.image ? (p.image.startsWith('http') ? p.image : '/storage/' + p.image) : ''" type="product" loading="lazy" class="w-full h-full object-cover" />
               </div>
               <p class="text-xs font-semibold text-gray-800 line-clamp-2 leading-tight mb-1">{{ p.name }}</p>
               <p class="text-sm font-black" style="color:#F07820;">{{ fmt(p.price) }}</p>
@@ -931,6 +933,12 @@ function fmt(v)  { return _fmt.format(v ?? 0) }
 function fmtN(v) { return _fmtN.format(v ?? 0) + ' MZN' }
 function formatDateTime(iso) {
   return new Date(iso).toLocaleString('pt-MZ', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })
+}
+
+let _filterTimer = null
+function debouncedFilter() {
+  clearTimeout(_filterTimer)
+  _filterTimer = setTimeout(filterProducts, 220)
 }
 
 function filterProducts() {

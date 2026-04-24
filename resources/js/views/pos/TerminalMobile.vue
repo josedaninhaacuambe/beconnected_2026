@@ -65,7 +65,7 @@
         <input
           ref="searchInput"
           v-model="search"
-          @input="filterProducts"
+          @input="debouncedFilter"
           type="text"
           placeholder="🔍 Produto, SKU ou código de barras..."
           class="w-full bg-bc-surface border border-bc-gold/30 rounded-xl px-4 py-3 text-base text-bc-light focus:outline-none focus:border-bc-gold focus:ring-2 focus:ring-bc-gold/20"
@@ -88,6 +88,7 @@
         <button
           v-for="p in filtered"
           :key="p.id"
+          v-memo="[p.id, p.stock?.quantity, p.stock?.weight_quantity, p.price]"
           @click="clickProduct(p)"
           :disabled="(p.stock?.quantity ?? 0) <= 0"
           class="w-full bg-bc-surface rounded-xl p-4 text-left border border-bc-gold/30 hover:border-bc-gold hover:shadow-lg disabled:opacity-50 transition-all active:scale-95"
@@ -98,6 +99,7 @@
               <AppImg
                 :src="p.image ? (p.image.startsWith('http') ? p.image : `/storage/${p.image}`) : ''"
                 type="product"
+                loading="lazy"
                 class="w-full h-full object-cover"
               />
             </div>
@@ -662,9 +664,15 @@ async function loadProducts() {
   }
 }
 
+let _filterTimer = null
+function debouncedFilter() {
+  clearTimeout(_filterTimer)
+  _filterTimer = setTimeout(filterProducts, 220)
+}
+
 function filterProducts() {
   let result = allProducts.value
-  
+
   // Filtro por categoria
   if (selectedCategory.value) {
     result = result.filter(p => p.category_id === selectedCategory.value)

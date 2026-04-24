@@ -11,6 +11,12 @@
       <span>A actualizar… (cache {{ cacheAge }})</span>
     </div>
 
+    <!-- Banner vendas pendentes offline -->
+    <div v-if="pendingOfflineSales.length > 0" class="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-amber-900 bg-amber-100 border border-amber-300 rounded-xl">
+      <span>⏳</span>
+      <span>{{ pendingOfflineSales.length }} venda{{ pendingOfflineSales.length !== 1 ? 's' : '' }} pendente{{ pendingOfflineSales.length !== 1 ? 's' : '' }} offline — serão sincronizadas quando houver internet</span>
+    </div>
+
     <!-- Cabeçalho -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       <div>
@@ -117,7 +123,7 @@
 
         <div v-for="(sale, idx) in data.sales" :key="sale.id"
           class="border-b border-gray-50 last:border-0"
-          :class="sale.status === 'voided' ? 'opacity-60' : ''">
+          :class="[sale.status === 'voided' ? 'opacity-60' : '', sale._pending ? 'bg-amber-50/60' : '']">
 
           <!-- Cabeçalho da venda -->
           <button class="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition"
@@ -129,6 +135,7 @@
                 <p class="text-sm font-bold text-gray-800 flex items-center gap-2">
                   {{ formatTime(sale.sale_at) }}
                   <span v-if="sale.status === 'voided'" class="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">ANULADA</span>
+                  <span v-if="sale._pending" class="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">⏳ PENDENTE</span>
                   <span v-if="sale.customer_name" class="text-gray-500 font-normal text-xs"> · {{ sale.customer_name }}</span>
                 </p>
                 <p class="text-xs text-gray-400">
@@ -197,8 +204,8 @@
               </div>
             </div>
 
-            <!-- Botão anular (apenas dono/gerente, só vendas activas) -->
-            <div v-if="data.is_owner_or_manager && sale.status !== 'voided'" class="mt-3">
+            <!-- Botão anular (apenas dono/gerente, só vendas sincronizadas) -->
+            <div v-if="data.is_owner_or_manager && sale.status !== 'voided' && !sale._pending" class="mt-3">
               <button @click="openVoidModal(sale)"
                 class="w-full py-2 rounded-xl border border-red-200 text-xs font-bold text-red-500 hover:bg-red-50 transition">
                 ↩ Anular Venda
@@ -280,7 +287,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
-import { useOfflinePos, cacheDailyCash, getCachedDailyCash, fmtCacheAge } from '@/composables/useOfflinePos'
+import { useOfflinePos, cacheDailyCash, getCachedDailyCash, fmtCacheAge, getPendingSales } from '@/composables/useOfflinePos'
 
 const { isOnline } = useOfflinePos()
 
@@ -295,8 +302,80 @@ const showVoidModal  = ref(false)
 const voidReason     = ref('')
 const voidTarget     = ref(null)
 const voidLoading    = ref(false)
+const pendingOfflineSales = ref([])
 
 const _fmt = new Intl.NumberFormat('pt-MZ', { style: 'currency', currency: 'MZN' })
+
+function adaptPendingSale(s) {
+  return {
+    id: s.local_id,
+    sale_at: s.sale_at,
+    total: s.total,
+    subtotal: s.subtotal,
+    discount: s.discount,
+    vat_amount: s.vat_amount,
+    vat_rate: s.vat_rate,
+    payment_method: s.payment_method,
+    customer_name: s.customer_name,
+    amount_paid: s.amount_paid,
+    change: s.change,
+    status: 'pending',
+    items: (s.items ?? []).map(i => ({
+      id: i.product_id,
+      product_name: i.product_name,
+      unit_price: i.unit_price,
+      quantity: i.quantity,
+      subtotal: i.subtotal,
+      weight_amount: i.weight_amount ?? null,
+      weight_unit: i.weight_unit ?? null,
+    })),
+    user: { name: s.seller_name ?? 'Você' },
+    _pending: true,
+  }
+}
+
+async function mergePendingSales() {
+  const allPending = await getPendingSales()
+  const forDate = allPending.filter(s => s.sale_at?.slice(0, 10) === selectedDate.value)
+  pendingOfflineSales.value = forDate
+  if (!forDate.length) return
+
+  const adapted = forDate.map(adaptPendingSale)
+
+  if (!data.value) {
+    const byPayment = {}
+    for (const s of forDate) {
+      const m = s.payment_method
+      if (!byPayment[m]) byPayment[m] = { method: m, total: 0, count: 0 }
+      byPayment[m].total += s.total
+      byPayment[m].count++
+    }
+    data.value = {
+      total_sales: forDate.length,
+      total_revenue: forDate.reduce((a, s) => a + s.total, 0),
+      total_discount: forDate.reduce((a, s) => a + (s.discount || 0), 0),
+      total_vat: forDate.reduce((a, s) => a + (s.vat_amount || 0), 0),
+      by_payment: Object.values(byPayment),
+      by_seller: [],
+      is_owner_or_manager: false,
+      sellers: [],
+      sales: adapted.sort((a, b) => new Date(b.sale_at) - new Date(a.sale_at)),
+    }
+  } else {
+    const d = JSON.parse(JSON.stringify(data.value))
+    d.total_sales    += forDate.length
+    d.total_revenue  += forDate.reduce((a, s) => a + s.total, 0)
+    d.total_discount += forDate.reduce((a, s) => a + (s.discount || 0), 0)
+    d.total_vat      += forDate.reduce((a, s) => a + (s.vat_amount || 0), 0)
+    for (const s of forDate) {
+      const existing = d.by_payment.find(p => p.method === s.payment_method)
+      if (existing) { existing.total += s.total; existing.count++ }
+      else d.by_payment.push({ method: s.payment_method, total: s.total, count: 1 })
+    }
+    d.sales = [...adapted, ...d.sales].sort((a, b) => new Date(b.sale_at) - new Date(a.sale_at))
+    data.value = d
+  }
+}
 function fmt(v) { return _fmt.format(v ?? 0) }
 
 function formatTime(iso) {
@@ -340,9 +419,10 @@ async function confirmVoid() {
 }
 
 async function load() {
-  loading.value  = true
+  loading.value     = true
   isFromCache.value = false
   cacheAge.value    = ''
+  pendingOfflineSales.value = []
 
   // 1. Mostrar cache imediatamente enquanto tenta a rede
   const cached = await getCachedDailyCash(selectedDate.value)
@@ -366,6 +446,9 @@ async function load() {
       if (!data.value) console.error('Fecho de caixa indisponível:', e)
     }
   }
+
+  // 2. Incluir vendas offline pendentes (não sincronizadas ainda)
+  await mergePendingSales()
 
   loading.value = false
 }

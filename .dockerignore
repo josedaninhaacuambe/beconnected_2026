@@ -6,8 +6,9 @@ npm-debug.log*
 .git/
 .gitignore
 
-# Docker (evitar recursão)
+# Docker (evitar recursão — mas permite docker/php/ que tem o start.sh)
 docker/
+!docker/php/
 docker-compose*.yml
 .dockerignore
 
