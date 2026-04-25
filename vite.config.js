@@ -35,6 +35,7 @@ export default defineConfig(({ mode }) => {
             tailwindcss(),
             VitePWA({
                 registerType: 'autoUpdate',
+                scope: '/',
                 devOptions: { enabled: true, type: 'module' },
                 includeAssets: ['favicon.ico', 'icons/*.png'],
                 manifest: {
@@ -57,22 +58,6 @@ export default defineConfig(({ mode }) => {
                 workbox: {
                     skipWaiting: true,
                     clientsClaim: true,
-                    // Pré-cachear o HTML raiz para que a app abra offline mesmo após
-                    // reinício do computador sem internet. revision:null → re-fetch a cada deploy.
-                    additionalManifestEntries: [
-                        { url: '/', revision: null },
-                    ],
-                    // Fallback de navegação: quando offline e a rota não está em cache,
-                    // serve o HTML raiz (/) que carrega o SPA Vue — o router trata do resto.
-                    navigateFallback: '/',
-                    navigateFallbackDenylist: [
-                        /^\/api\//,
-                        /^\/storage\//,
-                        /^\/sanctum\//,
-                        /^\/telescope\//,
-                        /^\/horizon\//,
-                        /\.[a-z0-9]+$/i,  // ficheiros com extensão (assets)
-                    ],
                     globPatterns: ['**/*.{js,css,ico,png,svg,woff,woff2}'],
                     runtimeCaching: [
                         // ── Páginas HTML (navegação SPA) ─────────────────────────────────

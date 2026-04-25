@@ -1,1 +1,1 @@
-if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('https://beconnected.escaleno.co.mz/build/sw.js', { scope: 'https://beconnected.escaleno.co.mz/build/' })})}
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('https://beconnected.escaleno.co.mz/build/sw.js', { scope: '/' })})}

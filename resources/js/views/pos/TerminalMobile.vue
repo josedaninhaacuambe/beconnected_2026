@@ -37,7 +37,7 @@
 
     <!-- ═══ MODO 1: BUSCA E PRODUTOS ═════════════════════════════════════ -->
     <div v-if="mode === 'search' && currentSection === 'venda'" class="flex-1 flex flex-col overflow-hidden">
-      
+
       <!-- Categorias de Produtos (Topo) -->
       <div v-if="categories.length > 0" class="px-4 py-3 bg-bc-surface border-b border-bc-gold/20">
         <div class="flex gap-3 overflow-x-auto whitespace-nowrap pb-2">
@@ -220,7 +220,7 @@
       <!-- Resumo de Venda -->
       <div class="px-4 py-4 bg-bc-surface border-b border-bc-gold/20 space-y-3">
         <h3 class="text-bc-light font-bold text-lg">Resumo da Venda</h3>
-        
+
         <div class="space-y-2 text-base">
           <div class="flex justify-between text-bc-muted">
             <span>Subtotal:</span>
@@ -405,8 +405,8 @@
             </div>
             <!-- Cabeçalho customizado -->
             <p v-if="auth.user?.store?.invoice_header_text" class="text-bc-gold text-xs mb-2 italic">{{ auth.user?.store?.invoice_header_text }}</p>
-            <p class="text-bc-gold font-bold text-sm">BECONNECT</p>
-            <p class="text-bc-muted text-xs">{{ auth.user?.store?.name ?? 'Loja' }}</p>
+            <!-- <p class="text-bc-gold font-bold text-sm">BECONNECT</p> -->
+            <p class="text-bc-gold font-bold text-sm">{{ auth.user?.store?.name ?? 'Loja' }}</p>
             <p v-if="auth.user?.store?.phone" class="text-bc-muted text-xs">{{ auth.user?.store?.phone }}</p>
             <p v-if="auth.user?.store?.address" class="text-bc-muted text-xs">{{ auth.user?.store?.address }}</p>
             <p class="text-bc-muted text-xs">{{ formatDateTime(receipt.sale_at) }}</p>
@@ -677,7 +677,7 @@ function filterProducts() {
   if (selectedCategory.value) {
     result = result.filter(p => p.category_id === selectedCategory.value)
   }
-  
+
   // Filtro por busca
   const q = search.value.toLowerCase().trim()
   if (q) {
@@ -687,7 +687,7 @@ function filterProducts() {
       (p.barcode && p.barcode.toLowerCase().includes(q))
     )
   }
-  
+
   filtered.value = result
 }
 
@@ -814,17 +814,17 @@ function newSale() {
 
 function printReceipt() {
   if (!receipt.value) return
-  
+
   const store = auth.user?.store
   let width = '80mm'
-  
+
   // Get format from store settings
   if (store?.invoice_format === '100mm') width = '100mm'
   else if (store?.invoice_format === 'A4') width = '100%'
-  
+
   // Build receipt HTML with customizations
   const receiptHTML = buildReceiptHTML()
-  
+
   const win = window.open('', '_blank', 'width=400,height=600')
   win.document.write(`
     <!DOCTYPE html><html><head>
@@ -843,41 +843,41 @@ function printReceipt() {
 
 function buildReceiptHTML() {
   if (!receipt.value) return ''
-  
+
   const store = auth.user?.store
   const r = receipt.value
   const fmtPrice = (val) => new Intl.NumberFormat('pt-MZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val)
-  
+
   let html = '<div style="text-align:center; margin-bottom:8px;">'
-  
+
   // Logo
   if (store?.invoice_show_logo && store?.logo) {
     const logoUrl = store.logo.startsWith('http') ? store.logo : `/storage/${store.logo}`
     html += `<img src="${logoUrl}" style="width:40px; height:40px; margin:0 auto; object-fit:contain; margin-bottom:6px;" />`
   }
-  
+
   // Header text
   if (store?.invoice_header_text) {
     html += `<div style="font-size:11px; margin-bottom:4px; font-style:italic;">${store.invoice_header_text}</div>`
   }
-  
+
   html += '<div style="font-size:16px; font-weight:900; letter-spacing:2px;">BECONNECT</div>'
   html += `<div style="font-size:10px; color:#666;">${store?.name ?? 'Loja'}</div>`
-  
+
   if (store?.address) html += `<div style="font-size:9px; color:#666;">${store.address}</div>`
   if (store?.phone) html += `<div style="font-size:9px; color:#666;">${store.phone}</div>`
-  
+
   html += `<div style="font-size:10px; color:#666;">${new Intl.DateTimeFormat('pt-MZ', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(r.sale_at))}</div>`
   html += `<div style="font-size:10px; color:#666;">${r.local_id}</div></div>`
-  
+
   html += '<div style="border-top:1px dashed #ccc; margin:6px 0;"></div>'
-  
+
   // Items
   r.items?.forEach(item => {
     html += `<div style="margin-bottom:4px;">`
     html += `<div style="font-weight:700; font-size:11px;">${item.product_name}</div>`
     html += '<div style="display:flex; justify-content:space-between; color:#444; font-size:11px;">'
-    
+
     if (item.weight_amount) {
       html += `<span>${item.weight_amount}${item.weight_unit} × ${fmtPrice(item.unit_price)}</span>`
     } else {
@@ -885,9 +885,9 @@ function buildReceiptHTML() {
     }
     html += `<span style="font-weight:700;">${fmtPrice(item.subtotal)}</span></div></div>`
   })
-  
+
   html += '<div style="border-top:1px dashed #ccc; margin:6px 0;"></div>'
-  
+
   // Totals
   html += `<div style="display:flex; justify-content:space-between; font-size:11px;"><span>Subtotal</span><span>${fmtPrice(r.subtotal)}</span></div>`
   if (r.discount > 0) {
@@ -896,12 +896,12 @@ function buildReceiptHTML() {
   if (r.apply_vat) {
     html += `<div style="display:flex; justify-content:space-between; font-size:11px; color:#080;"><span>IVA (${r.vat_rate}%)</span><span>+ ${fmtPrice(r.vat_amount)}</span></div>`
   }
-  
+
   html += '<div style="border-top:2px solid #000; margin:6px 0;"></div>'
   html += `<div style="display:flex; justify-content:space-between; font-size:14px; font-weight:900;"><span>TOTAL</span><span>${fmtPrice(r.total)}</span></div>`
-  
+
   html += '<div style="border-top:1px dashed #ccc; margin:6px 0;"></div>'
-  
+
   // Payment
   html += `<div style="display:flex; justify-content:space-between; font-size:11px;"><span>Forma de pagamento</span><span style="font-weight:700; text-transform:uppercase;">${r.payment_method}</span></div>`
   if (r.amount_paid > 0) {
@@ -910,24 +910,24 @@ function buildReceiptHTML() {
   if (r.change > 0) {
     html += `<div style="display:flex; justify-content:space-between; font-size:13px; font-weight:900; color:#080;"><span>TROCO</span><span>${fmtPrice(r.change)}</span></div>`
   }
-  
+
   if (r.customer_name) {
     html += `<div style="margin-top:4px; font-size:11px;">Cliente: <strong>${r.customer_name}</strong></div>`
   }
-  
+
   if (r.apply_vat) {
     html += `<div style="margin-top:6px; font-size:10px; color:#666; border-top:1px dashed #ccc; padding-top:4px;">Base tributável: ${fmtPrice(r.total - r.vat_amount)} · IVA ${r.vat_rate}%: ${fmtPrice(r.vat_amount)}</div>`
   }
-  
+
   html += '<div style="border-top:1px dashed #ccc; margin:8px 0;"></div>'
-  
+
   // Footer
   if (store?.invoice_footer_text) {
     html += `<div style="text-align:center; font-size:10px; color:#666; white-space:pre-line;">${store.invoice_footer_text}</div>`
   } else {
     html += '<div style="text-align:center; font-size:10px; color:#666;"><div>Obrigado pela sua compra!</div><div>beconnect.co.mz</div></div>'
   }
-  
+
   return html
 }
 
